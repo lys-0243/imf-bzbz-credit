@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { colors, fonts } from '@imf/assets';
 
 function parseIso(iso?: string): Date {
   if (iso && /^\d{4}-\d{2}-\d{2}$/.test(iso)) {
@@ -47,10 +48,11 @@ export function DateField({
           mode="date"
           display={Platform.OS === 'ios' ? 'spinner' : 'default'}
           maximumDate={new Date()}
-          onChange={(_, date) => {
+          onValueChange={(_, date) => {
             if (Platform.OS === 'android') setOpen(false);
-            if (date) onChange(toIso(date));
+            onChange(toIso(date));
           }}
+          onDismiss={() => setOpen(false)}
         />
       )}
       {open && Platform.OS === 'ios' && (
@@ -64,24 +66,24 @@ export function DateField({
 
 const styles = StyleSheet.create({
   field: { marginBottom: 12 },
-  label: { marginBottom: 4, fontWeight: '600', color: '#333' },
-  asterisk: { color: '#c62828', fontWeight: '700' },
+  label: { marginBottom: 4, fontFamily: fonts.medium, color: '#333' },
+  asterisk: { color: colors.primary.red, fontFamily: fonts.bold },
   input: {
     borderWidth: 1,
-    borderColor: '#ccc',
+    borderColor: colors.neutral.border,
     borderRadius: 8,
     padding: 12,
-    backgroundColor: '#fff',
+    backgroundColor: colors.neutral.surface,
   },
-  value: { color: '#111' },
-  placeholder: { color: '#999' },
+  value: { color: colors.neutral.text, fontFamily: fonts.regular },
+  placeholder: { color: colors.neutral.placeholder, fontFamily: fonts.regular },
   done: {
     alignSelf: 'flex-end',
     marginTop: 4,
     paddingHorizontal: 12,
     paddingVertical: 6,
-    backgroundColor: '#1a3a2a',
+    backgroundColor: colors.primary.blue,
     borderRadius: 6,
   },
-  doneText: { color: '#fff', fontWeight: '600' },
+  doneText: { color: '#fff', fontFamily: fonts.semiBold },
 });

@@ -99,6 +99,8 @@ export const PRET_AUTRE_INSTITUTION = [
   "Oui j'ai",
 ] as const;
 export const CLIENT_STATUTS = ['NOUVEAU', 'ANCIEN'] as const;
+export const DEVISES = ['USD', 'CDF'] as const;
+export type Devise = (typeof DEVISES)[number];
 
 const eligibilitySchema = z.object({
   age18OuPlus: z.boolean().default(true),
@@ -138,6 +140,7 @@ const businessSchema = z.object({
 });
 
 const pretIndividuelSchema = z.object({
+  devise: z.enum(DEVISES),
   montantDesire: z.number().positive(),
   dureeMois: z.number().int().positive(),
   montantPretPrecedent: z.number().nonnegative().optional(),
@@ -213,12 +216,14 @@ export const salairePayloadSchema = z.object({
   societe: z.string().min(1),
   adresseSociete: z.string().min(1),
   fonctionService: z.string().min(1),
+  devise: z.enum(DEVISES),
   montantSollicite: z.number().positive(),
   dureeMois: z.number().int().positive(),
   dureeAnnees: z.number().int().nonnegative(),
   dureeSemaines: z.number().int().nonnegative(),
   motifCredit: z.string().optional(),
   salaireNet: z.number().positive(),
+  capaciteMensuelle: z.number().positive(),
   cautionGarantie: z.string().optional(),
   numeroCompte: z.string().optional(),
   depotBc: z.string().optional(),

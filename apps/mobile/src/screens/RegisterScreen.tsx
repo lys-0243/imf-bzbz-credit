@@ -8,12 +8,14 @@ import {
   View,
 } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
+import { colors, fonts } from '@imf/assets';
 import type { CreditType } from '@imf/shared';
 import { api } from '../api';
 import { DateField } from '../components/DateField';
-import { BoolField, Field, Section, SelectField } from '../components/Form';
+import { BoolField, Field, ListSelectField, MoneyField, Section, SelectField } from '../components/Form';
 import {
   CLIENT_STATUTS,
+  DEVISES,
   defaultIndividuelPayload,
   defaultSalairePayload,
   ETATS_CIVILS,
@@ -125,7 +127,8 @@ function validateSalStep(step: number, sal: SalaireForm): string | null {
       !filled(sal.fonctionService) ||
       !(sal.montantSollicite > 0) ||
       !(sal.dureeMois > 0) ||
-      !(sal.salaireNet > 0)
+      !(sal.salaireNet > 0) ||
+      !(sal.capaciteMensuelle > 0)
     ) {
       return 'Complétez tous les champs emploi / prêt obligatoires';
     }
@@ -144,13 +147,9 @@ export function RegisterScreen({ type, onCreated, onCancel }: Props) {
   const [sal, setSal] = useState(() => defaultSalairePayload(''));
 
   useEffect(() => {
-    api<Commune[]>('/communes').then((list) => {
-      setCommunes(list);
-      if (list[0]) {
-        setInd((p) => ({ ...p, communeId: list[0].id }));
-        setSal((p) => ({ ...p, communeId: list[0].id }));
-      }
-    });
+    api<Commune[]>('/communes')
+      .then(setCommunes)
+      .catch(() => setError('Impossible de charger les communes'));
   }, []);
 
   const communeNames = useMemo(() => communes.map((c) => c.name), [communes]);
@@ -210,6 +209,7 @@ export function RegisterScreen({ type, onCreated, onCancel }: Props) {
               dureeAnnees: Number(sal.dureeAnnees),
               dureeSemaines: Number(sal.dureeSemaines),
               salaireNet: Number(sal.salaireNet),
+              capaciteMensuelle: Number(sal.capaciteMensuelle),
               email: sal.email || undefined,
               motifCredit: sal.motifCredit || undefined,
               cautionGarantie: sal.cautionGarantie || undefined,
@@ -311,12 +311,13 @@ export function RegisterScreen({ type, onCreated, onCancel }: Props) {
 
         {type !== 'SALAIRE' && step === 0 && (
           <Section title="Client">
-            <SelectField
+            <ListSelectField
               label="Commune"
               required
               value={communeName(ind.communeId)}
               options={communeNames}
               onChange={setCommuneByName}
+              placeholder="Sélectionner une commune"
             />
             <SelectField
               label="Nouveau ou ancien"
@@ -413,11 +414,44 @@ export function RegisterScreen({ type, onCreated, onCancel }: Props) {
 
         {type !== 'SALAIRE' && step === 4 && (
           <Section title="Prêt sollicité">
-            <Field label="Montant désiré" required value={String(ind.pret.montantDesire || '')} onChangeText={(v) => setInd({ ...ind, pret: { ...ind.pret, montantDesire: Number(v) || 0 } })} keyboardType="numeric" />
+            <SelectField
+              label="Devise"
+              required
+              value={ind.pret.devise}
+              options={DEVISES}
+              onChange={(v) =>
+                setInd({ ...ind, pret: { ...ind.pret, devise: v as (typeof DEVISES)[number] } })
+              }
+            />
+            <MoneyField
+              label="Montant désiré"
+              required
+              currency={ind.pret.devise}
+              value={ind.pret.montantDesire}
+              onChange={(v) =>
+                setInd({ ...ind, pret: { ...ind.pret, montantDesire: v ?? 0 } })
+              }
+            />
             <Field label="Durée (mois)" required value={String(ind.pret.dureeMois || '')} onChangeText={(v) => setInd({ ...ind, pret: { ...ind.pret, dureeMois: Number(v) || 0 } })} keyboardType="numeric" />
-            <Field label="Montant prêt précédent" value={ind.pret.montantPretPrecedent != null ? String(ind.pret.montantPretPrecedent) : ''} onChangeText={(v) => setInd({ ...ind, pret: { ...ind.pret, montantPretPrecedent: v ? Number(v) : undefined } })} keyboardType="numeric" />
+            <MoneyField
+              label="Montant prêt précédent"
+              currency={ind.pret.devise}
+              value={ind.pret.montantPretPrecedent}
+              allowEmpty
+              onChange={(v) =>
+                setInd({ ...ind, pret: { ...ind.pret, montantPretPrecedent: v } })
+              }
+            />
             <Field label="Durée prêt précédent" value={ind.pret.dureePretPrecedent != null ? String(ind.pret.dureePretPrecedent) : ''} onChangeText={(v) => setInd({ ...ind, pret: { ...ind.pret, dureePretPrecedent: v ? Number(v) : undefined } })} keyboardType="numeric" />
-            <Field label="Capacité mensuelle" required value={String(ind.pret.capaciteMensuelle || '')} onChangeText={(v) => setInd({ ...ind, pret: { ...ind.pret, capaciteMensuelle: Number(v) || 0 } })} keyboardType="numeric" />
+            <MoneyField
+              label="Capacité mensuelle de remboursement"
+              required
+              currency={ind.pret.devise}
+              value={ind.pret.capaciteMensuelle}
+              onChange={(v) =>
+                setInd({ ...ind, pret: { ...ind.pret, capaciteMensuelle: v ?? 0 } })
+              }
+            />
             <Field label="But de l’investissement" required value={ind.pret.butInvestissement} onChangeText={(v) => setInd({ ...ind, pret: { ...ind.pret, butInvestissement: v } })} />
             <Field label="Commentaire sur le but" required value={ind.pret.commentaireBut} onChangeText={(v) => setInd({ ...ind, pret: { ...ind.pret, commentaireBut: v } })} />
             <SelectField label="Prêt autre institution ?" required value={ind.pret.pretAutreInstitution} options={PRET_AUTRE_INSTITUTION} onChange={(v) => setInd({ ...ind, pret: { ...ind.pret, pretAutreInstitution: v as any } })} />
@@ -429,7 +463,14 @@ export function RegisterScreen({ type, onCreated, onCancel }: Props) {
 
         {type === 'SALAIRE' && step === 0 && (
           <Section title="Identité">
-            <SelectField label="Commune" required value={communeName(sal.communeId)} options={communeNames} onChange={setCommuneByName} />
+            <ListSelectField
+              label="Commune"
+              required
+              value={communeName(sal.communeId)}
+              options={communeNames}
+              onChange={setCommuneByName}
+              placeholder="Sélectionner une commune"
+            />
             <Field label="Prénom" required value={sal.prenom} onChangeText={(v) => setSal({ ...sal, prenom: v })} />
             <Field label="Nom" required value={sal.nom} onChangeText={(v) => setSal({ ...sal, nom: v })} />
             <Field label="Post-Nom" required value={sal.postNom} onChangeText={(v) => setSal({ ...sal, postNom: v })} />
@@ -445,12 +486,38 @@ export function RegisterScreen({ type, onCreated, onCancel }: Props) {
             <Field label="Société" required value={sal.societe} onChangeText={(v) => setSal({ ...sal, societe: v })} />
             <Field label="Adresse société" required value={sal.adresseSociete} onChangeText={(v) => setSal({ ...sal, adresseSociete: v })} />
             <Field label="Fonction / Service" required value={sal.fonctionService} onChangeText={(v) => setSal({ ...sal, fonctionService: v })} />
-            <Field label="Montant sollicité" required value={String(sal.montantSollicite || '')} onChangeText={(v) => setSal({ ...sal, montantSollicite: Number(v) || 0 })} keyboardType="numeric" />
+            <SelectField
+              label="Devise"
+              required
+              value={sal.devise}
+              options={DEVISES}
+              onChange={(v) => setSal({ ...sal, devise: v as (typeof DEVISES)[number] })}
+            />
+            <MoneyField
+              label="Montant sollicité"
+              required
+              currency={sal.devise}
+              value={sal.montantSollicite}
+              onChange={(v) => setSal({ ...sal, montantSollicite: v ?? 0 })}
+            />
             <Field label="Durée (mois)" required value={String(sal.dureeMois || '')} onChangeText={(v) => setSal({ ...sal, dureeMois: Number(v) || 0 })} keyboardType="numeric" />
             <Field label="Durée (années)" required value={String(sal.dureeAnnees || '')} onChangeText={(v) => setSal({ ...sal, dureeAnnees: Number(v) || 0 })} keyboardType="numeric" />
             <Field label="Durée (semaines)" required value={String(sal.dureeSemaines || '')} onChangeText={(v) => setSal({ ...sal, dureeSemaines: Number(v) || 0 })} keyboardType="numeric" />
             <Field label="Motif" value={sal.motifCredit || ''} onChangeText={(v) => setSal({ ...sal, motifCredit: v })} />
-            <Field label="Salaire net" required value={String(sal.salaireNet || '')} onChangeText={(v) => setSal({ ...sal, salaireNet: Number(v) || 0 })} keyboardType="numeric" />
+            <MoneyField
+              label="Salaire net"
+              required
+              currency={sal.devise}
+              value={sal.salaireNet}
+              onChange={(v) => setSal({ ...sal, salaireNet: v ?? 0 })}
+            />
+            <MoneyField
+              label="Capacité mensuelle de remboursement"
+              required
+              currency={sal.devise}
+              value={sal.capaciteMensuelle}
+              onChange={(v) => setSal({ ...sal, capaciteMensuelle: v ?? 0 })}
+            />
             <Field label="Caution / garantie" value={sal.cautionGarantie || ''} onChangeText={(v) => setSal({ ...sal, cautionGarantie: v })} />
             <Field label="N° de compte" value={sal.numeroCompte || ''} onChangeText={(v) => setSal({ ...sal, numeroCompte: v })} />
             <Field label="Dépôt BC" value={sal.depotBc || ''} onChangeText={(v) => setSal({ ...sal, depotBc: v })} />
@@ -485,7 +552,7 @@ export function RegisterScreen({ type, onCreated, onCancel }: Props) {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#f6f4ef', paddingTop: 48 },
+  root: { flex: 1, backgroundColor: colors.neutral.background, paddingTop: 8 },
   topBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -493,29 +560,34 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     marginBottom: 4,
   },
-  cancel: { color: '#a11', fontWeight: '700' },
+  cancel: { color: colors.primary.red, fontFamily: fonts.bold },
   typeBadge: {
-    backgroundColor: '#1a3a2a',
+    backgroundColor: colors.primary.blue,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 12,
   },
-  typeBadgeText: { color: '#fff', fontWeight: '700' },
+  typeBadgeText: { color: '#fff', fontFamily: fonts.bold },
   pad: { padding: 16, paddingBottom: 80 },
-  h1: { fontSize: 22, fontWeight: '700', marginBottom: 12, color: '#1a3a2a' },
+  h1: {
+    fontSize: 22,
+    fontFamily: fonts.bold,
+    marginBottom: 12,
+    color: colors.primary.blue,
+  },
   steps: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12 },
   step: {
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#ccc',
-    backgroundColor: '#fff',
+    borderColor: colors.neutral.border,
+    backgroundColor: colors.neutral.surface,
   },
-  stepOn: { backgroundColor: '#cfe3d6', borderColor: '#1a3a2a' },
+  stepOn: { backgroundColor: '#dce3f0', borderColor: colors.primary.blue },
   stepLocked: { opacity: 0.45 },
-  stepTextOn: { fontWeight: '700' },
-  stepTextLocked: { color: '#999' },
+  stepTextOn: { fontFamily: fonts.bold },
+  stepTextLocked: { color: colors.neutral.placeholder },
   nav: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -524,18 +596,18 @@ const styles = StyleSheet.create({
   },
   primary: {
     flex: 1,
-    backgroundColor: '#1a3a2a',
+    backgroundColor: colors.primary.blue,
     padding: 14,
     borderRadius: 8,
     alignItems: 'center',
   },
-  primaryText: { color: '#fff', fontWeight: '600' },
+  primaryText: { color: '#fff', fontFamily: fonts.semiBold },
   secondary: {
     padding: 14,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#aaa',
-    backgroundColor: '#fff',
+    backgroundColor: colors.neutral.surface,
   },
-  error: { color: '#a11', marginVertical: 8 },
+  error: { color: colors.primary.red, marginVertical: 8, fontFamily: fonts.regular },
 });

@@ -1,5 +1,6 @@
 import {
   CLIENT_STATUTS,
+  DEVISES,
   ETATS_CIVILS,
   PRET_AUTRE_INSTITUTION,
   SEXES,
@@ -54,6 +55,7 @@ export function defaultIndividuelPayload(communeId: string) {
       formeJuridique: '',
     },
     pret: {
+      devise: DEVISES[0] as (typeof DEVISES)[number],
       montantDesire: 0,
       dureeMois: 1,
       montantPretPrecedent: undefined as number | undefined,
@@ -80,12 +82,14 @@ export function defaultSalairePayload(communeId: string) {
     societe: '',
     adresseSociete: '',
     fonctionService: '',
+    devise: DEVISES[0] as (typeof DEVISES)[number],
     montantSollicite: 0,
     dureeMois: 1,
     dureeAnnees: 0,
     dureeSemaines: 0,
     motifCredit: '',
     salaireNet: 0,
+    capaciteMensuelle: 0,
     cautionGarantie: '',
     numeroCompte: '',
     depotBc: '',
@@ -95,4 +99,11 @@ export function defaultSalairePayload(communeId: string) {
 export type IndividuelForm = ReturnType<typeof defaultIndividuelPayload>;
 export type SalaireForm = ReturnType<typeof defaultSalairePayload>;
 
-export { CLIENT_STATUTS, ETATS_CIVILS, PRET_AUTRE_INSTITUTION, SEXES, TYPES_PIECE };
+export {
+  CLIENT_STATUTS,
+  DEVISES,
+  ETATS_CIVILS,
+  PRET_AUTRE_INSTITUTION,
+  SEXES,
+  TYPES_PIECE,
+};

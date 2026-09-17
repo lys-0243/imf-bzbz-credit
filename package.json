@@ -5,12 +5,13 @@
     "apps/api",
     "apps/web",
     "apps/mobile",
-    "packages/shared"
+    "packages/shared",
+    "packages/assets"
   ],
   "scripts": {
     "dev:api": "npm run build -w @imf/shared && npm run start:dev -w @imf/api",
     "dev:web": "npm run dev -w @imf/web",
-    "dev:mobile": "npm run start -w @imf/mobile",
+    "dev:mobile": "npm run start -w @imf/mobile -- --clear",
     "build:shared": "npm run build -w @imf/shared",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",

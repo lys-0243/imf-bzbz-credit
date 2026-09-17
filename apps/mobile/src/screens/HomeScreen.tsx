@@ -7,6 +7,8 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { colors, fonts } from '@imf/assets';
 import { CREDIT_TYPES, type CreditType } from '@imf/shared';
 import { useAuth } from '../auth';
 import { DetailScreen } from './DetailScreen';
@@ -21,6 +23,7 @@ const TYPE_LABELS: Record<CreditType, string> = {
 
 export function HomeScreen() {
   const { user, logout } = useAuth();
+  const insets = useSafeAreaInsets();
   const [detailId, setDetailId] = useState<string | null>(null);
   const [registerType, setRegisterType] = useState<CreditType | null>(null);
   const [typeModal, setTypeModal] = useState(false);
@@ -59,7 +62,7 @@ export function HomeScreen() {
       </View>
 
       <Pressable
-        style={styles.fab}
+        style={[styles.fab, { bottom: Math.max(insets.bottom, 12) + 36 }]}
         onPress={() => setTypeModal(true)}
         accessibilityLabel="Nouvelle demande"
       >
@@ -102,26 +105,26 @@ export function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#f6f4ef', paddingTop: 48 },
+  root: { flex: 1, backgroundColor: colors.neutral.background },
   header: {
     paddingHorizontal: 16,
+    paddingTop: 8,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 8,
   },
-  name: { fontWeight: '700', fontSize: 16 },
-  role: { color: '#666', fontSize: 12 },
-  logout: { color: '#1a3a2a', fontWeight: '600' },
+  name: { fontFamily: fonts.bold, fontSize: 16, color: colors.neutral.text },
+  role: { color: colors.neutral.textMuted, fontSize: 12, fontFamily: fonts.regular },
+  logout: { color: colors.primary.blue, fontFamily: fonts.semiBold },
   body: { flex: 1 },
   fab: {
     position: 'absolute',
     right: 16,
-    bottom: 24,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: '#1a3a2a',
+    backgroundColor: colors.primary.blue,
     paddingVertical: 14,
     paddingHorizontal: 18,
     borderRadius: 28,
@@ -131,14 +134,14 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     shadowOffset: { width: 0, height: 2 },
   },
-  fabText: { color: '#fff', fontWeight: '700' },
+  fabText: { color: '#fff', fontFamily: fonts.bold },
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.45)',
     justifyContent: 'flex-end',
   },
   sheet: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.neutral.surface,
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
     padding: 20,
@@ -146,18 +149,22 @@ const styles = StyleSheet.create({
   },
   sheetTitle: {
     fontSize: 18,
-    fontWeight: '700',
+    fontFamily: fonts.bold,
     marginBottom: 16,
-    color: '#1a3a2a',
+    color: colors.primary.blue,
   },
   typeBtn: {
     borderWidth: 1,
-    borderColor: '#1a3a2a',
+    borderColor: colors.primary.blue,
     borderRadius: 10,
     padding: 14,
     marginBottom: 10,
   },
-  typeBtnText: { fontWeight: '600', color: '#1a3a2a', textAlign: 'center' },
+  typeBtnText: {
+    fontFamily: fonts.semiBold,
+    color: colors.primary.blue,
+    textAlign: 'center',
+  },
   cancelBtn: { padding: 14, alignItems: 'center' },
-  cancelText: { color: '#666', fontWeight: '600' },
+  cancelText: { color: colors.neutral.textMuted, fontFamily: fonts.semiBold },
 });

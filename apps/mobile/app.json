@@ -4,12 +4,18 @@
     "slug": "imf-credit",
     "version": "0.1.0",
     "orientation": "portrait",
+    "icon": "./assets/icon.png",
     "platforms": [
       "android",
       "ios"
     ],
     "android": {
-      "package": "cd.imf.credit"
+      "package": "cd.imf.credit",
+      "statusBar": {
+        "barStyle": "dark-content",
+        "backgroundColor": "#f6f4ef",
+        "translucent": false
+      }
     },
     "extra": {
       "apiUrl": "http://10.0.2.2:3001"
@@ -17,7 +23,16 @@
     "plugins": [
       "expo-secure-store",
       "expo-status-bar",
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/logo.png",
+          "imageWidth": 220,
+          "resizeMode": "contain",
+          "backgroundColor": "#000000"
+        }
+      ]
     ]
   }
 }

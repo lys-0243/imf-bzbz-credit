@@ -7,6 +7,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { colors, fonts } from '@imf/assets';
 import { DOSSIER_ETAT_LABELS, type DossierEtat } from '@imf/shared';
 import { api } from '../api';
 import { Field, Section } from '../components/Form';
@@ -176,28 +177,33 @@ export function DetailScreen({ id, onBack }: Props) {
 }
 
 const styles = StyleSheet.create({
-  pad: { padding: 16, paddingBottom: 40, backgroundColor: '#f6f4ef' },
+  pad: { padding: 16, paddingBottom: 40, backgroundColor: colors.neutral.background },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  h1: { fontSize: 22, fontWeight: '700', color: '#1a3a2a', marginTop: 8 },
-  meta: { color: '#555', marginTop: 4 },
-  etat: { fontWeight: '700', marginVertical: 8 },
-  warn: { color: '#a60', marginBottom: 8 },
-  link: { color: '#1a3a2a', fontWeight: '600' },
+  h1: {
+    fontSize: 22,
+    fontFamily: fonts.bold,
+    color: colors.primary.blue,
+    marginTop: 8,
+  },
+  meta: { color: colors.neutral.textMuted, marginTop: 4, fontFamily: fonts.regular },
+  etat: { fontFamily: fonts.bold, marginVertical: 8 },
+  warn: { color: colors.primary.red, marginBottom: 8, fontFamily: fonts.medium },
+  link: { color: colors.primary.blue, fontFamily: fonts.semiBold },
   btn: {
-    backgroundColor: '#1a3a2a',
+    backgroundColor: colors.primary.blue,
     padding: 12,
     borderRadius: 8,
     alignItems: 'center',
     marginTop: 8,
   },
-  btnText: { color: '#fff', fontWeight: '600' },
+  btnText: { color: '#fff', fontFamily: fonts.semiBold },
   tl: {
     borderLeftWidth: 3,
-    borderLeftColor: '#1a3a2a',
+    borderLeftColor: colors.primary.blue,
     paddingLeft: 10,
     marginBottom: 10,
   },
-  tlTitle: { fontWeight: '700' },
-  tlDate: { color: '#777', fontSize: 12 },
-  error: { color: '#a11', marginTop: 8 },
+  tlTitle: { fontFamily: fonts.bold },
+  tlDate: { color: colors.neutral.textHint, fontSize: 12, fontFamily: fonts.light },
+  error: { color: colors.primary.red, marginTop: 8, fontFamily: fonts.regular },
 });

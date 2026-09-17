@@ -8,6 +8,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { colors, fonts } from '@imf/assets';
 import { DOSSIER_ETAT_LABELS, type DossierEtat } from '@imf/shared';
 import { api } from '../api';
 
@@ -91,35 +92,47 @@ export function SearchScreen({ onOpen }: Props) {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, padding: 16, backgroundColor: '#f6f4ef' },
-  h1: { fontSize: 22, fontWeight: '700', marginBottom: 12, color: '#1a3a2a' },
+  root: { flex: 1, padding: 16, backgroundColor: colors.neutral.background },
+  h1: {
+    fontSize: 22,
+    fontFamily: fonts.bold,
+    marginBottom: 12,
+    color: colors.primary.blue,
+  },
   row: { flexDirection: 'row', gap: 8, marginBottom: 12 },
   input: {
     flex: 1,
     borderWidth: 1,
-    borderColor: '#ccc',
+    borderColor: colors.neutral.border,
     borderRadius: 8,
     padding: 10,
-    backgroundColor: '#fff',
+    backgroundColor: colors.neutral.surface,
+    fontFamily: fonts.regular,
+    color: colors.neutral.text,
   },
   btn: {
-    backgroundColor: '#1a3a2a',
+    backgroundColor: colors.primary.blue,
     paddingHorizontal: 16,
     justifyContent: 'center',
     borderRadius: 8,
   },
-  btnText: { color: '#fff', fontWeight: '600' },
+  btnText: { color: '#fff', fontFamily: fonts.semiBold },
   card: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.neutral.surface,
     padding: 12,
     borderRadius: 10,
     marginBottom: 8,
     borderWidth: 1,
     borderColor: '#e5e5e5',
   },
-  ref: { fontWeight: '700', color: '#1a3a2a' },
-  meta: { color: '#666', marginTop: 2 },
-  etat: { marginTop: 4, fontWeight: '600' },
-  empty: { textAlign: 'center', color: '#888', marginTop: 24 },
-  error: { color: '#a11', marginBottom: 8 },
+  ref: { fontFamily: fonts.bold, color: colors.primary.blue },
+  meta: { color: colors.neutral.textMuted, marginTop: 2, fontFamily: fonts.regular },
+  etat: { marginTop: 4, fontFamily: fonts.semiBold },
+  empty: {
+    textAlign: 'center',
+    color: colors.neutral.textHint,
+    marginTop: 24,
+    fontFamily: fonts.regular,
+  },
+  error: { color: colors.primary.red, marginBottom: 8, fontFamily: fonts.regular },
 });
