@@ -1,0 +1,11 @@
+node_modules
+dist
+.next
+.expo
+*.tsbuildinfo
+.env
+.env.local
+coverage
+apps/api/dist
+packages/shared/dist
+

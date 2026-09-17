@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: imf
+      POSTGRES_PASSWORD: imf
+      POSTGRES_DB: imf_credit
+    ports:
+      - "5432:5432"
+    volumes:
+      - imf_pg:/var/lib/postgresql/data
+
+volumes:
+  imf_pg:

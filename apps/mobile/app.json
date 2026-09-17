@@ -1,0 +1,23 @@
+{
+  "expo": {
+    "name": "IMF Bisou Bisou",
+    "slug": "imf-credit",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "platforms": [
+      "android",
+      "ios"
+    ],
+    "android": {
+      "package": "cd.imf.credit"
+    },
+    "extra": {
+      "apiUrl": "http://10.0.2.2:3001"
+    },
+    "plugins": [
+      "expo-secure-store",
+      "expo-status-bar",
+      "@react-native-community/datetimepicker"
+    ]
+  }
+}

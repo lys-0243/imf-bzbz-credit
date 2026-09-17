@@ -1,0 +1,32 @@
+{
+  "name": "imf-credit",
+  "private": true,
+  "workspaces": [
+    "apps/api",
+    "apps/web",
+    "apps/mobile",
+    "packages/shared"
+  ],
+  "scripts": {
+    "dev:api": "npm run build -w @imf/shared && npm run start:dev -w @imf/api",
+    "dev:web": "npm run dev -w @imf/web",
+    "dev:mobile": "npm run start -w @imf/mobile",
+    "build:shared": "npm run build -w @imf/shared",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:seed": "prisma db seed"
+  },
+  "prisma": {
+    "schema": "prisma/schema.prisma",
+    "seed": "ts-node --compiler-options {\"module\":\"CommonJS\"} prisma/seed.ts"
+  },
+  "devDependencies": {
+    "prisma": "^6.14.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.8.3"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.14.0",
+    "bcryptjs": "^3.0.2"
+  }
+}

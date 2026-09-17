@@ -1,0 +1,147 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  RECEPTION
+  AGENT
+  ANALYSTE
+  CONFORMITE
+  DG
+  CA
+  ADMIN
+}
+
+enum CreditType {
+  SALAIRE
+  INDIVIDUEL
+  DARE_DARE
+}
+
+enum DossierEtat {
+  ENREGISTRE
+  AFFECTE
+  DESCENTE
+  RAPPORT_AGENT
+  SCORING
+  ANALYSTE
+  RETOUR_AGENT
+  CONFORMITE
+  RETOUR_ANALYSTE
+  DIRECTION
+  CONSEIL
+  A_DECAISSER
+  REJETE
+}
+
+model User {
+  id            String    @id @default(cuid())
+  entraObjectId String?   @unique
+  email         String    @unique
+  passwordHash  String
+  displayName   String
+  role          Role
+  zoneId        String?
+  zone          Zone?     @relation(fields: [zoneId], references: [id])
+  createdAt     DateTime  @default(now())
+  dossiersAgent Dossier[] @relation("AgentDossiers")
+}
+
+model Zone {
+  id        String    @id @default(cuid())
+  code      String    @unique
+  name      String
+  users     User[]
+  clients   Client[]
+  communes  Commune[]
+}
+
+model Commune {
+  id       String   @id @default(cuid())
+  code     String   @unique
+  name     String
+  zoneId   String
+  zone     Zone     @relation(fields: [zoneId], references: [id])
+  clients  Client[]
+
+  @@index([zoneId])
+}
+
+model Client {
+  id              String    @id @default(cuid())
+  fullName        String
+  phone           String
+  activityAddress String
+  zoneId          String
+  zone            Zone      @relation(fields: [zoneId], references: [id])
+  communeId       String?
+  commune         Commune?  @relation(fields: [communeId], references: [id])
+  dossiers        Dossier[]
+  createdAt       DateTime  @default(now())
+
+  @@index([phone])
+  @@index([fullName])
+  @@index([communeId])
+}
+
+model Dossier {
+  id            String       @id @default(cuid())
+  reference     String       @unique
+  type          CreditType
+  etat          DossierEtat  @default(ENREGISTRE)
+  payload       Json
+  clientId      String
+  client        Client       @relation(fields: [clientId], references: [id])
+  agentId       String?
+  agent         User?        @relation("AgentDossiers", fields: [agentId], references: [id])
+  agentValideAt DateTime?
+  scoreValue    Int?
+  scoreReasons  Json?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  transitions   Transition[]
+  pieces        Piece[]
+  auditLogs     AuditLog[]
+
+  @@index([reference])
+  @@index([etat])
+}
+
+model Transition {
+  id        String       @id @default(cuid())
+  dossierId String
+  dossier   Dossier      @relation(fields: [dossierId], references: [id])
+  fromEtat  DossierEtat?
+  toEtat    DossierEtat
+  comment   String?
+  actorId   String
+  createdAt DateTime     @default(now())
+
+  @@index([dossierId])
+}
+
+model Piece {
+  id        String   @id @default(cuid())
+  dossierId String
+  dossier   Dossier  @relation(fields: [dossierId], references: [id])
+  blobPath  String
+  kind      String
+  createdAt DateTime @default(now())
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  dossierId String?
+  dossier   Dossier? @relation(fields: [dossierId], references: [id])
+  actorId   String
+  action    String
+  payload   Json?
+  createdAt DateTime @default(now())
+
+  @@index([dossierId])
+}
