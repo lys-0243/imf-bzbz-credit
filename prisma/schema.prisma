@@ -90,26 +90,43 @@ model Client {
 }
 
 model Dossier {
-  id            String       @id @default(cuid())
-  reference     String       @unique
+  id            String         @id @default(cuid())
+  reference     String         @unique
   type          CreditType
-  etat          DossierEtat  @default(ENREGISTRE)
+  etat          DossierEtat    @default(ENREGISTRE)
   payload       Json
   clientId      String
-  client        Client       @relation(fields: [clientId], references: [id])
+  client        Client         @relation(fields: [clientId], references: [id])
   agentId       String?
-  agent         User?        @relation("AgentDossiers", fields: [agentId], references: [id])
+  agent         User?          @relation("AgentDossiers", fields: [agentId], references: [id])
   agentValideAt DateTime?
   scoreValue    Int?
   scoreReasons  Json?
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
   transitions   Transition[]
   pieces        Piece[]
   auditLogs     AuditLog[]
+  visite        VisiteTerrain?
 
   @@index([reference])
   @@index([etat])
+  @@index([agentId])
+}
+
+model VisiteTerrain {
+  id            String    @id @default(cuid())
+  dossierId     String    @unique
+  dossier       Dossier   @relation(fields: [dossierId], references: [id])
+  agentId       String
+  startedAt     DateTime  @default(now())
+  completedAt   DateTime?
+  checklistJson Json?
+  rapportTexte  String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([agentId])
 }
 
 model Transition {

@@ -1,0 +1,255 @@
+.page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background:
+    radial-gradient(ellipse at 15% 20%, rgba(244, 223, 60, 0.18), transparent 45%),
+    radial-gradient(ellipse at 85% 80%, rgba(154, 28, 32, 0.2), transparent 40%),
+    linear-gradient(145deg, #1c2f66 0%, #284080 48%, #1a274f 100%);
+}
+
+.card {
+  width: min(1080px, 100%);
+  min-height: min(640px, calc(100vh - 48px));
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  background: #fff;
+  border-radius: 36px;
+  overflow: hidden;
+  box-shadow: 0 28px 80px rgba(10, 20, 50, 0.35);
+}
+
+.formPane {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 48px 52px;
+}
+
+.brand {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px;
+  margin-bottom: 28px;
+}
+
+.logo {
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
+}
+
+.brandName {
+  margin: 0;
+  font-size: clamp(1.75rem, 2.4vw, 2.15rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #111;
+  line-height: 1.15;
+}
+
+.subtitle {
+  margin: 8px 0 0;
+  font-size: 0.98rem;
+  font-weight: 400;
+  color: #666;
+}
+
+.form {
+  display: grid;
+  gap: 14px;
+  margin-top: 8px;
+}
+
+.field {
+  position: relative;
+}
+
+.field input {
+  width: 100%;
+  height: 52px;
+  padding: 0 46px 0 18px;
+  border: 1px solid #d6d6d6;
+  border-radius: 22px;
+  font-family: inherit;
+  font-size: 0.98rem;
+  background: #fff;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.field input:focus {
+  border-color: #284080;
+  box-shadow: 0 0 0 3px rgba(40, 64, 128, 0.15);
+}
+
+.fieldIcon {
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 22px;
+  height: 22px;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: #888;
+  cursor: default;
+  display: grid;
+  place-items: center;
+}
+
+.fieldIconButton {
+  cursor: pointer;
+}
+
+.fieldIconButton:hover {
+  color: #284080;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 2px;
+  font-size: 0.86rem;
+  color: #666;
+}
+
+.remember {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.remember input {
+  width: 15px;
+  height: 15px;
+  accent-color: #284080;
+}
+
+.submit {
+  margin-top: 8px;
+  height: 52px;
+  border: 0;
+  border-radius: 999px;
+  background: #284080;
+  color: #fff;
+  font-family: inherit;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.1s ease;
+}
+
+.submit:hover:not(:disabled) {
+  background: #1c2f66;
+}
+
+.submit:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.submit:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
+.error {
+  margin: 0;
+  color: #9a1c20;
+  font-size: 0.9rem;
+}
+
+.hint {
+  margin: 18px 0 0;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: #888;
+}
+
+.hint code {
+  font-size: 0.76rem;
+  background: #f3f3f3;
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+.visualPane {
+  position: relative;
+  min-height: 320px;
+  margin: 18px;
+  border-radius: 28px;
+  overflow: hidden;
+}
+
+.visualPane img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  display: block;
+}
+
+.visualOverlay {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, transparent 45%, rgba(20, 30, 60, 0.45) 100%);
+  pointer-events: none;
+}
+
+.visualCaption {
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  bottom: 22px;
+  margin: 0;
+  color: #fff;
+  font-size: 0.95rem;
+  font-weight: 500;
+  line-height: 1.35;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.35);
+}
+
+@media (max-width: 860px) {
+  .page {
+    padding: 12px;
+    align-items: stretch;
+  }
+
+  .card {
+    grid-template-columns: 1fr;
+    min-height: auto;
+    border-radius: 28px;
+  }
+
+  .formPane {
+    padding: 32px 24px 20px;
+    order: 1;
+  }
+
+  .visualPane {
+    order: 0;
+    min-height: 220px;
+    margin: 14px 14px 0;
+    border-radius: 22px;
+  }
+
+  .brand {
+    align-items: center;
+    text-align: center;
+  }
+
+  .brandName,
+  .subtitle {
+    text-align: center;
+    width: 100%;
+  }
+}

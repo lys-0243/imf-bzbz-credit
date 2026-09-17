@@ -8,4 +8,5 @@ dist
 coverage
 apps/api/dist
 packages/shared/dist
+uploads
 

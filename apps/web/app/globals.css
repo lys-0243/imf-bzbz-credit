@@ -1,0 +1,62 @@
+@font-face {
+  font-family: 'Neutrif Pro';
+  src: url('/fonts/NeutrifPro-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Neutrif Pro';
+  src: url('/fonts/NeutrifPro-Medium.ttf') format('truetype');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Neutrif Pro';
+  src: url('/fonts/NeutrifPro-SemiBold.ttf') format('truetype');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Neutrif Pro';
+  src: url('/fonts/NeutrifPro-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  --imf-red: #9a1c20;
+  --imf-blue: #284080;
+  --imf-blue-deep: #1c2f66;
+  --imf-yellow: #f4df3c;
+  --imf-green: #2ab24b;
+  --imf-bg: #f6f4ef;
+  --imf-text: #111111;
+  --imf-muted: #5c5c5c;
+  --imf-border: #d8d8d8;
+  --imf-font: 'Neutrif Pro', 'Segoe UI', sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
+  font-family: var(--imf-font);
+  color: var(--imf-text);
+  background: var(--imf-bg);
+}
+
+a {
+  color: inherit;
+}

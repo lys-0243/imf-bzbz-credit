@@ -48,4 +48,5 @@ export const fontSources = {
 
 export const images = {
   logo: require('../images/logo.png'),
+  login: require('../images/login.jpg'),
 };

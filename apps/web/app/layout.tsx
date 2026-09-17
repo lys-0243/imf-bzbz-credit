@@ -1,25 +1,12 @@
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+import type { ReactNode } from 'react';
+import AppHeader from '../components/AppHeader';
+import './globals.css';
+
+export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="fr">
-      <body style={{ fontFamily: 'system-ui', margin: 24 }}>
-        <header>
-          <a href="/">IMF Crédit</a>
-          {' · '}
-          <a href="/reception">Réception</a>
-          {' · '}
-          <a href="/agent">Agent</a>
-          {' · '}
-          <a href="/analyste">Analyste</a>
-          {' · '}
-          <a href="/conformite">Conformité</a>
-          {' · '}
-          <a href="/direction">Direction</a>
-        </header>
-        <main>{children}</main>
+      <body>
+        <AppHeader>{children}</AppHeader>
       </body>
     </html>
   );

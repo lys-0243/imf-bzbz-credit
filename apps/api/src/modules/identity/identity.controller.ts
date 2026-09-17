@@ -17,7 +17,15 @@ export class IdentityController {
 
   @Get('me')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.RECEPTION, Role.AGENT)
+  @Roles(
+    Role.RECEPTION,
+    Role.AGENT,
+    Role.ANALYSTE,
+    Role.CONFORMITE,
+    Role.DG,
+    Role.CA,
+    Role.ADMIN,
+  )
   me(@CurrentUser() user: { id: string }) {
     return this.auth.me(user.id);
   }

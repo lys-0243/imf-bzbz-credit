@@ -286,3 +286,5 @@ export const DOSSIER_ETAT_LABELS: Record<DossierEtat, string> = {
   A_DECAISSER: 'À décaisser',
   REJETE: 'Rejeté',
 };
+
+export * from './agentChecklist';

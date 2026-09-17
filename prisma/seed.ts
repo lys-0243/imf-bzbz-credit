@@ -68,6 +68,23 @@ async function main() {
       },
     });
   }
+
+  const analysteHash = await bcrypt.hash('Analyste1!', 10);
+  await prisma.user.upsert({
+    where: { email: 'analyste@imf.local' },
+    update: {
+      passwordHash: analysteHash,
+      displayName: 'Analyste crédit',
+      role: Role.ANALYSTE,
+      zoneId: null,
+    },
+    create: {
+      email: 'analyste@imf.local',
+      passwordHash: analysteHash,
+      displayName: 'Analyste crédit',
+      role: Role.ANALYSTE,
+    },
+  });
 }
 
 main()
