@@ -6,13 +6,14 @@ import type { ReactNode } from 'react';
 export default function AppHeader({ children }: { children?: ReactNode }) {
   const pathname = usePathname();
   const isLogin = pathname === '/login' || pathname?.startsWith('/login/');
+  const isHome = pathname === '/';
   const isDashboard =
     pathname === '/agent' ||
     pathname?.startsWith('/agent/') ||
     pathname === '/analyste' ||
     pathname?.startsWith('/analyste/');
 
-  if (isLogin || isDashboard) {
+  if (isLogin || isHome || isDashboard) {
     return <>{children}</>;
   }
 
