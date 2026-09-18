@@ -11,6 +11,10 @@ export type SidebarDossier = {
   type: string;
   etat: string;
   etatLabel: string;
+  bucket?: 'nouveaux' | 'en_cours' | 'retournes' | 'termines';
+  updatedAt?: string;
+  montantSouhaite?: number | null;
+  devise?: string | null;
   client: {
     fullName: string;
     activityAddress: string;
@@ -19,37 +23,101 @@ export type SidebarDossier = {
   };
 };
 
+export function formatMontantDossier(d: SidebarDossier): string {
+  if (d.montantSouhaite == null || Number.isNaN(d.montantSouhaite)) return '—';
+  const n = d.montantSouhaite.toLocaleString('fr-FR', {
+    maximumFractionDigits: 0,
+  });
+  return d.devise ? `${d.devise} ${n}` : n;
+}
+
 export type NavKey =
   | 'dashboard'
   | 'nouveaux'
   | 'dossiers'
+  | 'retournes'
+  | 'termines'
   | 'profile'
   | 'logout';
+
+export type NavCounts = {
+  nouveaux?: number;
+  enCours?: number;
+  retournes?: number;
+  termines?: number;
+};
 
 type NavItem = {
   key: NavKey;
   label: string;
   href?: string;
+  countKey?: keyof NavCounts;
 };
 
 const AGENT_NAV: NavItem[] = [
   { key: 'dashboard', label: 'Tableau de bord', href: '/agent' },
-  { key: 'nouveaux', label: 'Nouveaux dossiers', href: '/agent/nouveaux' },
-  { key: 'dossiers', label: 'Mes dossiers', href: '/agent/mes-dossiers' },
+  {
+    key: 'nouveaux',
+    label: 'Nouveaux dossiers',
+    href: '/agent/nouveaux',
+    countKey: 'nouveaux',
+  },
+  {
+    key: 'dossiers',
+    label: 'Dossiers en cours',
+    href: '/agent/dossiers-en-cours',
+    countKey: 'enCours',
+  },
+  {
+    key: 'retournes',
+    label: 'Dossiers retournés',
+    href: '/agent/dossiers-retournes',
+    countKey: 'retournes',
+  },
+  {
+    key: 'termines',
+    label: 'Dossiers terminés',
+    href: '/agent/dossiers-termines',
+    countKey: 'termines',
+  },
 ];
 
 const ANALYSTE_NAV: NavItem[] = [
   { key: 'dashboard', label: 'Tableau de bord', href: '/analyste' },
-  { key: 'nouveaux', label: 'Nouveaux dossiers', href: '/analyste/nouveaux' },
-  { key: 'dossiers', label: 'Mes dossiers', href: '/analyste/mes-dossiers' },
+  {
+    key: 'nouveaux',
+    label: 'Nouveaux dossiers',
+    href: '/analyste/nouveaux',
+    countKey: 'nouveaux',
+  },
+  {
+    key: 'dossiers',
+    label: 'Dossiers en cours',
+    href: '/analyste/dossiers-en-cours',
+    countKey: 'enCours',
+  },
+  {
+    key: 'retournes',
+    label: 'Dossiers retournés',
+    href: '/analyste/dossiers-retournes',
+    countKey: 'retournes',
+  },
+  {
+    key: 'termines',
+    label: 'Dossiers terminés',
+    href: '/analyste/dossiers-termines',
+    countKey: 'termines',
+  },
 ];
 
 function activeKey(pathname: string, base: 'agent' | 'analyste'): NavKey {
   if (pathname.startsWith(`/${base}/profile`)) return 'profile';
   if (pathname.startsWith(`/${base}/nouveaux`)) return 'nouveaux';
+  if (pathname.startsWith(`/${base}/dossiers-en-cours`)) return 'dossiers';
   if (pathname.startsWith(`/${base}/mes-dossiers`)) return 'dossiers';
+  if (pathname.startsWith(`/${base}/dossiers-retournes`)) return 'retournes';
+  if (pathname.startsWith(`/${base}/dossiers-termines`)) return 'termines';
   if (pathname === `/${base}` || pathname === `/${base}/`) return 'dashboard';
-  // détail /agent/:id
   const rest = pathname.slice(`/${base}/`.length);
   if (rest && !rest.includes('/')) return 'dossiers';
   return 'dashboard';
@@ -57,9 +125,11 @@ function activeKey(pathname: string, base: 'agent' | 'analyste'): NavKey {
 
 export function DashboardShell({
   base,
+  counts,
   children,
 }: {
   base: 'agent' | 'analyste';
+  counts?: NavCounts;
   children: ReactNode;
 }) {
   const { user, logout } = useAuth();
@@ -100,6 +170,10 @@ export function DashboardShell({
           <ul className={styles.menu}>
             {nav.map((item) => {
               const active = item.key === current;
+              const count =
+                item.countKey && counts
+                  ? counts[item.countKey]
+                  : undefined;
               return (
                 <li key={item.key}>
                   <button
@@ -113,9 +187,21 @@ export function DashboardShell({
                       <NavIcon name={item.key} />
                     </span>
                     <span className={styles.menuText}>{item.label}</span>
-                    <span className={styles.menuChevron} aria-hidden>
-                      <ChevronIcon />
-                    </span>
+                    {typeof count === 'number' && count > 0 ? (
+                      <span
+                        className={
+                          item.key === 'retournes'
+                            ? styles.menuBadgeWarn
+                            : styles.menuBadge
+                        }
+                      >
+                        {count}
+                      </span>
+                    ) : (
+                      <span className={styles.menuChevron} aria-hidden>
+                        <ChevronIcon />
+                      </span>
+                    )}
                   </button>
                 </li>
               );
@@ -168,7 +254,9 @@ export function DashboardEmpty({
 
 export function etatBadgeClass(etat: string) {
   if (etat === 'ANALYSTE' || etat === 'DESCENTE') return styles.badgeOk;
-  if (etat === 'REJETE') return `${styles.badge} ${styles.badgeWarn}`;
+  if (etat === 'REJETE' || etat === 'RETOUR_AGENT' || etat === 'RETOUR_ANALYSTE') {
+    return `${styles.badge} ${styles.badgeWarn}`;
+  }
   return styles.badge;
 }
 
@@ -218,6 +306,19 @@ function NavIcon({ name }: { name: NavKey }) {
       return (
         <svg {...props}>
           <path d="M3 7h6l2 2h10v10a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" />
+        </svg>
+      );
+    case 'retournes':
+      return (
+        <svg {...props}>
+          <path d="M9 14l-4-4 4-4" />
+          <path d="M5 10h11a4 4 0 010 8h-1" />
+        </svg>
+      );
+    case 'termines':
+      return (
+        <svg {...props}>
+          <path d="M20 6L9 17l-5-5" />
         </svg>
       );
     case 'profile':

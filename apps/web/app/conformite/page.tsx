@@ -1,3 +1,10 @@
+import { pageMetadata } from '../../lib/seo';
+
+export const metadata = pageMetadata(
+  'Conformité',
+  'Contrôle réglementaire et validation des dossiers.',
+);
+
 export default function ConformitePage() {
   return (
     <div>

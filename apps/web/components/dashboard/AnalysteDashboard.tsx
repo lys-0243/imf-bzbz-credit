@@ -5,22 +5,26 @@ import { useEffect, useMemo, useState } from 'react';
 import AuthGate from '../AuthGate';
 import { ApiError, apiFetch } from '../../lib/api';
 import AnalysteDossierPanel from './AnalysteDossierPanel';
-import { DashboardShell, type SidebarDossier } from './DashboardShell';
+import { BoardHome } from './BoardHome';
 import {
-  BoardHome,
-  DossierListView,
-  matchesDossierQuery,
-} from './DossierViews';
+  DashboardShell,
+  type SidebarDossier,
+} from './DashboardShell';
+import { DossierListView, matchesDossierQuery } from './DossierViews';
 import { ProfileView } from './ProfileView';
 
 export type AnalysteSection =
   | 'dashboard'
   | 'nouveaux'
   | 'dossiers'
+  | 'retournes'
+  | 'termines'
   | 'profile'
   | 'detail';
 
 type AnalysteRow = SidebarDossier & {
+  bucket?: 'nouveaux' | 'en_cours' | 'retournes' | 'termines';
+  updatedAt?: string;
   agent?: { displayName: string } | null;
   scoreValue?: number | null;
 };
@@ -60,38 +64,96 @@ function AnalysteWorkspace({
     };
   }, []);
 
+  const byBucket = useMemo(() => {
+    const aAnalyser = rows.filter((d) => d.bucket === 'nouveaux');
+    const retournes = rows.filter((d) => d.bucket === 'retournes');
+    const termines = rows.filter((d) => d.bucket === 'termines');
+    return {
+      nouveaux: aAnalyser,
+      enCours: aAnalyser,
+      retournes,
+      termines,
+    };
+  }, [rows]);
+
+  const counts = {
+    nouveaux: byBucket.nouveaux.length,
+    enCours: byBucket.enCours.length,
+    retournes: byBucket.retournes.length,
+    termines: byBucket.termines.length,
+  };
+
+  const listSource =
+    section === 'nouveaux' || section === 'dossiers'
+      ? byBucket.nouveaux
+      : section === 'retournes'
+        ? byBucket.retournes
+        : section === 'termines'
+          ? byBucket.termines
+          : rows;
+
   const filtered = useMemo(
-    () => rows.filter((d) => matchesDossierQuery(d, search)),
-    [rows, search],
+    () => listSource.filter((d) => matchesDossierQuery(d, search)),
+    [listSource, search],
   );
 
+  const listTitle =
+    section === 'nouveaux'
+      ? 'Nouveaux dossiers'
+      : section === 'dossiers'
+        ? 'Dossiers en cours'
+        : section === 'retournes'
+          ? 'Dossiers retournés'
+          : section === 'termines'
+            ? 'Dossiers terminés'
+            : 'Dossiers';
+
+  const recent = useMemo(() => rows.slice(0, 10), [rows]);
+
   return (
-    <DashboardShell base="analyste">
+    <DashboardShell base="analyste" counts={counts}>
       {section === 'dashboard' ? (
         <BoardHome
-          title="Tableau de bord"
+          detailBase="analyste"
+          recent={recent}
           stats={[
-            { label: 'À analyser', value: rows.length },
             {
-              label: 'Score moyen',
-              value:
-                rows.length === 0
-                  ? '—'
-                  : Math.round(
-                      rows.reduce((a, r) => a + (r.scoreValue ?? 0), 0) /
-                        rows.length,
-                    ),
+              key: 'nouveaux',
+              label: 'Nouveaux attribués',
+              value: counts.nouveaux,
+              href: '/analyste/nouveaux',
+              tone: counts.nouveaux > 0 ? 'ok' : 'muted',
             },
-            { label: 'Ouverts', value: rows.length },
+            {
+              key: 'en_cours',
+              label: 'En cours',
+              value: counts.enCours,
+              href: '/analyste/dossiers-en-cours',
+            },
+            {
+              key: 'retournes',
+              label: 'Retournés',
+              value: counts.retournes,
+              href: '/analyste/dossiers-retournes',
+              tone: counts.retournes > 0 ? 'warn' : 'muted',
+            },
+            {
+              key: 'termines',
+              label: 'Terminés',
+              value: counts.termines,
+              href: '/analyste/dossiers-termines',
+              tone: 'muted',
+            },
           ]}
         />
       ) : null}
 
-      {section === 'nouveaux' || section === 'dossiers' ? (
+      {section === 'nouveaux' ||
+      section === 'dossiers' ||
+      section === 'retournes' ||
+      section === 'termines' ? (
         <DossierListView
-          title={
-            section === 'nouveaux' ? 'Nouveaux dossiers' : 'Mes dossiers'
-          }
+          title={listTitle}
           dossiers={filtered}
           search={search}
           onSearchChange={setSearch}

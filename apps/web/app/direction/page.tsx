@@ -1,3 +1,10 @@
+import { pageMetadata } from '../../lib/seo';
+
+export const metadata = pageMetadata(
+  'Direction / CA',
+  'Signature et décisions Direction / Conseil d’administration.',
+);
+
 export default function DirectionPage() {
   return (
     <div>

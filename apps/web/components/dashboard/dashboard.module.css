@@ -181,6 +181,26 @@
   flex-shrink: 0;
 }
 
+.menuBadge,
+.menuBadgeWarn {
+  min-width: 22px;
+  height: 22px;
+  padding: 0 7px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.72rem;
+  font-weight: 700;
+  border-radius: var(--imf-radius);
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+
+.menuBadgeWarn {
+  background: rgba(244, 180, 184, 0.95);
+  color: #9a1c20;
+}
+
 .footerActions {
   margin-top: auto;
   display: flex;
@@ -239,6 +259,157 @@
   font-size: 1.5rem;
   font-weight: 700;
   letter-spacing: -0.02em;
+}
+
+.boardBanner {
+  border: 1px solid #dce3f2;
+  background: #f4f7fc;
+  padding: 18px 20px;
+  margin-bottom: 22px;
+}
+
+.boardBanner h2 {
+  margin: 0 0 6px;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.boardBanner p {
+  margin: 0;
+  color: var(--imf-muted);
+  line-height: 1.45;
+  font-size: 0.95rem;
+}
+
+.boardBannerWarn {
+  border-color: #e8b4b7;
+  background: #fdf4f4;
+}
+
+.boardBannerWarn h2 {
+  color: var(--imf-red);
+}
+
+.boardBannerOk {
+  border-color: #b7e0c2;
+  background: #f3faf5;
+}
+
+.boardBannerMuted {
+  border-color: #e5e5e5;
+  background: #fafafa;
+}
+
+.boardCards {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 28px;
+}
+
+.boardCard {
+  position: relative;
+  text-align: left;
+  border: 1px solid transparent;
+  border-radius: var(--imf-radius);
+  background: #fff;
+  padding: 20px 18px 18px;
+  cursor: pointer;
+  font-family: inherit;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow: hidden;
+  min-height: 148px;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.boardCard::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 5px;
+  background: currentColor;
+}
+
+.boardCard:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 28px rgba(20, 30, 60, 0.12);
+}
+
+.boardCardBlue {
+  color: var(--imf-blue);
+  background: linear-gradient(145deg, #eef2fb 0%, #f7f9fd 55%, #fff 100%);
+  border-color: #c9d4ef;
+}
+
+.boardCardGreen {
+  color: var(--imf-green);
+  background: linear-gradient(145deg, #eaf8ef 0%, #f5fcf7 55%, #fff 100%);
+  border-color: #b6e4c3;
+}
+
+.boardCardRed {
+  color: var(--imf-red);
+  background: linear-gradient(145deg, #fceeee 0%, #fdf6f6 55%, #fff 100%);
+  border-color: #e8b8bb;
+}
+
+.boardCardYellow {
+  color: #8a7a10;
+  background: linear-gradient(145deg, #fff8d6 0%, #fffcef 55%, #fff 100%);
+  border-color: #f0e08a;
+}
+
+.boardCardYellow::before {
+  background: var(--imf-yellow);
+}
+
+.boardCardTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.boardCardIcon {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--imf-radius);
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  flex-shrink: 0;
+}
+
+.boardCardLabel {
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--imf-muted);
+  line-height: 1.3;
+}
+
+.boardCardValue {
+  font-size: 2.35rem;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--imf-text);
+  letter-spacing: -0.03em;
+}
+
+.boardCardLink {
+  margin-top: auto;
+  font-size: 0.8rem;
+  font-weight: 700;
+  opacity: 0.9;
+}
+
+.boardCard:hover .boardCardLink {
+  opacity: 1;
+  text-decoration: underline;
 }
 
 .toolbar {
@@ -615,5 +786,9 @@
 
   .stats {
     grid-template-columns: 1fr;
+  }
+
+  .boardCards {
+    grid-template-columns: 1fr 1fr;
   }
 }

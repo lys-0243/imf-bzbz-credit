@@ -1,6 +1,11 @@
 'use client';
 
-import { dashStyles as styles, etatBadgeClass, type SidebarDossier } from './DashboardShell';
+import {
+  dashStyles as styles,
+  etatBadgeClass,
+  formatMontantDossier,
+  type SidebarDossier,
+} from './DashboardShell';
 
 export function matchesDossierQuery(d: SidebarDossier, q: string) {
   const s = q.trim().toLowerCase();
@@ -10,6 +15,7 @@ export function matchesDossierQuery(d: SidebarDossier, q: string) {
     d.type,
     d.etat,
     d.etatLabel,
+    formatMontantDossier(d),
     d.client.fullName,
     d.client.activityAddress,
     d.client.commune?.name,
@@ -88,6 +94,7 @@ export function DossierListView({
                 <th>Référence</th>
                 <th>Client</th>
                 <th>Type</th>
+                <th>Montant souhaité</th>
                 <th>État</th>
                 <th>Adresse</th>
               </tr>
@@ -105,6 +112,9 @@ export function DossierListView({
                   <td>{d.client.fullName}</td>
                   <td>{d.type}</td>
                   <td>
+                    <strong>{formatMontantDossier(d)}</strong>
+                  </td>
+                  <td>
                     <span className={etatBadgeClass(d.etat)}>{d.etatLabel}</span>
                   </td>
                   <td>
@@ -117,37 +127,6 @@ export function DossierListView({
           </table>
         </div>
       ) : null}
-    </div>
-  );
-}
-
-export function BoardHome({
-  title,
-  stats,
-}: {
-  title: string;
-  stats: Array<{ label: string; value: number | string }>;
-}) {
-  return (
-    <div>
-      <h1 className={styles.pageTitle}>{title}</h1>
-      <div className={styles.stats}>
-        {stats.map((s) => (
-          <div key={s.label} className={styles.statCard}>
-            <p className={styles.statLabel}>{s.label}</p>
-            <p className={styles.statValue}>{s.value}</p>
-          </div>
-        ))}
-      </div>
-      <div className={styles.emptyState}>
-        <div>
-          <h2>Bienvenue</h2>
-          <p>
-            Utilisez le menu pour consulter les nouveaux dossiers ou ouvrir vos
-            dossiers en cours.
-          </p>
-        </div>
-      </div>
     </div>
   );
 }
