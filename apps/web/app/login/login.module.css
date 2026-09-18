@@ -16,7 +16,7 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   background: #fff;
-  border-radius: 36px;
+  border-radius: 5px;
   overflow: hidden;
   box-shadow: 0 28px 80px rgba(10, 20, 50, 0.35);
 }
@@ -73,7 +73,7 @@
   height: 52px;
   padding: 0 46px 0 18px;
   border: 1px solid #d6d6d6;
-  border-radius: 22px;
+  border-radius: 5px;
   font-family: inherit;
   font-size: 0.98rem;
   background: #fff;
@@ -138,7 +138,7 @@
   margin-top: 8px;
   height: 52px;
   border: 0;
-  border-radius: 999px;
+  border-radius: 5px;
   background: #284080;
   color: #fff;
   font-family: inherit;
@@ -178,14 +178,14 @@
   font-size: 0.76rem;
   background: #f3f3f3;
   padding: 1px 5px;
-  border-radius: 4px;
+  border-radius: 5px;
 }
 
 .visualPane {
   position: relative;
   min-height: 320px;
   margin: 18px;
-  border-radius: 28px;
+  border-radius: 5px;
   overflow: hidden;
 }
 
@@ -227,7 +227,7 @@
   .card {
     grid-template-columns: 1fr;
     min-height: auto;
-    border-radius: 28px;
+    border-radius: 5px;
   }
 
   .formPane {
@@ -239,7 +239,7 @@
     order: 0;
     min-height: 220px;
     margin: 14px 14px 0;
-    border-radius: 22px;
+    border-radius: 5px;
   }
 
   .brand {

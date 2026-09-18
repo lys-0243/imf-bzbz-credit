@@ -17,10 +17,10 @@ function HomeInner() {
   const { user, loading } = useAuth();
 
   return (
-    <div>
-      <h1>Back-office crédit</h1>
-      <p>
-        Poste agent (descente, checklist, rapport) et inbox analyste disponibles.
+    <div style={{ maxWidth: 560, paddingTop: 24 }}>
+      <h1 style={{ fontFamily: 'var(--imf-font)' }}>Back-office crédit</h1>
+      <p style={{ color: 'var(--imf-muted)' }}>
+        Dashboard agent et analyste — sidebar dossiers + détail.
       </p>
       {loading ? null : user ? (
         <p>
