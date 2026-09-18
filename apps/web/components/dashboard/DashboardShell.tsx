@@ -36,16 +36,12 @@ const AGENT_NAV: NavItem[] = [
   { key: 'dashboard', label: 'Tableau de bord', href: '/agent' },
   { key: 'nouveaux', label: 'Nouveaux dossiers', href: '/agent/nouveaux' },
   { key: 'dossiers', label: 'Mes dossiers', href: '/agent/mes-dossiers' },
-  { key: 'profile', label: 'Profile', href: '/agent/profile' },
-  { key: 'logout', label: 'Deconnexion' },
 ];
 
 const ANALYSTE_NAV: NavItem[] = [
   { key: 'dashboard', label: 'Tableau de bord', href: '/analyste' },
   { key: 'nouveaux', label: 'Nouveaux dossiers', href: '/analyste/nouveaux' },
   { key: 'dossiers', label: 'Mes dossiers', href: '/analyste/mes-dossiers' },
-  { key: 'profile', label: 'Profile', href: '/analyste/profile' },
-  { key: 'logout', label: 'Deconnexion' },
 ];
 
 function activeKey(pathname: string, base: 'agent' | 'analyste'): NavKey {
@@ -66,21 +62,40 @@ export function DashboardShell({
   base: 'agent' | 'analyste';
   children: ReactNode;
 }) {
-  const { logout } = useAuth();
+  const { user, logout } = useAuth();
   const router = useRouter();
   const pathname = usePathname() || `/${base}`;
   const nav = base === 'agent' ? AGENT_NAV : ANALYSTE_NAV;
   const current = activeKey(pathname, base);
+  const profileHref = `/${base}/profile`;
+  const photoUrl =
+    (user as { photoUrl?: string | null } | null)?.photoUrl ||
+    '/images/logo.jpg';
 
   return (
     <div className={styles.shell}>
       <aside className={styles.sidebar}>
-        <div className={styles.brandRow}>
-          <img className={styles.logo} src="/images/logo.png" alt="" />
-          <p className={styles.brandTitle}>IMF Bisou Bisou</p>
+        <div className={styles.profileBlock}>
+          <div className={styles.avatarWrap}>
+            <img
+              className={styles.avatarImg}
+              src={photoUrl}
+              alt={user?.displayName || 'Profil'}
+            />
+            <button
+              type="button"
+              className={styles.avatarEdit}
+              aria-label="Modifier le profil"
+              onClick={() => router.push(profileHref)}
+            >
+              <PencilIcon />
+            </button>
+          </div>
+          <p className={styles.profileName}>{user?.displayName || '—'}</p>
+          <p className={styles.profileEmail}>{user?.email || '—'}</p>
         </div>
 
-        <nav>
+        <nav className={styles.nav}>
           <p className={styles.menuLabel}>Menu</p>
           <ul className={styles.menu}>
             {nav.map((item) => {
@@ -91,11 +106,6 @@ export function DashboardShell({
                     type="button"
                     className={`${styles.menuItem} ${active ? styles.menuItemActive : ''}`}
                     onClick={() => {
-                      if (item.key === 'logout') {
-                        logout();
-                        router.replace('/login');
-                        return;
-                      }
                       if (item.href) router.push(item.href);
                     }}
                   >
@@ -112,6 +122,26 @@ export function DashboardShell({
             })}
           </ul>
         </nav>
+
+        <div className={styles.footerActions}>
+          <button
+            type="button"
+            className={styles.profileBtn}
+            onClick={() => router.push(profileHref)}
+          >
+            Modifier le profil
+          </button>
+          <button
+            type="button"
+            className={styles.logoutBtn}
+            onClick={() => {
+              logout();
+              router.replace('/login');
+            }}
+          >
+            Deconnexion
+          </button>
+        </div>
       </aside>
 
       <div className={styles.main}>{children}</div>
@@ -146,6 +176,15 @@ function ChevronIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <path d="M9 6l6 6-6 6" />
+    </svg>
+  );
+}
+
+function PencilIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4 12.5-12.5z" />
     </svg>
   );
 }

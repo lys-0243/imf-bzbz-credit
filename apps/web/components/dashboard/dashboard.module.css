@@ -10,40 +10,118 @@
   top: 0;
   left: 0;
   bottom: 0;
-  width: 260px;
-  background: #fff;
-  border-right: 1px solid #ececec;
-  padding: 28px 20px;
+  width: 280px;
+  padding: 28px 22px;
   display: flex;
   flex-direction: column;
-  gap: 28px;
+  gap: 24px;
   z-index: 20;
   overflow-y: auto;
+  border-right: 0;
+  background:
+    radial-gradient(ellipse at 15% 10%, rgba(244, 223, 60, 0.18), transparent 45%),
+    radial-gradient(ellipse at 90% 90%, rgba(154, 28, 32, 0.22), transparent 42%),
+    linear-gradient(145deg, #1c2f66 0%, #284080 48%, #1a274f 100%);
+  color: #fff;
 }
 
 .brandRow {
   display: flex;
+  justify-content: center;
   align-items: center;
-  gap: 12px;
+  padding: 4px 0 8px;
 }
 
 .logo {
-  width: 36px;
-  height: 36px;
+  width: 64px;
+  height: 64px;
   object-fit: contain;
+  filter: brightness(1.05);
 }
 
-.brandTitle {
-  margin: 0;
-  font-size: 0.95rem;
+.profileBlock {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 8px;
+  padding: 12px 0 4px;
+}
+
+.avatarWrap {
+  position: relative;
+  width: 88px;
+  height: 88px;
+  margin-bottom: 4px;
+}
+
+.avatar,
+.avatarImg {
+  width: 88px;
+  height: 88px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.18);
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  font-size: 1.5rem;
   font-weight: 700;
+  letter-spacing: 0.02em;
+  object-fit: cover;
+}
+
+.avatarEdit {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 50%;
+  background: #111;
+  color: #fff;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  padding: 0;
+}
+
+.avatarEdit:hover {
+  background: #000;
+}
+
+.profileName {
+  margin: 4px 0 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #fff;
+  line-height: 1.25;
+  word-break: break-word;
+}
+
+.profileEmail {
+  margin: 0;
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.72);
+  word-break: break-all;
+  line-height: 1.35;
+}
+
+.nav {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
 }
 
 .menuLabel {
-  margin: 0 0 8px;
-  font-size: 0.8rem;
+  margin: 8px 0 8px;
+  font-size: 0.75rem;
   font-weight: 700;
-  color: var(--imf-text);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.55);
 }
 
 .menu {
@@ -52,7 +130,8 @@
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
+  flex: 1;
 }
 
 .menuItem {
@@ -66,18 +145,21 @@
   font-family: inherit;
   font-size: 0.92rem;
   font-weight: 500;
-  color: #222;
+  color: rgba(255, 255, 255, 0.88);
   cursor: pointer;
   text-align: left;
+  border-radius: var(--imf-radius);
 }
 
 .menuItem:hover {
-  color: var(--imf-blue);
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .menuItemActive {
-  color: var(--imf-blue);
+  color: #fff;
   font-weight: 600;
+  background: rgba(255, 255, 255, 0.14);
 }
 
 .menuIcon {
@@ -95,12 +177,57 @@
 .menuChevron {
   width: 16px;
   height: 16px;
-  opacity: 0.45;
+  opacity: 0.5;
   flex-shrink: 0;
 }
 
+.footerActions {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.profileBtn {
+  width: 100%;
+  height: 42px;
+  border: 0;
+  border-radius: var(--imf-radius);
+  background: rgba(255, 255, 255, 0.95);
+  color: var(--imf-blue);
+  font-family: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.profileBtn:hover {
+  background: #fff;
+}
+
+.logoutBtn {
+  width: 100%;
+  height: 42px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: var(--imf-radius);
+  background: transparent;
+  color: #fff;
+  font-family: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.logoutBtn:hover {
+  background: rgba(154, 28, 32, 0.22);
+  border-color: rgba(244, 180, 184, 0.85);
+  color: #ffd6d8;
+}
+
 .main {
-  margin-left: 260px;
+  margin-left: 280px;
   margin-right: 32px;
   min-height: 100vh;
   padding: 28px 0 40px 32px;
@@ -477,7 +604,7 @@
     position: relative;
     width: 100%;
     border-right: 0;
-    border-bottom: 1px solid #ececec;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
   }
 
   .main {
