@@ -17,6 +17,8 @@ type Props = {
   /** Full home header with hero + search; compact otherwise; detail = back + title */
   variant?: 'home' | 'compact' | 'detail';
   title?: string;
+  /** Show search row (home always; also on compact when true, e.g. Dossiers) */
+  showSearch?: boolean;
   searchQuery?: string;
   onChangeSearch?: (q: string) => void;
   onSubmitSearch?: () => void;
@@ -31,6 +33,7 @@ export function HomeHeader({
   displayName = '',
   variant = 'home',
   title,
+  showSearch = false,
   searchQuery = '',
   onChangeSearch,
   onSubmitSearch,
@@ -41,6 +44,7 @@ export function HomeHeader({
 }: Props) {
   const insets = useSafeAreaInsets();
   const firstName = displayName.trim().split(/\s+/)[0] || 'Utilisateur';
+  const withSearch = variant === 'home' || showSearch;
 
   if (variant === 'detail') {
     return (
@@ -72,13 +76,18 @@ export function HomeHeader({
     <SidebarGradient
       style={[
         styles.wrap,
-        variant === 'home' ? styles.wrapHome : styles.wrapCompact,
-        { paddingTop: insets.top + (variant === 'home' ? 8 : 10) },
+        variant === 'home' || withSearch ? styles.wrapHome : styles.wrapCompact,
+        {
+          paddingTop:
+            insets.top + (variant === 'home' || withSearch ? 8 : 10),
+        },
       ]}
     >
       <View style={styles.topRow}>
         <View style={styles.identity}>
-          <UserAvatar name={displayName} size={variant === 'home' ? 46 : 40} />
+          {variant === 'home' ? (
+            <UserAvatar name={displayName} size={46} />
+          ) : null}
           <View style={styles.greetingCol}>
             {variant === 'home' ? (
               <Text style={styles.greeting} numberOfLines={1}>
@@ -111,35 +120,36 @@ export function HomeHeader({
       </View>
 
       {variant === 'home' ? (
-        <>
-          <Text style={styles.hero} numberOfLines={2}>
-            Suivez vos dossiers crédit
-          </Text>
-          <View style={styles.searchRow}>
-            <Ionicons
-              name="search"
-              size={18}
-              color={colors.neutral.placeholder}
-              style={styles.searchIcon}
-            />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Nom, téléphone, n° dossier"
-              placeholderTextColor={colors.neutral.placeholder}
-              value={searchQuery}
-              onChangeText={onChangeSearch}
-              onSubmitEditing={onSubmitSearch}
-              returnKeyType="search"
-            />
-            <Pressable
-              style={styles.searchBtn}
-              onPress={onSubmitSearch}
-              accessibilityLabel="Rechercher"
-            >
-              <Ionicons name="arrow-forward" size={18} color="#fff" />
-            </Pressable>
-          </View>
-        </>
+        <Text style={styles.hero} numberOfLines={2}>
+          Suivez vos dossiers crédit
+        </Text>
+      ) : null}
+
+      {withSearch ? (
+        <View style={styles.searchRow}>
+          <Ionicons
+            name="search"
+            size={18}
+            color={colors.neutral.placeholder}
+            style={styles.searchIcon}
+          />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Nom, téléphone, n° dossier"
+            placeholderTextColor={colors.neutral.placeholder}
+            value={searchQuery}
+            onChangeText={onChangeSearch}
+            onSubmitEditing={onSubmitSearch}
+            returnKeyType="search"
+          />
+          <Pressable
+            style={styles.searchBtn}
+            onPress={onSubmitSearch}
+            accessibilityLabel="Rechercher"
+          >
+            <Ionicons name="arrow-forward" size={18} color="#fff" />
+          </Pressable>
+        </View>
       ) : null}
     </SidebarGradient>
   );

@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import AuthGate from '../AuthGate';
 import { ApiError, apiFetch } from '../../lib/api';
 import AnalysteDossierPanel from './AnalysteDossierPanel';
@@ -11,6 +11,7 @@ import {
   type SidebarDossier,
 } from './DashboardShell';
 import { DossierListView, matchesDossierQuery } from './DossierViews';
+import { DossierSheet } from './DossierSheet';
 import { ProfileView } from './ProfileView';
 
 export type AnalysteSection =
@@ -41,6 +42,11 @@ function AnalysteWorkspace({
   const [search, setSearch] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [openId, setOpenId] = useState<string | null>(selectedId ?? null);
+
+  useEffect(() => {
+    setOpenId(selectedId ?? null);
+  }, [selectedId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -83,12 +89,14 @@ function AnalysteWorkspace({
     termines: byBucket.termines.length,
   };
 
+  const viewSection = section === 'detail' ? 'dashboard' : section;
+
   const listSource =
-    section === 'nouveaux' || section === 'dossiers'
+    viewSection === 'nouveaux' || viewSection === 'dossiers'
       ? byBucket.nouveaux
-      : section === 'retournes'
+      : viewSection === 'retournes'
         ? byBucket.retournes
-        : section === 'termines'
+        : viewSection === 'termines'
           ? byBucket.termines
           : rows;
 
@@ -98,24 +106,35 @@ function AnalysteWorkspace({
   );
 
   const listTitle =
-    section === 'nouveaux'
+    viewSection === 'nouveaux'
       ? 'Nouveaux dossiers'
-      : section === 'dossiers'
+      : viewSection === 'dossiers'
         ? 'Dossiers en cours'
-        : section === 'retournes'
+        : viewSection === 'retournes'
           ? 'Dossiers retournés'
-          : section === 'termines'
+          : viewSection === 'termines'
             ? 'Dossiers terminés'
             : 'Dossiers';
 
   const recent = useMemo(() => rows.slice(0, 10), [rows]);
 
+  const closeSheet = useCallback(() => {
+    setOpenId(null);
+    if (section === 'detail') {
+      router.replace('/analyste');
+    }
+  }, [router, section]);
+
+  const openDossier = useCallback((id: string) => {
+    setOpenId(id);
+  }, []);
+
   return (
     <DashboardShell base="analyste" counts={counts}>
-      {section === 'dashboard' ? (
+      {viewSection === 'dashboard' ? (
         <BoardHome
-          detailBase="analyste"
           recent={recent}
+          onSelectDossier={openDossier}
           stats={[
             {
               key: 'nouveaux',
@@ -148,26 +167,27 @@ function AnalysteWorkspace({
         />
       ) : null}
 
-      {section === 'nouveaux' ||
-      section === 'dossiers' ||
-      section === 'retournes' ||
-      section === 'termines' ? (
+      {viewSection === 'nouveaux' ||
+      viewSection === 'dossiers' ||
+      viewSection === 'retournes' ||
+      viewSection === 'termines' ? (
         <DossierListView
           title={listTitle}
           dossiers={filtered}
+          selectedId={openId}
           search={search}
           onSearchChange={setSearch}
-          onSelect={(id) => router.push(`/analyste/${id}`)}
+          onSelect={openDossier}
           loading={loading}
           error={error}
         />
       ) : null}
 
-      {section === 'profile' ? <ProfileView /> : null}
+      {viewSection === 'profile' ? <ProfileView /> : null}
 
-      {section === 'detail' && selectedId ? (
-        <AnalysteDossierPanel id={selectedId} />
-      ) : null}
+      <DossierSheet open={Boolean(openId)} onClose={closeSheet}>
+        {openId ? <AnalysteDossierPanel id={openId} /> : null}
+      </DossierSheet>
     </DashboardShell>
   );
 }

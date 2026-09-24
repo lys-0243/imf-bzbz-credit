@@ -7,6 +7,7 @@ export type AuthUser = {
   displayName: string;
   role: string;
   zoneId?: string | null;
+  zone?: { id: string; name: string; code?: string } | null;
 };
 
 type AuthCtx = {

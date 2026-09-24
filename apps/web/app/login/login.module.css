@@ -3,7 +3,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 24px;
+  padding: 24px 72px;
   background:
     radial-gradient(ellipse at 15% 20%, rgba(244, 223, 60, 0.18), transparent 45%),
     radial-gradient(ellipse at 85% 80%, rgba(154, 28, 32, 0.2), transparent 40%),
@@ -220,7 +220,7 @@
 
 @media (max-width: 860px) {
   .page {
-    padding: 12px;
+    padding: 16px 32px;
     align-items: stretch;
   }
 

@@ -83,6 +83,10 @@ export function HomeScreen() {
                 displayName={displayName}
                 variant="compact"
                 title={COMPACT_TITLES[activeTab]}
+                showSearch={activeTab === 'dossiers'}
+                searchQuery={q}
+                onChangeSearch={setQ}
+                onSubmitSearch={() => setSearchKey((k) => k + 1)}
                 onBellPress={() => setActiveTab('alertes')}
               />
             )}
@@ -97,7 +101,9 @@ export function HomeScreen() {
                 />
               ) : null}
               {activeTab === 'alertes' ? <AlertsTab /> : null}
-              {activeTab === 'profil' ? <ProfileTab /> : null}
+              {activeTab === 'profil' ? (
+                <ProfileTab onNavigate={setActiveTab} />
+              ) : null}
             </View>
           </>
         )}

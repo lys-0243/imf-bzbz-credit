@@ -1,5 +1,6 @@
 'use client';
 
+import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../lib/auth';
 import {
@@ -8,6 +9,7 @@ import {
   formatMontantDossier,
   type SidebarDossier,
 } from './DashboardShell';
+import { DossierSearchField, matchesDossierQuery } from './DossierViewsCore';
 
 export type BoardStat = {
   key: string;
@@ -28,27 +30,27 @@ function statusMessage(
 ) {
   if (counts.retournes > 0) {
     return {
-      title: `Bonjour ${name}`,
+      title: `Bonjour${name ? `, ${name}` : ''}`,
       text: `Attention : ${counts.retournes} dossier${counts.retournes > 1 ? 's' : ''} renvoyé${counts.retournes > 1 ? 's' : ''} nécessitent votre action.`,
       tone: 'warn' as const,
     };
   }
   if (counts.nouveaux > 0) {
     return {
-      title: `Bonjour ${name}`,
+      title: `Bonjour${name ? `, ${name}` : ''}`,
       text: `Vous avez ${counts.nouveaux} nouveau${counts.nouveaux > 1 ? 'x' : ''} dossier${counts.nouveaux > 1 ? 's' : ''} attribué${counts.nouveaux > 1 ? 's' : ''}. Bonne journée de travail.`,
       tone: 'ok' as const,
     };
   }
   if (counts.enCours > 0) {
     return {
-      title: `Bonjour ${name}`,
+      title: `Bonjour${name ? `, ${name}` : ''}`,
       text: `${counts.enCours} dossier${counts.enCours > 1 ? 's' : ''} en cours. Continuez vos descentes et rapports.`,
       tone: 'default' as const,
     };
   }
   return {
-    title: `Bonjour ${name}`,
+    title: `Bonjour${name ? `, ${name}` : ''}`,
     text: 'Votre file est à jour. Aucun dossier en attente pour le moment.',
     tone: 'muted' as const,
   };
@@ -114,15 +116,17 @@ export function BoardHome({
   title = 'Tableau de bord',
   stats,
   recent,
-  detailBase,
+  onSelectDossier,
 }: {
   title?: string;
   stats: BoardStat[];
   recent: SidebarDossier[];
-  detailBase: 'agent' | 'analyste';
+  onSelectDossier: (id: string) => void;
 }) {
   const { user } = useAuth();
   const router = useRouter();
+  const [search, setSearch] = useState('');
+  const [appliedQuery, setAppliedQuery] = useState('');
   const counts = {
     nouveaux: stats.find((s) => s.key === 'nouveaux')?.value ?? 0,
     enCours: stats.find((s) => s.key === 'en_cours')?.value ?? 0,
@@ -131,24 +135,24 @@ export function BoardHome({
   };
   const msg = statusMessage(user?.displayName?.split(/\s+/)[0] || '', counts);
 
+  const filtered = useMemo(
+    () => recent.filter((d) => matchesDossierQuery(d, appliedQuery)),
+    [recent, appliedQuery],
+  );
+
   return (
     <div>
-      <h1 className={styles.pageTitle}>{title}</h1>
-
-      <div
-        className={`${styles.boardBanner} ${
-          msg.tone === 'warn'
-            ? styles.boardBannerWarn
-            : msg.tone === 'ok'
-              ? styles.boardBannerOk
-              : msg.tone === 'muted'
-                ? styles.boardBannerMuted
-                : ''
-        }`}
-      >
-        <h2>{msg.title}</h2>
-        <p>{msg.text}</p>
-      </div>
+      <header className={styles.boardHero}>
+        <p className={styles.boardHeroEyebrow}>{title}</p>
+        <h1 className={styles.boardHeroTitle}>{msg.title}</h1>
+        <p className={styles.boardHeroText}>{msg.text}</p>
+        <DossierSearchField
+          value={search}
+          onChange={setSearch}
+          onSubmit={() => setAppliedQuery(search)}
+          placeholder="Nom, référence, type de crédit…"
+        />
+      </header>
 
       <div className={styles.boardCards}>
         {stats.map((s) => (
@@ -172,11 +176,15 @@ export function BoardHome({
 
       <section className={styles.section}>
         <h2>10 derniers dossiers travaillés</h2>
-        {recent.length === 0 ? (
+        {filtered.length === 0 ? (
           <div className={styles.emptyState}>
             <div>
               <h2>Aucun historique</h2>
-              <p>Les dossiers récemment mis à jour apparaîtront ici.</p>
+              <p>
+                {appliedQuery.trim()
+                  ? 'Aucun dossier ne correspond à votre recherche.'
+                  : 'Les dossiers récemment mis à jour apparaîtront ici.'}
+              </p>
             </div>
           </div>
         ) : (
@@ -193,11 +201,8 @@ export function BoardHome({
                 </tr>
               </thead>
               <tbody>
-                {recent.map((d) => (
-                  <tr
-                    key={d.id}
-                    onClick={() => router.push(`/${detailBase}/${d.id}`)}
-                  >
+                {filtered.map((d) => (
+                  <tr key={d.id} onClick={() => onSelectDossier(d.id)}>
                     <td>
                       <strong>{d.reference}</strong>
                     </td>
@@ -207,9 +212,7 @@ export function BoardHome({
                       <strong>{formatMontantDossier(d)}</strong>
                     </td>
                     <td>
-                      <span className={etatBadgeClass(d.etat)}>
-                        {d.etatLabel}
-                      </span>
+                      <span className={etatBadgeClass(d.etat)}>{d.etatLabel}</span>
                     </td>
                     <td className={styles.itemMeta}>
                       {d.updatedAt

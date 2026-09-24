@@ -578,33 +578,7 @@ export function DetailScreen({ id, onBack, bottomInset = 24 }: Props) {
         onBack={onBack}
       />
 
-      <View style={styles.tabsWrap}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.tabsRow}
-        >
-          {tabs.map((t) => {
-            const active = tab === t.key;
-            return (
-              <Pressable
-                key={t.key}
-                style={[styles.tabChip, active && styles.tabChipActive]}
-                onPress={() => setTab(t.key)}
-              >
-                <Text
-                  style={[
-                    styles.tabChipText,
-                    active && styles.tabChipTextActive,
-                  ]}
-                >
-                  {t.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
-      </View>
+      
 
       <ScrollView
         contentContainerStyle={[
@@ -637,6 +611,34 @@ export function DetailScreen({ id, onBack, bottomInset = 24 }: Props) {
         </View>
 
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+        <View style={styles.tabsWrap}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.tabsRow}
+        >
+          {tabs.map((t) => {
+            const active = tab === t.key;
+            return (
+              <Pressable
+                key={t.key}
+                style={[styles.tabChip, active && styles.tabChipActive]}
+                onPress={() => setTab(t.key)}
+              >
+                <Text
+                  style={[
+                    styles.tabChipText,
+                    active && styles.tabChipTextActive,
+                  ]}
+                >
+                  {t.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      </View>
         {tabContent}
       </ScrollView>
     </View>
@@ -652,18 +654,18 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   tabsWrap: {
-    backgroundColor: colors.neutral.surface,
-    marginTop: -18,
-    marginHorizontal: 12,
+    backgroundColor: colors.primary.blue,
+    marginBottom: -10,
+    marginHorizontal: 0,
     borderRadius: 22,
     paddingVertical: 8,
     paddingHorizontal: 6,
     zIndex: 2,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
+    shadowOffset: { width: 5, height: 4 },
+    shadowOpacity: 0.12,
     shadowRadius: 10,
-    elevation: 3,
+    elevation: 5,
   },
   tabsRow: {
     paddingHorizontal: 4,
@@ -676,15 +678,15 @@ const styles = StyleSheet.create({
     borderRadius: 999,
   },
   tabChipActive: {
-    backgroundColor: colors.primary.blue,
+    backgroundColor: '#fff',
   },
   tabChipText: {
     fontFamily: fonts.medium,
     fontSize: 16,
-    color: colors.neutral.textMuted,
+    color: 'rgba(255,255,255,0.72)',
   },
   tabChipTextActive: {
-    color: '#fff',
+    color: colors.primary.blue,
     fontFamily: fonts.semiBold,
   },
   scroll: {
