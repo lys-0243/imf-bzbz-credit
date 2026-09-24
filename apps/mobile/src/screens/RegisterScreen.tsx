@@ -16,6 +16,7 @@ import { useAuth } from '../auth';
 import { DateField } from '../components/DateField';
 import { BoolField, DurationField, Field, ListSelectField, MoneyField, Section, SelectField } from '../components/Form';
 import { HomeHeader } from '../components/HomeHeader';
+import { ResultSheet } from '../components/ResultSheet';
 import {
   CLIENT_STATUTS,
   DEVISES,
@@ -141,6 +142,12 @@ export function RegisterScreen({ type, onCreated, onCancel }: Props) {
   const [maxReached, setMaxReached] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<{
+    variant: 'success' | 'error';
+    title: string;
+    message?: string;
+    dossierId?: string;
+  } | null>(null);
   const [ind, setInd] = useState(() => defaultIndividuelPayload(''));
   const [sal, setSal] = useState(() => defaultSalairePayload(''));
 
@@ -247,13 +254,26 @@ export function RegisterScreen({ type, onCreated, onCancel }: Props) {
                     : undefined,
               },
             };
-      const created = await api<{ id: string }>('/dossiers', {
+      const created = await api<{ id: string; reference?: string }>('/dossiers', {
         method: 'POST',
         body: JSON.stringify({ type, payload }),
       });
-      onCreated(created.id);
+      setResult({
+        variant: 'success',
+        title: 'Dossier créé',
+        message: created.reference
+          ? `Référence ${created.reference}`
+          : 'Le dossier a été enregistré avec succès.',
+        dossierId: created.id,
+      });
     } catch (e: any) {
-      setError(e.message || 'Échec enregistrement');
+      const msg = e.message || 'Échec enregistrement';
+      setError(msg);
+      setResult({
+        variant: 'error',
+        title: 'Échec de l’enregistrement',
+        message: msg,
+      });
     } finally {
       setBusy(false);
     }
@@ -632,6 +652,34 @@ export function RegisterScreen({ type, onCreated, onCancel }: Props) {
           )}
         </View>
       </View>
+
+      <ResultSheet
+        visible={result != null}
+        variant={result?.variant || 'success'}
+        title={result?.title || ''}
+        message={result?.message}
+        primaryLabel={
+          result?.variant === 'success' ? 'Voir le dossier' : 'Fermer'
+        }
+        onPrimary={() => {
+          if (result?.variant === 'success' && result.dossierId) {
+            const id = result.dossierId;
+            setResult(null);
+            onCreated(id);
+            return;
+          }
+          setResult(null);
+        }}
+        onClose={() => {
+          if (result?.variant === 'success' && result.dossierId) {
+            // Close without opening detail → back to home list via cancel
+            setResult(null);
+            onCancel();
+            return;
+          }
+          setResult(null);
+        }}
+      />
     </View>
   );
 }

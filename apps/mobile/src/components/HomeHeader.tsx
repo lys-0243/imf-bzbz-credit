@@ -13,9 +13,9 @@ import { SidebarGradient } from './SidebarGradient';
 import { UserAvatar } from './UserAvatar';
 
 type Props = {
-  displayName: string;
-  /** Full home header with hero + search; compact otherwise */
-  variant?: 'home' | 'compact';
+  displayName?: string;
+  /** Full home header with hero + search; compact otherwise; detail = back + title */
+  variant?: 'home' | 'compact' | 'detail';
   title?: string;
   searchQuery?: string;
   onChangeSearch?: (q: string) => void;
@@ -24,10 +24,11 @@ type Props = {
   /** Compact header trailing action (default bell) */
   trailing?: 'bell' | 'close';
   onClose?: () => void;
+  onBack?: () => void;
 };
 
 export function HomeHeader({
-  displayName,
+  displayName = '',
   variant = 'home',
   title,
   searchQuery = '',
@@ -36,9 +37,36 @@ export function HomeHeader({
   onBellPress,
   trailing = 'bell',
   onClose,
+  onBack,
 }: Props) {
   const insets = useSafeAreaInsets();
   const firstName = displayName.trim().split(/\s+/)[0] || 'Utilisateur';
+
+  if (variant === 'detail') {
+    return (
+      <SidebarGradient
+        style={[
+          styles.wrap,
+          styles.wrapCompact,
+          { paddingTop: insets.top + 10 },
+        ]}
+      >
+        <View style={styles.detailRow}>
+          <Pressable
+            style={styles.bellBtn}
+            onPress={onBack}
+            accessibilityLabel="Retour"
+          >
+            <Ionicons name="chevron-back" size={22} color="#fff" />
+          </Pressable>
+          <Text style={styles.detailTitle} numberOfLines={1}>
+            {title || ''}
+          </Text>
+          <View style={styles.detailSpacer} />
+        </View>
+      </SidebarGradient>
+    );
+  }
 
   return (
     <SidebarGradient
@@ -135,6 +163,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
+  detailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  detailTitle: {
+    flex: 1,
+    textAlign: 'center',
+    color: '#fff',
+    fontFamily: fonts.bold,
+    fontSize: 17,
+    marginHorizontal: 8,
+  },
+  detailSpacer: { width: 42 },
   identity: {
     flexDirection: 'row',
     alignItems: 'center',
