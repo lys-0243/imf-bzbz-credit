@@ -548,6 +548,8 @@ export function validateAgentChecklist(
     if (item.input === 'upload') {
       const kind = item.kind ?? item.id;
       if (!uploadedKinds.has(kind)) {
+        const avis = (val?.note ?? '').trim();
+        if (avis) continue;
         issues.push({
           itemId: item.id,
           label: item.label,

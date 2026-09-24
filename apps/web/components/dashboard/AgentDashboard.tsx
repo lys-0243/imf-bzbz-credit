@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import AuthGate from '../AuthGate';
 import { ApiError, apiFetch } from '../../lib/api';
 import AgentDossierPanel from './AgentDossierPanel';
@@ -11,7 +11,6 @@ import {
   type SidebarDossier,
 } from './DashboardShell';
 import { DossierListView, matchesDossierQuery } from './DossierViews';
-import { DossierSheet } from './DossierSheet';
 import { ProfileView } from './ProfileView';
 
 export type AgentSection =
@@ -41,11 +40,6 @@ function AgentWorkspace({
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [listKey, setListKey] = useState(0);
-  const [openId, setOpenId] = useState<string | null>(selectedId ?? null);
-
-  useEffect(() => {
-    setOpenId(selectedId ?? null);
-  }, [selectedId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -85,16 +79,14 @@ function AgentWorkspace({
     termines: byBucket.termines.length,
   };
 
-  const viewSection = section === 'detail' ? 'dashboard' : section;
-
   const listSource =
-    viewSection === 'nouveaux'
+    section === 'nouveaux'
       ? byBucket.nouveaux
-      : viewSection === 'dossiers'
+      : section === 'dossiers'
         ? byBucket.enCours
-        : viewSection === 'retournes'
+        : section === 'retournes'
           ? byBucket.retournes
-          : viewSection === 'termines'
+          : section === 'termines'
             ? byBucket.termines
             : rows;
 
@@ -104,35 +96,24 @@ function AgentWorkspace({
   );
 
   const listTitle =
-    viewSection === 'nouveaux'
+    section === 'nouveaux'
       ? 'Nouveaux dossiers'
-      : viewSection === 'dossiers'
+      : section === 'dossiers'
         ? 'Dossiers en cours'
-        : viewSection === 'retournes'
+        : section === 'retournes'
           ? 'Dossiers retournés'
-          : viewSection === 'termines'
+          : section === 'termines'
             ? 'Dossiers terminés'
             : 'Dossiers';
 
   const recent = useMemo(() => rows.slice(0, 10), [rows]);
 
-  const closeSheet = useCallback(() => {
-    setOpenId(null);
-    if (section === 'detail') {
-      router.replace('/agent');
-    }
-  }, [router, section]);
-
-  const openDossier = useCallback((id: string) => {
-    setOpenId(id);
-  }, []);
-
   return (
     <DashboardShell base="agent" counts={counts}>
-      {viewSection === 'dashboard' ? (
+      {section === 'dashboard' ? (
         <BoardHome
           recent={recent}
-          onSelectDossier={openDossier}
+          onSelectDossier={(id) => router.push(`/agent/${id}`)}
           stats={[
             {
               key: 'nouveaux',
@@ -165,36 +146,33 @@ function AgentWorkspace({
         />
       ) : null}
 
-      {viewSection === 'nouveaux' ||
-      viewSection === 'dossiers' ||
-      viewSection === 'retournes' ||
-      viewSection === 'termines' ? (
+      {section === 'nouveaux' ||
+      section === 'dossiers' ||
+      section === 'retournes' ||
+      section === 'termines' ? (
         <DossierListView
           title={listTitle}
           dossiers={filtered}
-          selectedId={openId}
+          selectedId={selectedId}
           search={search}
           onSearchChange={setSearch}
-          onSelect={openDossier}
+          onSelect={(id) => router.push(`/agent/${id}`)}
           loading={loading}
           error={error}
         />
       ) : null}
 
-      {viewSection === 'profile' ? <ProfileView /> : null}
+      {section === 'profile' ? <ProfileView /> : null}
 
-      <DossierSheet open={Boolean(openId)} onClose={closeSheet}>
-        {openId ? (
-          <AgentDossierPanel
-            id={openId}
-            onSubmitted={() => {
-              setListKey((k) => k + 1);
-              closeSheet();
-              router.push('/agent/dossiers-en-cours');
-            }}
-          />
-        ) : null}
-      </DossierSheet>
+      {section === 'detail' && selectedId ? (
+        <AgentDossierPanel
+          id={selectedId}
+          onSubmitted={() => {
+            setListKey((k) => k + 1);
+            router.push('/agent/dossiers-en-cours');
+          }}
+        />
+      ) : null}
     </DashboardShell>
   );
 }

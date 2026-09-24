@@ -574,7 +574,7 @@ export function DetailScreen({ id, onBack, bottomInset = 24 }: Props) {
     <View style={styles.root}>
       <HomeHeader
         variant="detail"
-        title={d.reference}
+        title={`Dossier n° ${d.reference}`}
         onBack={onBack}
       />
 

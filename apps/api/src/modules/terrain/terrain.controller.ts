@@ -11,7 +11,7 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Role } from '@prisma/client';
-import { IsBoolean, IsObject, IsOptional, IsString } from 'class-validator';
+import { IsDateString, IsObject, IsString } from 'class-validator';
 import type { ChecklistAnswers } from '@imf/shared';
 import { CurrentUser } from '../identity/current-user.decorator';
 import { JwtAuthGuard } from '../identity/jwt-auth.guard';
@@ -26,6 +26,11 @@ class ChecklistDto {
 class RapportDto {
   @IsString()
   rapportTexte!: string;
+}
+
+class StartVisiteDto {
+  @IsDateString()
+  visiteDate!: string;
 }
 
 class UploadMetaDto {
@@ -66,8 +71,9 @@ export class TerrainController {
   start(
     @CurrentUser() user: { id: string; role: Role },
     @Param('id') id: string,
+    @Body() dto: StartVisiteDto,
   ) {
-    return this.terrain.startVisite(user, id);
+    return this.terrain.startVisite(user, id, dto.visiteDate);
   }
 
   @Put('agent/dossiers/:id/checklist')
@@ -88,6 +94,15 @@ export class TerrainController {
     @Body() dto: RapportDto,
   ) {
     return this.terrain.saveRapport(user, id, dto.rapportTexte);
+  }
+
+  @Post('agent/dossiers/:id/rapport/generate')
+  @Roles(Role.AGENT, Role.ADMIN)
+  generateRapport(
+    @CurrentUser() user: { id: string; role: Role },
+    @Param('id') id: string,
+  ) {
+    return this.terrain.generateRapport(user, id);
   }
 
   @Post('agent/dossiers/:id/pieces')
