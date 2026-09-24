@@ -49,8 +49,8 @@ export function HomeScreen() {
 
   if (registerType) {
     return (
-      <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
-        <StatusBar style="dark" />
+      <View style={styles.root}>
+        <StatusBar style="light" />
         <RegisterScreen
           type={registerType}
           onCancel={() => setRegisterType(null)}
@@ -59,7 +59,7 @@ export function HomeScreen() {
             setDetailId(id);
           }}
         />
-      </SafeAreaView>
+      </View>
     );
   }
 

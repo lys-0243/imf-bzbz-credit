@@ -21,6 +21,9 @@ type Props = {
   onChangeSearch?: (q: string) => void;
   onSubmitSearch?: () => void;
   onBellPress?: () => void;
+  /** Compact header trailing action (default bell) */
+  trailing?: 'bell' | 'close';
+  onClose?: () => void;
 };
 
 export function HomeHeader({
@@ -31,6 +34,8 @@ export function HomeHeader({
   onChangeSearch,
   onSubmitSearch,
   onBellPress,
+  trailing = 'bell',
+  onClose,
 }: Props) {
   const insets = useSafeAreaInsets();
   const firstName = displayName.trim().split(/\s+/)[0] || 'Utilisateur';
@@ -58,13 +63,23 @@ export function HomeHeader({
             )}
           </View>
         </View>
-        <Pressable
-          style={styles.bellBtn}
-          onPress={onBellPress}
-          accessibilityLabel="Notifications"
-        >
-          <Ionicons name="notifications-outline" size={22} color="#fff" />
-        </Pressable>
+        {trailing === 'close' ? (
+          <Pressable
+            style={styles.bellBtn}
+            onPress={onClose}
+            accessibilityLabel="Annuler"
+          >
+            <Ionicons name="close" size={22} color="#fff" />
+          </Pressable>
+        ) : (
+          <Pressable
+            style={styles.bellBtn}
+            onPress={onBellPress}
+            accessibilityLabel="Notifications"
+          >
+            <Ionicons name="notifications-outline" size={22} color="#fff" />
+          </Pressable>
+        )}
       </View>
 
       {variant === 'home' ? (

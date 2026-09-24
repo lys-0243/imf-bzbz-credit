@@ -8,11 +8,14 @@ import {
   View,
 } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fonts } from '@imf/assets';
 import type { CreditType } from '@imf/shared';
 import { api } from '../api';
+import { useAuth } from '../auth';
 import { DateField } from '../components/DateField';
 import { BoolField, Field, ListSelectField, MoneyField, Section, SelectField } from '../components/Form';
+import { HomeHeader } from '../components/HomeHeader';
 import {
   CLIENT_STATUTS,
   DEVISES,
@@ -28,9 +31,9 @@ import {
 } from '../formDefaults';
 
 const TYPE_LABELS: Record<CreditType, string> = {
-  DARE_DARE: 'Dare-Dare',
-  INDIVIDUEL: 'Individuel',
-  SALAIRE: 'Salaire',
+  DARE_DARE: 'Crédit Dare-Dare',
+  INDIVIDUEL: 'Crédit Individuel',
+  SALAIRE: 'Crédit Salaire',
 };
 
 type Props = {
@@ -138,6 +141,8 @@ function validateSalStep(step: number, sal: SalaireForm): string | null {
 }
 
 export function RegisterScreen({ type, onCreated, onCancel }: Props) {
+  const { user } = useAuth();
+  const insets = useSafeAreaInsets();
   const [communes, setCommunes] = useState<Commune[]>([]);
   const [step, setStep] = useState(0);
   const [maxReached, setMaxReached] = useState(0);
@@ -263,51 +268,57 @@ export function RegisterScreen({ type, onCreated, onCancel }: Props) {
 
   return (
     <View style={styles.root}>
-      <View style={styles.topBar}>
-        <Pressable onPress={onCancel}>
-          <Text style={styles.cancel}>Annuler</Text>
-        </Pressable>
-        <View style={styles.typeBadge}>
-          <Text style={styles.typeBadgeText}>{TYPE_LABELS[type]}</Text>
-        </View>
-      </View>
+      <HomeHeader
+        displayName={user?.displayName || ''}
+        variant="compact"
+        title={TYPE_LABELS[type]}
+        trailing="close"
+        onClose={onCancel}
+      />
 
       <KeyboardAwareScrollView
-        contentContainerStyle={styles.pad}
+        style={styles.scroll}
+        contentContainerStyle={[
+          styles.pad,
+          { paddingBottom: 100 + Math.max(insets.bottom, 8) },
+        ]}
         enableOnAndroid
         extraScrollHeight={Platform.OS === 'ios' ? 24 : 80}
         keyboardShouldPersistTaps="handled"
       >
+        <Text style={styles.stepMeta}>
+          Étape {step + 1} sur {steps.length}
+        </Text>
         <Text style={styles.h1}>Nouvelle demande</Text>
+        <View style={styles.typeChip}>
+          <Text style={styles.typeChipText}>{TYPE_LABELS[type]}</Text>
+        </View>
 
-        <View style={styles.steps}>
+        <View style={styles.progressTrack}>
           {steps.map((s, i) => {
             const locked = i > maxReached && i > step;
+            const done = i < step || (i <= maxReached && i !== step);
+            const active = step === i;
             return (
               <Pressable
                 key={s}
+                style={styles.progressSegWrap}
                 onPress={() => !locked && tryGoTo(i)}
-                style={[
-                  styles.step,
-                  step === i && styles.stepOn,
-                  locked && styles.stepLocked,
-                ]}
+                disabled={locked}
+                accessibilityLabel={s}
               >
-                <Text
-                  style={
-                    step === i
-                      ? styles.stepTextOn
-                      : locked
-                        ? styles.stepTextLocked
-                        : undefined
-                  }
-                >
-                  {s}
-                </Text>
+                <View
+                  style={[
+                    styles.progressSeg,
+                    (active || done) && styles.progressSegOn,
+                    locked && styles.progressSegLocked,
+                  ]}
+                />
               </Pressable>
             );
           })}
         </View>
+        <Text style={styles.stepLabel}>{steps[step]}</Text>
 
         {type !== 'SALAIRE' && step === 0 && (
           <Section title="Client">
@@ -523,21 +534,37 @@ export function RegisterScreen({ type, onCreated, onCancel }: Props) {
             <Field label="Dépôt BC" value={sal.depotBc || ''} onChangeText={(v) => setSal({ ...sal, depotBc: v })} />
           </Section>
         )}
+      </KeyboardAwareScrollView>
 
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-
-        <View style={styles.nav}>
-          {step > 0 && (
-            <Pressable style={styles.secondary} onPress={() => tryGoTo(step - 1)}>
-              <Text>Précédent</Text>
+      <View
+        style={[
+          styles.footer,
+          { paddingBottom: Math.max(insets.bottom, 12) + 4 },
+        ]}
+      >
+        {error ? <Text style={styles.errorFooter}>{error}</Text> : null}
+        <View style={styles.footerRow}>
+          {step > 0 ? (
+            <Pressable
+              style={styles.secondary}
+              onPress={() => tryGoTo(step - 1)}
+            >
+              <Text style={styles.secondaryText}>Précédent</Text>
             </Pressable>
-          )}
+          ) : null}
           {step < steps.length - 1 ? (
-            <Pressable style={styles.primary} onPress={() => tryGoTo(step + 1)}>
+            <Pressable
+              style={styles.primary}
+              onPress={() => tryGoTo(step + 1)}
+            >
               <Text style={styles.primaryText}>Suivant</Text>
             </Pressable>
           ) : (
-            <Pressable style={styles.primary} onPress={submit} disabled={busy}>
+            <Pressable
+              style={styles.primary}
+              onPress={submit}
+              disabled={busy}
+            >
               {busy ? (
                 <ActivityIndicator color="#fff" />
               ) : (
@@ -546,68 +573,105 @@ export function RegisterScreen({ type, onCreated, onCancel }: Props) {
             </Pressable>
           )}
         </View>
-      </KeyboardAwareScrollView>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.neutral.background, paddingTop: 8 },
-  topBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    marginBottom: 4,
+  root: { flex: 1, backgroundColor: colors.neutral.background },
+  scroll: { flex: 1 },
+  pad: { paddingHorizontal: 20, paddingTop: 20 },
+  stepMeta: {
+    textAlign: 'center',
+    fontFamily: fonts.regular,
+    fontSize: 13,
+    color: colors.neutral.textMuted,
+    marginBottom: 8,
   },
-  cancel: { color: colors.primary.red, fontFamily: fonts.bold },
-  typeBadge: {
-    backgroundColor: colors.primary.blue,
+  h1: {
+    textAlign: 'center',
+    fontSize: 30,
+    lineHeight: 36,
+    fontFamily: fonts.bold,
+    color: colors.neutral.text,
+    marginBottom: 10,
+  },
+  typeChip: {
+    alignSelf: 'center',
+    backgroundColor: 'rgba(40, 64, 128, 0.1)',
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 12,
+    borderRadius: 16,
+    marginBottom: 18,
   },
-  typeBadgeText: { color: '#fff', fontFamily: fonts.bold },
-  pad: { padding: 16, paddingBottom: 80 },
-  h1: {
-    fontSize: 22,
-    fontFamily: fonts.bold,
-    marginBottom: 12,
+  typeChipText: {
+    fontFamily: fonts.semiBold,
+    fontSize: 12,
     color: colors.primary.blue,
   },
-  steps: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12 },
-  step: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: colors.neutral.border,
-    backgroundColor: colors.neutral.surface,
-  },
-  stepOn: { backgroundColor: '#dce3f0', borderColor: colors.primary.blue },
-  stepLocked: { opacity: 0.45 },
-  stepTextOn: { fontFamily: fonts.bold },
-  stepTextLocked: { color: colors.neutral.placeholder },
-  nav: {
+  progressTrack: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 12,
-    marginTop: 8,
+    gap: 6,
+    marginBottom: 8,
+  },
+  progressSegWrap: { flex: 1 },
+  progressSeg: {
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#e0e0e0',
+  },
+  progressSegOn: {
+    backgroundColor: colors.primary.blue,
+  },
+  progressSegLocked: {
+    opacity: 0.5,
+  },
+  stepLabel: {
+    textAlign: 'center',
+    fontFamily: fonts.semiBold,
+    fontSize: 13,
+    color: colors.primary.blue,
+    marginBottom: 18,
+  },
+  footer: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#e5e5e5',
+    backgroundColor: colors.neutral.background,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+  },
+  errorFooter: {
+    color: colors.primary.red,
+    fontFamily: fonts.regular,
+    fontSize: 13,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  footerRow: {
+    flexDirection: 'row',
+    gap: 10,
   },
   primary: {
     flex: 1,
     backgroundColor: colors.primary.blue,
-    padding: 14,
-    borderRadius: 8,
+    paddingVertical: 16,
+    borderRadius: 28,
     alignItems: 'center',
   },
-  primaryText: { color: '#fff', fontFamily: fonts.semiBold },
+  primaryText: { color: '#fff', fontFamily: fonts.bold, fontSize: 16 },
   secondary: {
-    padding: 14,
-    borderRadius: 8,
+    paddingVertical: 16,
+    paddingHorizontal: 18,
+    borderRadius: 28,
     borderWidth: 1,
-    borderColor: '#aaa',
+    borderColor: colors.neutral.border,
     backgroundColor: colors.neutral.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  error: { color: colors.primary.red, marginVertical: 8, fontFamily: fonts.regular },
+  secondaryText: {
+    fontFamily: fonts.semiBold,
+    color: colors.neutral.text,
+  },
 });

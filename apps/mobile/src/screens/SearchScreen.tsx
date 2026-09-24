@@ -187,10 +187,10 @@ const styles = StyleSheet.create({
     padding: 18,
     marginBottom: 14,
     shadowColor: '#000',
-    shadowOpacity: 0.05,
+    shadowOpacity: 0.03,
     shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 2,
+    shadowOffset: { width: 10, height: 13 },
+    elevation: 3,
   },
   cardTop: {
     flexDirection: 'row',
