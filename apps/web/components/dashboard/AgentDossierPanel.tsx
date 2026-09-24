@@ -3,28 +3,23 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   CHECKLIST_CATEGORY_LABELS,
+  validateAgentChecklist,
   type ChecklistAnswers,
   type ChecklistCategory,
   type ChecklistItemDef,
 } from '@imf/shared';
 import { ApiError, apiFetch, getApiUrl, getToken } from '../../lib/api';
 import { dashStyles as styles } from './DashboardShell';
+import {
+  DossierDetailView,
+  type DossierDetailData,
+  type PendingAction,
+} from './DossierDetailView';
 
 type Piece = { id: string; kind: string; blobPath: string; createdAt: string };
 
-type DossierDetail = {
-  id: string;
-  reference: string;
-  type: string;
-  etat: string;
-  etatLabel: string;
+type DossierDetail = DossierDetailData & {
   editable: boolean;
-  client: {
-    fullName: string;
-    phone: string;
-    activityAddress: string;
-    commune?: { name: string } | null;
-  };
   pieces: Piece[];
   checklist: ChecklistItemDef[];
   checklistAnswers: ChecklistAnswers;
@@ -55,12 +50,15 @@ export default function AgentDossierPanel({
     values: {},
   });
   const [rapport, setRapport] = useState('');
+  const [visiteDate, setVisiteDate] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [issues, setIssues] = useState<
     Array<{ itemId: string; label: string; reason: string }>
   >([]);
   const [busy, setBusy] = useState(false);
+  const [generating, setGenerating] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [tabRequest, setTabRequest] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const d = await apiFetch<DossierDetail>(`/agent/dossiers/${id}`);
@@ -72,6 +70,10 @@ export default function AgentDossierPanel({
       },
     );
     setRapport(d.visite?.rapportTexte ?? '');
+    if (d.visite?.startedAt) {
+      const iso = new Date(d.visite.startedAt).toISOString().slice(0, 10);
+      setVisiteDate(iso);
+    }
     setError(null);
     setIssues([]);
     setMsg(null);
@@ -110,18 +112,142 @@ export default function AgentDossierPanel({
     [data?.pieces],
   );
 
+  const pendingActions = useMemo((): PendingAction[] => {
+    if (!data) return [];
+    const actions: PendingAction[] = [];
+    const canEdit = data.editable && data.etat === 'DESCENTE';
+    const canStart =
+      data.editable &&
+      (data.etat === 'AFFECTE' || data.etat === 'RETOUR_AGENT');
+
+    if (canStart) {
+      actions.push({
+        id: 'start-visite',
+        label: 'Indiquer la date et démarrer',
+        reason: 'La date de descente doit être renseignée',
+        tab: 'operations',
+      });
+    }
+    if (data.etat === 'DESCENTE' || data.visite) {
+      if (!(rapport || '').trim()) {
+        actions.push({
+          id: 'resume_executif',
+          label: 'Générer et valider le résumé',
+          reason: 'Résumé exécutif manquant',
+          tab: 'operations',
+        });
+      }
+      const checklistIssues = validateAgentChecklist(
+        data.type as 'SALAIRE' | 'INDIVIDUEL' | 'DARE_DARE',
+        (data.payload ?? {}) as Record<string, any>,
+        answers,
+        uploadedKinds,
+        rapport,
+      );
+      for (const issue of checklistIssues) {
+        if (issue.itemId === 'resume_executif') continue;
+        actions.push({
+          id: issue.itemId,
+          label: issue.label,
+          reason: issue.reason,
+          tab: issue.reason === 'Pièce manquante' ? 'docs' : 'operations',
+        });
+      }
+      if (canEdit && checklistIssues.length === 0) {
+        actions.push({
+          id: 'soumettre',
+          label: 'Soumettre le dossier',
+          reason: 'Checklist complète — transmission à l’analyste',
+          tab: 'operations',
+        });
+      }
+    }
+    return actions;
+  }, [data, answers, uploadedKinds, rapport]);
+
+  const visiteTiming = useMemo(() => {
+    if (!visiteDate) return null;
+    const parts = visiteDate.split('-').map(Number);
+    if (parts.length !== 3 || parts.some((n) => Number.isNaN(n))) return null;
+    const [y, m, d] = parts;
+    const visiteUtc = Date.UTC(y, m - 1, d);
+    const now = new Date();
+    const todayUtc = Date.UTC(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+    );
+    if (visiteUtc > todayUtc) return 'future' as const;
+    return 'past' as const;
+  }, [visiteDate]);
+
+  const docAvis = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const [itemId, val] of Object.entries(answers.values ?? {})) {
+      if (val?.note?.trim()) map[itemId] = val.note.trim();
+    }
+    return map;
+  }, [answers.values]);
+
+  const opsChecklistRows = useMemo(() => {
+    const rows: Array<{
+      id: string;
+      category: string;
+      item: ChecklistItemDef;
+    }> = [];
+    for (const cat of CATEGORY_ORDER) {
+      for (const item of byCategory.get(cat) ?? []) {
+        if (item.id === 'resume_executif') continue;
+        if (item.input === 'upload') continue;
+        rows.push({
+          id: item.id,
+          category: CHECKLIST_CATEGORY_LABELS[cat],
+          item,
+        });
+      }
+    }
+    return rows;
+  }, [byCategory]);
+
   async function startVisite() {
+    if (!visiteDate) {
+      setError('Indiquez la date de la descente avant de démarrer.');
+      return;
+    }
     setBusy(true);
     setError(null);
     setMsg(null);
     try {
-      await apiFetch(`/agent/dossiers/${id}/visite/start`, { method: 'POST' });
+      await apiFetch(`/agent/dossiers/${id}/visite/start`, {
+        method: 'POST',
+        body: JSON.stringify({ visiteDate }),
+      });
       await load();
-      setMsg('Visite démarrée.');
+      setMsg('Descente démarrée.');
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Échec démarrage visite');
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function generateResume() {
+    setGenerating(true);
+    setError(null);
+    setMsg(null);
+    try {
+      const res = await apiFetch<{ rapportTexte: string }>(
+        `/agent/dossiers/${id}/rapport/generate`,
+        { method: 'POST' },
+      );
+      setRapport(res.rapportTexte || '');
+      setMsg('Résumé généré — validez ou ajustez le texte ci-dessous.');
+    } catch (e) {
+      setError(
+        e instanceof ApiError ? e.message : 'Échec de génération du résumé',
+      );
+    } finally {
+      setGenerating(false);
     }
   }
 
@@ -201,6 +327,34 @@ export default function AgentDossierPanel({
     }
   }
 
+  async function saveDocAvis(itemId: string, avis: string) {
+    const next: ChecklistAnswers = {
+      ...answers,
+      values: {
+        ...answers.values,
+        [itemId]: {
+          ...answers.values?.[itemId],
+          note: avis,
+        },
+      },
+    };
+    setAnswers(next);
+    setBusy(true);
+    setError(null);
+    try {
+      await apiFetch(`/agent/dossiers/${id}/checklist`, {
+        method: 'PUT',
+        body: JSON.stringify({ answers: next }),
+      });
+      setMsg('Avis enregistré.');
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'Échec enregistrement avis');
+      throw e;
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function setFlag(key: 'dat' | 'hypotheque' | 'hasGarant', value: boolean) {
     setAnswers((prev) => ({
       ...prev,
@@ -257,51 +411,65 @@ export default function AgentDossierPanel({
     data.editable &&
     (data.etat === 'AFFECTE' || data.etat === 'RETOUR_AGENT');
 
-  return (
-    <div className={styles.panelInner}>
-      <div className={styles.panelHeader}>
-        <div>
-          <h1 className={styles.panelTitle}>{data.reference}</h1>
-          <p className={styles.panelSub}>
-            {data.type} · {data.etatLabel}
-            <br />
-            <strong>{data.client.fullName}</strong> · {data.client.phone}
-            <br />
-            {data.client.activityAddress}
-            {data.client.commune ? ` · ${data.client.commune.name}` : ''}
-          </p>
-        </div>
-        <div className={styles.actions}>
-          {canStart ? (
-            <button
-              type="button"
-              className={`${styles.btn} ${styles.btnPrimary}`}
-              onClick={startVisite}
-              disabled={busy}
-            >
-              Démarrer la descente
-            </button>
-          ) : null}
-          {canEdit ? (
-            <>
-              <button
-                type="button"
-                className={`${styles.btn} ${styles.btnSecondary}`}
-                onClick={saveDraft}
-                disabled={busy}
-              >
-                Enregistrer
-              </button>
-              <button
-                type="button"
-                className={`${styles.btn} ${styles.btnPrimary}`}
-                onClick={soumettre}
-                disabled={busy}
-              >
-                Soumettre
-              </button>
-            </>
-          ) : null}
+  const operationsContent = (
+    <div className={styles.descentePane}>
+      <div className={styles.detailTableBlock}>
+        <h3 className={styles.detailTableTitle}>1. Date de la descente</h3>
+        <p className={styles.descenteCardHint}>
+          Avant toute opération, précisez la date réelle de la visite terrain.
+        </p>
+        <div className={styles.tableWrap}>
+          <table className={styles.detailDataTable}>
+            <thead>
+              <tr>
+                <th>Champ</th>
+                <th>Valeur</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Date de descente *</td>
+                <td>
+                  <input
+                    type="date"
+                    className={styles.opsInlineInput}
+                    value={visiteDate}
+                    disabled={!canStart && !canEdit}
+                    onChange={(e) => setVisiteDate(e.target.value)}
+                  />
+                </td>
+              </tr>
+              <tr>
+                <td>Action</td>
+                <td>
+                  {canStart ? (
+                    <button
+                      type="button"
+                      className={`${styles.btn} ${styles.btnPrimary}`}
+                      onClick={startVisite}
+                      disabled={busy || !visiteDate}
+                    >
+                      Démarrer la descente
+                    </button>
+                  ) : data.visite?.startedAt ? (
+                    <span className={styles.itemMeta}>
+                      Descente enregistrée le{' '}
+                      {new Date(data.visite.startedAt).toLocaleDateString(
+                        'fr-FR',
+                        {
+                          day: 'numeric',
+                          month: 'long',
+                          year: 'numeric',
+                        },
+                      )}
+                    </span>
+                  ) : (
+                    '—'
+                  )}
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
 
@@ -319,178 +487,314 @@ export default function AgentDossierPanel({
 
       {data.etat === 'DESCENTE' || data.visite ? (
         <>
-          <section className={styles.section}>
-            <h2>Options conditionnelles</h2>
-            <div className={styles.flags}>
-              <label>
-                <input
-                  type="checkbox"
-                  checked={Boolean(answers.flags?.hasGarant)}
-                  disabled={!canEdit}
-                  onChange={(e) => setFlag('hasGarant', e.target.checked)}
-                />
-                Garant / caution
-              </label>
-              <label>
-                <input
-                  type="checkbox"
-                  checked={Boolean(answers.flags?.dat)}
-                  disabled={!canEdit}
-                  onChange={(e) => setFlag('dat', e.target.checked)}
-                />
-                DAT
-              </label>
-              <label>
-                <input
-                  type="checkbox"
-                  checked={Boolean(answers.flags?.hypotheque)}
-                  disabled={!canEdit}
-                  onChange={(e) => setFlag('hypotheque', e.target.checked)}
-                />
-                Hypothèque
-              </label>
-              {canEdit ? (
+          {visiteTiming ? (
+            <div className={styles.detailTableBlock}>
+              <h3 className={styles.detailTableTitle}>2. Documents</h3>
+              <div
+                className={
+                  visiteTiming === 'past'
+                    ? styles.opsDocPromptPast
+                    : styles.opsDocPromptFuture
+                }
+              >
+                <p>
+                  {visiteTiming === 'past'
+                    ? 'La date de descente est passée (ou aujourd’hui). Ajoutez les documents demandés, ou renseignez un avis si une pièce n’est pas disponible.'
+                    : 'La date de descente est ultérieure. Souhaitez-vous déjà ajouter les documents ?'}
+                </p>
+                <button
+                  type="button"
+                  className={`${styles.btn} ${styles.btnPrimary}`}
+                  onClick={() => setTabRequest('docs')}
+                >
+                  {visiteTiming === 'past'
+                    ? 'Ajouter les documents'
+                    : 'Oui, ajouter des documents'}
+                </button>
+              </div>
+            </div>
+          ) : null}
+
+          <div className={styles.detailTableBlock}>
+            <h3 className={styles.detailTableTitle}>
+              3. Options conditionnelles
+            </h3>
+            <div className={styles.tableWrap}>
+              <table className={styles.detailDataTable}>
+                <thead>
+                  <tr>
+                    <th>Option</th>
+                    <th>Valeur</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>Garant / caution</td>
+                    <td>
+                      <input
+                        type="checkbox"
+                        checked={Boolean(answers.flags?.hasGarant)}
+                        disabled={!canEdit}
+                        onChange={(e) =>
+                          setFlag('hasGarant', e.target.checked)
+                        }
+                      />
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>DAT</td>
+                    <td>
+                      <input
+                        type="checkbox"
+                        checked={Boolean(answers.flags?.dat)}
+                        disabled={!canEdit}
+                        onChange={(e) => setFlag('dat', e.target.checked)}
+                      />
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>Hypothèque</td>
+                    <td>
+                      <input
+                        type="checkbox"
+                        checked={Boolean(answers.flags?.hypotheque)}
+                        disabled={!canEdit}
+                        onChange={(e) =>
+                          setFlag('hypotheque', e.target.checked)
+                        }
+                      />
+                    </td>
+                  </tr>
+                  {canEdit ? (
+                    <tr>
+                      <td>Mise à jour</td>
+                      <td>
+                        <button
+                          type="button"
+                          className={`${styles.btn} ${styles.btnSecondary}`}
+                          onClick={applyFlags}
+                          disabled={busy}
+                          style={{
+                            height: 34,
+                            padding: '0 14px',
+                            fontSize: '0.8rem',
+                          }}
+                        >
+                          Actualiser
+                        </button>
+                      </td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {opsChecklistRows.length > 0 ? (
+            <div className={styles.detailTableBlock}>
+              <h3 className={styles.detailTableTitle}>4. Contrôles agent</h3>
+              <div className={styles.tableWrap}>
+                <table className={styles.detailDataTable}>
+                  <thead>
+                    <tr>
+                      <th>Catégorie</th>
+                      <th>Contrôle</th>
+                      <th>Réponse</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {opsChecklistRows.map(({ id, category, item }) => (
+                      <tr key={id}>
+                        <td>{category}</td>
+                        <td>
+                          {item.label}
+                          {item.required ? ' *' : ''}
+                        </td>
+                        <td>
+                          {item.input === 'text' ? (
+                            <textarea
+                              className={styles.opsInlineTextarea}
+                              value={answers.values?.[item.id]?.text ?? ''}
+                              disabled={!canEdit}
+                              rows={3}
+                              onChange={(e) =>
+                                setValue(item.id, { text: e.target.value })
+                              }
+                            />
+                          ) : null}
+                          {item.input === 'boolean' ? (
+                            <div className={styles.opsBoolRow}>
+                              <label>
+                                <input
+                                  type="radio"
+                                  name={item.id}
+                                  checked={
+                                    answers.values?.[item.id]?.booleanValue ===
+                                    true
+                                  }
+                                  disabled={!canEdit}
+                                  onChange={() =>
+                                    setValue(item.id, { booleanValue: true })
+                                  }
+                                />{' '}
+                                Oui
+                              </label>
+                              <label>
+                                <input
+                                  type="radio"
+                                  name={item.id}
+                                  checked={
+                                    answers.values?.[item.id]?.booleanValue ===
+                                    false
+                                  }
+                                  disabled={!canEdit}
+                                  onChange={() =>
+                                    setValue(item.id, { booleanValue: false })
+                                  }
+                                />{' '}
+                                Non
+                              </label>
+                              <input
+                                className={styles.opsInlineInput}
+                                placeholder="Note"
+                                value={answers.values?.[item.id]?.note ?? ''}
+                                disabled={!canEdit}
+                                onChange={(e) =>
+                                  setValue(item.id, { note: e.target.value })
+                                }
+                              />
+                            </div>
+                          ) : null}
+                          {item.input === 'check' ? (
+                            <input
+                              type="checkbox"
+                              checked={Boolean(
+                                answers.values?.[item.id]?.checked,
+                              )}
+                              disabled={!canEdit}
+                              onChange={(e) =>
+                                setValue(item.id, {
+                                  checked: e.target.checked,
+                                })
+                              }
+                            />
+                          ) : null}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : null}
+
+          <div className={styles.detailTableBlock}>
+            <h3 className={styles.detailTableTitle}>
+              {opsChecklistRows.length > 0 ? '5' : '4'}. Résumé exécutif (IA)
+            </h3>
+            <p className={styles.descenteCardHint}>
+              Dernière étape : l’IA analyse le dossier et propose un résumé à
+              valider.
+            </p>
+            <div className={styles.descenteResumeActions}>
+              <button
+                type="button"
+                className={`${styles.btn} ${styles.btnPrimary}`}
+                onClick={generateResume}
+                disabled={!canEdit || generating || busy}
+              >
+                {generating
+                  ? 'Génération en cours…'
+                  : 'Générer un résumé du dossier'}
+              </button>
+              {canEdit && rapport.trim() ? (
                 <button
                   type="button"
                   className={`${styles.btn} ${styles.btnSecondary}`}
-                  onClick={applyFlags}
-                  disabled={busy}
-                  style={{ height: 34, padding: '0 14px', fontSize: '0.8rem' }}
+                  onClick={saveDraft}
+                  disabled={busy || generating}
                 >
-                  Actualiser
+                  Valider / enregistrer le résumé
                 </button>
               ) : null}
             </div>
-          </section>
+            <div className={styles.tableWrap}>
+              <table className={styles.detailDataTable}>
+                <thead>
+                  <tr>
+                    <th>Champ</th>
+                    <th>Valeur</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>
+                      {rapport.trim()
+                        ? 'Résumé proposé — à valider'
+                        : 'Résumé'}
+                    </td>
+                    <td>
+                      <textarea
+                        className={styles.opsInlineTextarea}
+                        value={rapport}
+                        disabled={!canEdit || generating}
+                        rows={10}
+                        placeholder="Cliquez sur « Générer un résumé du dossier » pour lancer l’étude IA."
+                        onChange={(e) => setRapport(e.target.value)}
+                      />
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
 
-          {CATEGORY_ORDER.map((cat) => {
-            const items = byCategory.get(cat) ?? [];
-            if (!items.length) return null;
-            return (
-              <section key={cat} className={styles.section}>
-                <h2>{CHECKLIST_CATEGORY_LABELS[cat]}</h2>
-                <ul className={styles.checkList}>
-                  {items.map((item) => {
-                    if (item.input === 'text') {
-                      return (
-                        <li key={item.id} className={styles.checkItem}>
-                          <label>
-                            <span>
-                              {item.label}
-                              {item.required ? ' *' : ''}
-                            </span>
-                            <textarea
-                              value={
-                                item.id === 'resume_executif'
-                                  ? rapport
-                                  : (answers.values?.[item.id]?.text ?? '')
-                              }
-                              disabled={!canEdit}
-                              onChange={(e) => {
-                                if (item.id === 'resume_executif') {
-                                  setRapport(e.target.value);
-                                } else {
-                                  setValue(item.id, { text: e.target.value });
-                                }
-                              }}
-                            />
-                          </label>
-                        </li>
-                      );
-                    }
-                    if (item.input === 'boolean') {
-                      const v = answers.values?.[item.id]?.booleanValue;
-                      return (
-                        <li key={item.id} className={styles.checkItem}>
-                          <fieldset disabled={!canEdit}>
-                            <legend>
-                              {item.label}
-                              {item.required ? ' *' : ''}
-                            </legend>
-                            <label style={{ marginRight: 16 }}>
-                              <input
-                                type="radio"
-                                name={item.id}
-                                checked={v === true}
-                                onChange={() =>
-                                  setValue(item.id, { booleanValue: true })
-                                }
-                              />{' '}
-                              Oui
-                            </label>
-                            <label>
-                              <input
-                                type="radio"
-                                name={item.id}
-                                checked={v === false}
-                                onChange={() =>
-                                  setValue(item.id, { booleanValue: false })
-                                }
-                              />{' '}
-                              Non
-                            </label>
-                            <input
-                              placeholder="Note"
-                              value={answers.values?.[item.id]?.note ?? ''}
-                              onChange={(e) =>
-                                setValue(item.id, { note: e.target.value })
-                              }
-                            />
-                          </fieldset>
-                        </li>
-                      );
-                    }
-                    if (item.input === 'upload') {
-                      const kind = item.kind ?? item.id;
-                      const has = uploadedKinds.has(kind);
-                      const files = (data.pieces ?? []).filter(
-                        (p) => p.kind === kind,
-                      );
-                      return (
-                        <li key={item.id} className={styles.checkItem}>
-                          <div>
-                            {item.label}
-                            {item.required ? ' *' : ''}{' '}
-                            {has ? (
-                              <span className={styles.statusOk}>OK</span>
-                            ) : (
-                              <span className={styles.statusMiss}>manquant</span>
-                            )}
-                          </div>
-                          {files.map((f) => (
-                            <div key={f.id} className={styles.itemMeta}>
-                              {f.blobPath}
-                            </div>
-                          ))}
-                          {canEdit ? (
-                            <input
-                              type="file"
-                              disabled={busy}
-                              style={{ marginTop: 8 }}
-                              onChange={(e) => {
-                                const file = e.target.files?.[0];
-                                if (file) void upload(kind, file);
-                                e.target.value = '';
-                              }}
-                            />
-                          ) : null}
-                        </li>
-                      );
-                    }
-                    return null;
-                  })}
-                </ul>
-              </section>
-            );
-          })}
+          {canEdit ? (
+            <div className={styles.descenteFooterActions}>
+              <button
+                type="button"
+                className={`${styles.btn} ${styles.btnSecondary}`}
+                onClick={saveDraft}
+                disabled={busy || generating}
+              >
+                Enregistrer le brouillon
+              </button>
+              <button
+                type="button"
+                className={`${styles.btn} ${styles.btnPrimary}`}
+                onClick={soumettre}
+                disabled={busy || generating}
+              >
+                Soumettre
+              </button>
+            </div>
+          ) : null}
         </>
       ) : (
-        <section className={styles.section}>
-          <p className={styles.panelSub}>
-            Démarrez la descente pour renseigner la checklist et le rapport.
+        <div className={styles.detailTableBlock}>
+          <p className={styles.descenteCardHint} style={{ margin: 0 }}>
+            Renseignez la date puis démarrez la descente pour accéder aux
+            opérations agent et au résumé IA.
           </p>
-        </section>
+        </div>
       )}
     </div>
+  );
+
+  return (
+    <DossierDetailView
+      data={data}
+      backHref="/agent"
+      extraTabs={[{ key: 'operations', label: 'Opérations Agent' }]}
+      extraTabContent={{ operations: operationsContent }}
+      pendingActions={pendingActions}
+      canManageDocs={canEdit}
+      docBusy={busy}
+      onUploadDoc={upload}
+      docAvis={docAvis}
+      onSaveDocAvis={saveDocAvis}
+      tabRequest={tabRequest}
+      onTabRequestHandled={() => setTabRequest(null)}
+    />
   );
 }

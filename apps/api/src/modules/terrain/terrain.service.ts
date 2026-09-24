@@ -139,16 +139,24 @@ export class TerrainService {
     };
   }
 
-  async startVisite(user: AuthUser, id: string) {
+  async startVisite(user: AuthUser, id: string, visiteDateRaw: string) {
     const d = await this.prisma.dossier.findUnique({ where: { id } });
     if (!d) throw new NotFoundException('Dossier introuvable');
     this.assertAgentOwns(d, user);
+
+    const visiteDate = this.parseVisiteDate(visiteDateRaw);
 
     if (d.etat === DossierEtat.DESCENTE) {
       const existing = await this.prisma.visiteTerrain.findUnique({
         where: { dossierId: id },
       });
-      if (existing) return this.getOne(user, id);
+      if (existing) {
+        await this.prisma.visiteTerrain.update({
+          where: { dossierId: id },
+          data: { startedAt: visiteDate },
+        });
+        return this.getOne(user, id);
+      }
     }
 
     if (
@@ -172,7 +180,7 @@ export class TerrainService {
           dossierId: id,
           fromEtat: d.etat,
           toEtat: DossierEtat.DESCENTE,
-          comment: 'Début de la descente terrain',
+          comment: `Début de la descente terrain (${visiteDateRaw})`,
           actorId: user.id,
         },
       });
@@ -181,13 +189,14 @@ export class TerrainService {
         create: {
           dossierId: id,
           agentId: user.id,
+          startedAt: visiteDate,
           checklistJson: {
             flags: { hasGarant: true, dat: false, hypotheque: false },
             values: {},
           } as Prisma.InputJsonValue,
         },
         update: {
-          startedAt: new Date(),
+          startedAt: visiteDate,
           completedAt: null,
           agentId: user.id,
         },
@@ -197,12 +206,172 @@ export class TerrainService {
           dossierId: id,
           actorId: user.id,
           action: 'VISITE_STARTED',
-          payload: { reference: d.reference },
+          payload: { reference: d.reference, visiteDate: visiteDateRaw },
         },
       });
     });
 
     return this.getOne(user, id);
+  }
+
+  private parseVisiteDate(raw: string): Date {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(raw || '').trim());
+    if (!m) {
+      throw new BadRequestException(
+        'Date de descente invalide (format attendu AAAA-MM-JJ)',
+      );
+    }
+    const date = new Date(`${m[1]}-${m[2]}-${m[3]}T12:00:00.000Z`);
+    if (Number.isNaN(date.getTime())) {
+      throw new BadRequestException('Date de descente invalide');
+    }
+    const today = new Date();
+    const max = new Date(
+      Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() + 30),
+    );
+    const min = new Date(
+      Date.UTC(today.getUTCFullYear() - 1, today.getUTCMonth(), today.getUTCDate()),
+    );
+    if (date < min || date > max) {
+      throw new BadRequestException(
+        'La date de descente doit être comprise dans une plage raisonnable',
+      );
+    }
+    return date;
+  }
+
+  async generateRapport(user: AuthUser, id: string) {
+    const d = await this.prisma.dossier.findUnique({
+      where: { id },
+      include: {
+        client: { include: { commune: true, zone: true } },
+        agent: { select: { displayName: true } },
+        pieces: true,
+        visite: true,
+        transitions: { orderBy: { createdAt: 'asc' } },
+      },
+    });
+    if (!d) throw new NotFoundException('Dossier introuvable');
+    this.assertAgentOwns(d, user);
+    if (!d.visite) {
+      throw new BadRequestException('Démarrez la visite d’abord');
+    }
+
+    const payload = (d.payload ?? {}) as Record<string, any>;
+    const { montantSouhaite, devise } = montantSouhaiteFromPayload(
+      d.type,
+      payload,
+    );
+    const context = {
+      reference: d.reference,
+      type: d.type,
+      etat: d.etat,
+      etatLabel: DOSSIER_ETAT_LABELS[d.etat],
+      client: {
+        fullName: d.client.fullName,
+        phone: d.client.phone,
+        commune: d.client.commune?.name ?? null,
+        zone: d.client.zone?.name ?? null,
+        activityAddress: d.client.activityAddress,
+      },
+      agent: d.agent?.displayName ?? null,
+      visiteDate: d.visite.startedAt,
+      montantSouhaite,
+      devise,
+      pieces: d.pieces.map((p) => p.kind),
+      payload,
+      transitions: d.transitions.map((t) => ({
+        from: t.fromEtat,
+        to: t.toEtat,
+        comment: t.comment,
+        at: t.createdAt,
+      })),
+    };
+
+    const rapportTexte = await this.buildAiResume(context);
+    return { rapportTexte };
+  }
+
+  private async buildAiResume(context: Record<string, unknown>): Promise<string> {
+    const apiKey = process.env.OPENAI_API_KEY?.trim();
+    const fallback = this.buildFallbackResume(context);
+
+    if (!apiKey) return fallback;
+
+    try {
+      const res = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+          temperature: 0.3,
+          messages: [
+            {
+              role: 'system',
+              content:
+                "Tu es un agent de crédit IMF en RDC. Rédige un résumé exécutif de descente terrain en français, professionnel, structuré (contexte client, activité/emploi, demande de crédit, points d'attention, recommandation). 180 à 280 mots. Pas de markdown.",
+            },
+            {
+              role: 'user',
+              content: `Analyse ce dossier et génère le résumé exécutif à valider par l'agent :\n${JSON.stringify(context, null, 2)}`,
+            },
+          ],
+        }),
+      });
+      if (!res.ok) return fallback;
+      const body = (await res.json()) as {
+        choices?: Array<{ message?: { content?: string } }>;
+      };
+      const text = body.choices?.[0]?.message?.content?.trim();
+      return text || fallback;
+    } catch {
+      return fallback;
+    }
+  }
+
+  private buildFallbackResume(context: Record<string, unknown>): string {
+    const client = (context.client ?? {}) as Record<string, unknown>;
+    const payload = (context.payload ?? {}) as Record<string, any>;
+    const montant = context.montantSouhaite;
+    const devise = context.devise || '';
+    const type = String(context.type || '');
+    const pieces = Array.isArray(context.pieces)
+      ? (context.pieces as string[])
+      : [];
+    const visiteDate = context.visiteDate
+      ? new Date(String(context.visiteDate)).toLocaleDateString('fr-FR')
+      : '—';
+
+    const lines = [
+      `Résumé exécutif — dossier ${context.reference} (${type}).`,
+      `Descente effectuée le ${visiteDate} pour le client ${client.fullName || '—'}, joignable au ${client.phone || '—'}, zone ${client.zone || '—'} / commune ${client.commune || '—'}.`,
+      `Montant sollicité : ${montant != null ? `${devise} ${Number(montant).toLocaleString('fr-FR')}` : 'non précisé'}.`,
+    ];
+
+    if (type === 'SALAIRE') {
+      lines.push(
+        `Emploi : ${payload.societe || '—'}, fonction ${payload.fonctionService || '—'}, salaire net déclaré ${payload.salaireNet || '—'}, capacité mensuelle ${payload.capaciteMensuelle || '—'}. Motif : ${payload.motifCredit || '—'}.`,
+      );
+    } else {
+      const dem = payload.demandeur ?? {};
+      const biz = payload.business ?? {};
+      const pret = payload.pret ?? {};
+      lines.push(
+        `Demandeur : ${[dem.prenom, dem.nom, dem.postNom].filter(Boolean).join(' ') || client.fullName || '—'}. Activité : ${biz.nomBusiness || '—'} (${biz.typeBusiness || '—'}, secteur ${biz.secteurBusiness || '—'}).`,
+        `Prêt souhaité : ${pret.montantDesire != null ? `${pret.devise || ''} ${pret.montantDesire}` : '—'} sur ${pret.dureeMois || '—'} mois. But : ${pret.butInvestissement || '—'}.`,
+      );
+    }
+
+    lines.push(
+      `Pièces déjà présentes au dossier : ${pieces.length ? pieces.join(', ') : 'aucune'}.`,
+      `Points d’attention : vérifier la cohérence des revenus/activité, la complétude documentaire et l’adresse d’activité déclarée (${client.activityAddress || '—'}).`,
+      `Recommandation provisoire : poursuivre l’instruction sous réserve de validation terrain et de complétude des pièces manquantes.`,
+    );
+
+    return lines.join('\n\n');
   }
 
   async saveChecklist(
