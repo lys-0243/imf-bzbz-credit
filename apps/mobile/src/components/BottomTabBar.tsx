@@ -49,25 +49,44 @@ export function BottomTabBar({ active, onChange, onNouveau }: Props) {
       <View style={styles.pill}>
         {TABS.map((tab) => {
           const isActive = active === tab.id;
-          return (
-            <Pressable
-              key={tab.id}
-              style={[styles.item, isActive && styles.itemActive]}
-              onPress={() => onChange(tab.id)}
-              accessibilityRole="tab"
-              accessibilityState={{ selected: isActive }}
-              accessibilityLabel={tab.label}
-            >
+          const content = (
+            <>
               <Ionicons
                 name={isActive ? tab.iconActive : tab.icon}
                 size={22}
-                color={isActive ? colors.primary.blue : colors.neutral.textMuted}
+                color={isActive ? '#fff' : colors.neutral.textMuted}
               />
               {isActive ? (
                 <Text style={styles.labelActive} numberOfLines={1}>
                   {tab.label}
                 </Text>
               ) : null}
+            </>
+          );
+          return (
+            <Pressable
+              key={tab.id}
+              style={styles.item}
+              onPress={() => onChange(tab.id)}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: isActive }}
+              accessibilityLabel={tab.label}
+            >
+              {isActive ? (
+                <LinearGradient
+                  colors={[
+                    colors.gradient.sidebar.deep,
+                    colors.gradient.sidebar.mid,
+                  ]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.itemInner}
+                >
+                  {content}
+                </LinearGradient>
+              ) : (
+                <View style={styles.itemInner}>{content}</View>
+              )}
             </Pressable>
           );
         })}
@@ -119,26 +138,22 @@ const styles = StyleSheet.create({
   },
   item: {
     flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  itemInner: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
     paddingVertical: 10,
-    paddingHorizontal: 8,
+    paddingHorizontal: 10,
     borderRadius: 22,
-  },
-  itemActive: {
-    backgroundColor: '#fff',
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowRadius: 5,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 3,
   },
   labelActive: {
     fontSize: 13,
     fontFamily: fonts.semiBold,
-    color: colors.primary.blue,
+    color: '#fff',
   },
   nouveauShadow: {
     shadowColor: colors.primary.red,

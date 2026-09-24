@@ -168,7 +168,7 @@ export function OptionsSheet({
             style={styles.list}
             keyboardShouldPersistTaps="handled"
             ListEmptyComponent={
-              <Text style={styles.empty}>Aucune commune trouvée</Text>
+              <Text style={styles.empty}>Aucun résultat</Text>
             }
             renderItem={({ item }) => {
               const active = selected === item;

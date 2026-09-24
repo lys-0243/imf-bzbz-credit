@@ -115,6 +115,79 @@ export function MoneyField({
   );
 }
 
+/** Champ durée affiché `12 mois` / `2 ans` / `3 semaines` hors édition. */
+export function DurationField({
+  label,
+  value,
+  unit,
+  onChange,
+  required,
+  allowEmpty,
+}: {
+  label: string;
+  value: number | undefined;
+  unit: 'mois' | 'annees' | 'semaines';
+  onChange: (v: number | undefined) => void;
+  required?: boolean;
+  allowEmpty?: boolean;
+}) {
+  const [focused, setFocused] = useState(false);
+  const [draft, setDraft] = useState('');
+
+  const unitLabel = (n: number) => {
+    if (unit === 'mois') return 'mois';
+    if (unit === 'annees') return n === 1 ? 'an' : 'ans';
+    return n === 1 ? 'semaine' : 'semaines';
+  };
+
+  const shown =
+    focused
+      ? draft
+      : value != null && value > 0
+        ? `${value} ${unitLabel(value)}`
+        : '';
+
+  const ph = required ? `${label} *` : label;
+
+  return (
+    <View style={styles.field}>
+      <TextInput
+        style={[styles.input, focused && styles.inputFocused]}
+        value={shown}
+        keyboardType="numeric"
+        placeholder={ph}
+        placeholderTextColor={colors.neutral.placeholder}
+        accessibilityLabel={label}
+        onFocus={() => {
+          setFocused(true);
+          setDraft(value != null && value > 0 ? String(value) : '');
+        }}
+        onBlur={() => {
+          setFocused(false);
+          const cleaned = draft.replace(/[^\d]/g, '');
+          if (!cleaned) {
+            onChange(allowEmpty ? undefined : 0);
+            setDraft('');
+            return;
+          }
+          const n = Number(cleaned);
+          onChange(Number.isFinite(n) ? n : allowEmpty ? undefined : 0);
+        }}
+        onChangeText={(t) => {
+          const cleaned = t.replace(/[^\d]/g, '');
+          setDraft(cleaned);
+          if (!cleaned) {
+            onChange(allowEmpty ? undefined : 0);
+            return;
+          }
+          const n = Number(cleaned);
+          if (Number.isFinite(n)) onChange(n);
+        }}
+      />
+    </View>
+  );
+}
+
 export function BoolField({
   label,
   value,
@@ -230,7 +303,7 @@ export function SelectField({
   );
 }
 
-/** Liste → bottom sheet (communes, etc.). */
+/** Liste → bottom sheet (communes, listes fermées, etc.). */
 export function ListSelectField({
   label,
   value,
@@ -238,6 +311,9 @@ export function ListSelectField({
   onChange,
   required,
   placeholder,
+  subtitle,
+  searchable = true,
+  searchPlaceholder,
 }: {
   label: string;
   value: string;
@@ -245,6 +321,9 @@ export function ListSelectField({
   onChange: (v: string) => void;
   required?: boolean;
   placeholder?: string;
+  subtitle?: string;
+  searchable?: boolean;
+  searchPlaceholder?: string;
 }) {
   const [open, setOpen] = useState(false);
   const ph = placeholder ?? (required ? `${label} *` : label);
@@ -269,10 +348,11 @@ export function ListSelectField({
       <OptionsSheet
         visible={open}
         title={label}
-        subtitle="Choisissez une commune"
+        subtitle={subtitle ?? 'Choisissez une option'}
         options={options}
         value={value}
-        searchPlaceholder="Rechercher une commune"
+        searchable={searchable}
+        searchPlaceholder={searchPlaceholder ?? 'Rechercher…'}
         onClose={() => setOpen(false)}
         onConfirm={(v) => {
           onChange(v);

@@ -222,7 +222,8 @@ export const salairePayloadSchema = z.object({
   dureeAnnees: z.number().int().nonnegative(),
   dureeSemaines: z.number().int().nonnegative(),
   motifCredit: z.string().optional(),
-  salaireNet: z.number().positive(),
+  /** Free-text amount with currency, e.g. "500$", "500 USD", "800.000 CDF" */
+  salaireNet: z.string().min(1),
   capaciteMensuelle: z.number().positive(),
   cautionGarantie: z.string().optional(),
   numeroCompte: z.string().optional(),

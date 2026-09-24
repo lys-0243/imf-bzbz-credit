@@ -7,6 +7,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, fonts } from '@imf/assets';
 import {
@@ -106,64 +107,81 @@ export function SearchScreen({
       {busy && rows.length === 0 ? (
         <ActivityIndicator style={{ marginTop: 24 }} color={colors.primary.blue} />
       ) : null}
-      <FlatList
-        data={rows}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={{
-          paddingBottom: TAB_BAR_BASE_HEIGHT + bottomInset + 24,
-          paddingHorizontal: 16,
-        }}
-        renderItem={({ item }) => {
-          const tone = etatTone(item.etat);
-          const { montantSouhaite, devise } = montantSouhaiteFromPayload(
-            item.type,
-            item.payload as Record<string, any> | null | undefined,
-          );
-          const montantLabel = formatMontantSouhaite(montantSouhaite, devise);
-          return (
-            <Pressable style={styles.card} onPress={() => onOpen(item.id)}>
-              <View style={styles.cardTop}>
-                <View style={styles.datePill}>
-                  <Ionicons
-                    name="calendar-outline"
-                    size={14}
-                    color={colors.primary.blue}
-                  />
-                  <Text style={styles.dateText}>
-                    {formatUpdatedAt(item.updatedAt)}
-                  </Text>
+      <View style={styles.listWrap}>
+        <FlatList
+          data={rows}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={{
+            paddingBottom: TAB_BAR_BASE_HEIGHT + bottomInset + 24,
+            paddingHorizontal: 16,
+          }}
+          renderItem={({ item }) => {
+            const tone = etatTone(item.etat);
+            const { montantSouhaite, devise } = montantSouhaiteFromPayload(
+              item.type,
+              item.payload as Record<string, any> | null | undefined,
+            );
+            const montantLabel = formatMontantSouhaite(montantSouhaite, devise);
+            return (
+              <Pressable style={styles.card} onPress={() => onOpen(item.id)}>
+                <View style={styles.cardTop}>
+                  <View style={styles.datePill}>
+                    <Ionicons
+                      name="calendar-outline"
+                      size={14}
+                      color={colors.primary.blue}
+                    />
+                    <Text style={styles.dateText}>
+                      {formatUpdatedAt(item.updatedAt)}
+                    </Text>
+                  </View>
+                  <View style={[styles.etatPill, { backgroundColor: tone.bg }]}>
+                    <Text style={[styles.etatText, { color: tone.fg }]} numberOfLines={1}>
+                      {DOSSIER_ETAT_LABELS[item.etat] || item.etat}
+                    </Text>
+                  </View>
                 </View>
-                <View style={[styles.etatPill, { backgroundColor: tone.bg }]}>
-                  <Text style={[styles.etatText, { color: tone.fg }]} numberOfLines={1}>
-                    {DOSSIER_ETAT_LABELS[item.etat] || item.etat}
-                  </Text>
-                </View>
-              </View>
 
-              <Text style={styles.clientName} numberOfLines={2}>
-                {item.client.fullName}
-              </Text>
-              <Text style={styles.amount}>{montantLabel}</Text>
-
-              <View style={styles.footerRow}>
-                <View style={styles.dot} />
-                <Text style={styles.typeLabel} numberOfLines={1}>
-                  {TYPE_LABELS[item.type] || item.type}
+                <Text style={styles.clientName} numberOfLines={2}>
+                  {item.client.fullName}
                 </Text>
-              </View>
-            </Pressable>
-          );
-        }}
-        ListEmptyComponent={
-          !busy ? <Text style={styles.empty}>Aucun dossier</Text> : null
-        }
-      />
+                <Text style={styles.amount}>{montantLabel}</Text>
+
+                <View style={styles.footerRow}>
+                  <View style={styles.dot} />
+                  <Text style={styles.typeLabel} numberOfLines={1}>
+                    {TYPE_LABELS[item.type] || item.type}
+                  </Text>
+                </View>
+              </Pressable>
+            );
+          }}
+          ListEmptyComponent={
+            !busy ? <Text style={styles.empty}>Aucun dossier</Text> : null
+          }
+        />
+        <LinearGradient
+          pointerEvents="none"
+          colors={['transparent', colors.neutral.background]}
+          style={[
+            styles.bottomFade,
+            { height: TAB_BAR_BASE_HEIGHT + bottomInset + 24 },
+          ]}
+        />
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.neutral.background, paddingTop: 16 },
+  listWrap: { flex: 1 },
+  bottomFade: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
   sectionHead: {
     flexDirection: 'row',
     justifyContent: 'space-between',

@@ -14,7 +14,7 @@ import type { CreditType } from '@imf/shared';
 import { api } from '../api';
 import { useAuth } from '../auth';
 import { DateField } from '../components/DateField';
-import { BoolField, Field, ListSelectField, MoneyField, Section, SelectField } from '../components/Form';
+import { BoolField, DurationField, Field, ListSelectField, MoneyField, Section, SelectField } from '../components/Form';
 import { HomeHeader } from '../components/HomeHeader';
 import {
   CLIENT_STATUTS,
@@ -46,96 +46,89 @@ function filled(v: string | undefined) {
   return Boolean(v && String(v).trim());
 }
 
+function missingMessage(missing: string[]): string | null {
+  if (missing.length === 0) return null;
+  if (missing.length === 1) {
+    return `Champ obligatoire manquant : ${missing[0]}`;
+  }
+  return `Champs obligatoires manquants : ${missing.join(', ')}`;
+}
+
 function validateIndStep(step: number, ind: IndividuelForm): string | null {
   if (step === 0) {
-    if (!ind.communeId) return 'Sélectionnez une commune';
+    const missing: string[] = [];
+    if (!ind.communeId) missing.push('Commune');
     if (ind.clientStatut === 'ANCIEN' && !filled(ind.numeroCompte)) {
-      return 'N° de compte obligatoire pour un ancien client';
+      missing.push('N° de compte');
     }
-    return null;
+    return missingMessage(missing);
   }
   if (step === 1) return null; // booleans always set
   if (step === 2) {
     const d = ind.demandeur;
-    if (
-      !filled(d.prenom) ||
-      !filled(d.nom) ||
-      !filled(d.postNom) ||
-      !filled(d.dateNaissance) ||
-      !filled(d.numeroPiece) ||
-      !filled(d.adresseDomicile) ||
-      !filled(d.telephone)
-    ) {
-      return 'Complétez tous les champs obligatoires du demandeur';
-    }
+    const missing: string[] = [];
+    if (!filled(d.prenom)) missing.push('Prénom');
+    if (!filled(d.nom)) missing.push('Nom');
+    if (!filled(d.postNom)) missing.push('Post-Nom');
+    if (!filled(d.dateNaissance)) missing.push('Date de naissance');
+    if (!filled(d.numeroPiece)) missing.push('N° de pièce');
+    if (!filled(d.adresseDomicile)) missing.push('Adresse domicile');
+    if (!filled(d.telephone)) missing.push('Téléphone');
     if (d.etatCivil === 'Marie') {
-      if (!filled(d.conjointNom) || !filled(d.conjointDateNaissance)) {
-        return 'Informations conjoint obligatoires si Marié';
-      }
+      if (!filled(d.conjointNom)) missing.push('Prénom et nom conjoint');
+      if (!filled(d.conjointDateNaissance)) missing.push('Date naissance conjoint');
     }
-    return null;
+    return missingMessage(missing);
   }
   if (step === 3) {
     const b = ind.business;
-    if (
-      !filled(b.nomBusiness) ||
-      !filled(b.adresseBusiness) ||
-      !filled(b.dureeAdresse) ||
-      !filled(b.typeBusiness) ||
-      !filled(b.dureeTypeBusiness) ||
-      !filled(b.secteurBusiness) ||
-      !filled(b.formeJuridique)
-    ) {
-      return 'Complétez tous les champs business obligatoires';
-    }
-    return null;
+    const missing: string[] = [];
+    if (!filled(b.nomBusiness)) missing.push('Nom du business');
+    if (!filled(b.adresseBusiness)) missing.push('Adresse physique');
+    if (!filled(b.dureeAdresse)) missing.push('Durée à cette adresse');
+    if (!filled(b.typeBusiness)) missing.push('Type de business');
+    if (!filled(b.dureeTypeBusiness)) missing.push('Durée de ce type');
+    if (!filled(b.secteurBusiness)) missing.push('Secteur');
+    if (!filled(b.formeJuridique)) missing.push('Forme juridique');
+    return missingMessage(missing);
   }
   if (step === 4) {
     const p = ind.pret;
-    if (
-      !(p.montantDesire > 0) ||
-      !(p.dureeMois > 0) ||
-      !(p.capaciteMensuelle > 0) ||
-      !filled(p.butInvestissement) ||
-      !filled(p.commentaireBut)
-    ) {
-      return 'Complétez tous les champs prêt obligatoires';
-    }
+    const missing: string[] = [];
+    if (!(p.montantDesire > 0)) missing.push('Montant désiré');
+    if (!(p.dureeMois > 0)) missing.push('Durée (mois)');
+    if (!(p.capaciteMensuelle > 0)) missing.push('Capacité mensuelle');
+    if (!filled(p.butInvestissement)) missing.push('But de l’investissement');
+    if (!filled(p.commentaireBut)) missing.push('Commentaire sur le but');
     if (p.pretAutreInstitution !== 'Non' && !filled(p.autreInstitutionNom)) {
-      return 'Indiquez l’institution de l’autre prêt';
+      missing.push('Institution de l’autre prêt');
     }
-    return null;
+    return missingMessage(missing);
   }
   return null;
 }
 
 function validateSalStep(step: number, sal: SalaireForm): string | null {
   if (step === 0) {
-    if (!sal.communeId) return 'Sélectionnez une commune';
-    if (
-      !filled(sal.prenom) ||
-      !filled(sal.nom) ||
-      !filled(sal.postNom) ||
-      !filled(sal.telephone) ||
-      !filled(sal.adresseDomicile)
-    ) {
-      return 'Complétez tous les champs identité obligatoires';
-    }
-    return null;
+    const missing: string[] = [];
+    if (!sal.communeId) missing.push('Commune');
+    if (!filled(sal.prenom)) missing.push('Prénom');
+    if (!filled(sal.nom)) missing.push('Nom');
+    if (!filled(sal.postNom)) missing.push('Post-Nom');
+    if (!filled(sal.telephone)) missing.push('Téléphone');
+    if (!filled(sal.adresseDomicile)) missing.push('Adresse domicile');
+    return missingMessage(missing);
   }
   if (step === 1) {
-    if (
-      !filled(sal.societe) ||
-      !filled(sal.adresseSociete) ||
-      !filled(sal.fonctionService) ||
-      !(sal.montantSollicite > 0) ||
-      !(sal.dureeMois > 0) ||
-      !(sal.salaireNet > 0) ||
-      !(sal.capaciteMensuelle > 0)
-    ) {
-      return 'Complétez tous les champs emploi / prêt obligatoires';
-    }
-    return null;
+    const missing: string[] = [];
+    if (!filled(sal.societe)) missing.push('Société');
+    if (!filled(sal.adresseSociete)) missing.push('Adresse société');
+    if (!filled(sal.fonctionService)) missing.push('Fonction / Service');
+    if (!(sal.montantSollicite > 0)) missing.push('Montant sollicité');
+    if (!(sal.dureeMois > 0)) missing.push('Durée (mois)');
+    if (!filled(sal.salaireNet)) missing.push('Salaire net');
+    if (!(sal.capaciteMensuelle > 0)) missing.push('Capacité mensuelle');
+    return missingMessage(missing);
   }
   return null;
 }
@@ -213,7 +206,7 @@ export function RegisterScreen({ type, onCreated, onCancel }: Props) {
               dureeMois: Number(sal.dureeMois),
               dureeAnnees: Number(sal.dureeAnnees),
               dureeSemaines: Number(sal.dureeSemaines),
-              salaireNet: Number(sal.salaireNet),
+              salaireNet: sal.salaireNet.trim(),
               capaciteMensuelle: Number(sal.capaciteMensuelle),
               email: sal.email || undefined,
               motifCredit: sal.motifCredit || undefined,
@@ -296,9 +289,8 @@ export function RegisterScreen({ type, onCreated, onCancel }: Props) {
 
         <View style={styles.progressTrack}>
           {steps.map((s, i) => {
-            const locked = i > maxReached && i > step;
-            const done = i < step || (i <= maxReached && i !== step);
-            const active = step === i;
+            const locked = i > maxReached;
+            const filled = i <= step;
             return (
               <Pressable
                 key={s}
@@ -310,7 +302,7 @@ export function RegisterScreen({ type, onCreated, onCancel }: Props) {
                 <View
                   style={[
                     styles.progressSeg,
-                    (active || done) && styles.progressSegOn,
+                    filled && styles.progressSegOn,
                     locked && styles.progressSegLocked,
                   ]}
                 />
@@ -329,6 +321,8 @@ export function RegisterScreen({ type, onCreated, onCancel }: Props) {
               options={communeNames}
               onChange={setCommuneByName}
               placeholder="Sélectionner une commune"
+              subtitle="Choisissez une commune"
+              searchPlaceholder="Rechercher une commune"
             />
             <SelectField
               label="Nouveau ou ancien"
@@ -385,11 +379,26 @@ export function RegisterScreen({ type, onCreated, onCancel }: Props) {
             <Field label="Post-Nom" required value={ind.demandeur.postNom} onChangeText={(v) => setInd({ ...ind, demandeur: { ...ind.demandeur, postNom: v } })} />
             <DateField label="Date de naissance" required value={ind.demandeur.dateNaissance} onChange={(v) => setInd({ ...ind, demandeur: { ...ind.demandeur, dateNaissance: v } })} />
             <SelectField label="Sexe" required value={ind.demandeur.sexe} options={SEXES} onChange={(v) => setInd({ ...ind, demandeur: { ...ind.demandeur, sexe: v as any } })} />
-            <SelectField label="Type de pièce" required value={ind.demandeur.typePiece} options={TYPES_PIECE} onChange={(v) => setInd({ ...ind, demandeur: { ...ind.demandeur, typePiece: v as any } })} />
+            <ListSelectField
+              label="Type de pièce"
+              required
+              searchable={false}
+              subtitle="Choisissez le type de pièce"
+              value={ind.demandeur.typePiece}
+              options={TYPES_PIECE}
+              onChange={(v) =>
+                setInd({
+                  ...ind,
+                  demandeur: { ...ind.demandeur, typePiece: v as any },
+                })
+              }
+            />
             <Field label="N° de pièce" required value={ind.demandeur.numeroPiece} onChangeText={(v) => setInd({ ...ind, demandeur: { ...ind.demandeur, numeroPiece: v } })} />
-            <SelectField
+            <ListSelectField
               label="État civil"
               required
+              searchable={false}
+              subtitle="Choisissez l’état civil"
               value={ind.demandeur.etatCivil}
               options={ETATS_CIVILS}
               onChange={(v) =>
@@ -417,7 +426,7 @@ export function RegisterScreen({ type, onCreated, onCancel }: Props) {
             <Field label="Adresse physique" required value={ind.business.adresseBusiness} onChangeText={(v) => setInd({ ...ind, business: { ...ind.business, adresseBusiness: v } })} />
             <Field label="Durée à cette adresse" required value={ind.business.dureeAdresse} onChangeText={(v) => setInd({ ...ind, business: { ...ind.business, dureeAdresse: v } })} />
             <Field label="Type de business" required value={ind.business.typeBusiness} onChangeText={(v) => setInd({ ...ind, business: { ...ind.business, typeBusiness: v } })} />
-            <Field label="Durée de ce type" required value={ind.business.dureeTypeBusiness} onChangeText={(v) => setInd({ ...ind, business: { ...ind.business, dureeTypeBusiness: v } })} />
+            <Field label="Durée de ce type de business" required value={ind.business.dureeTypeBusiness} onChangeText={(v) => setInd({ ...ind, business: { ...ind.business, dureeTypeBusiness: v } })} />
             <Field label="Secteur" required value={ind.business.secteurBusiness} onChangeText={(v) => setInd({ ...ind, business: { ...ind.business, secteurBusiness: v } })} />
             <Field label="Forme juridique" required value={ind.business.formeJuridique} onChangeText={(v) => setInd({ ...ind, business: { ...ind.business, formeJuridique: v } })} />
           </Section>
@@ -443,7 +452,15 @@ export function RegisterScreen({ type, onCreated, onCancel }: Props) {
                 setInd({ ...ind, pret: { ...ind.pret, montantDesire: v ?? 0 } })
               }
             />
-            <Field label="Durée (mois)" required value={String(ind.pret.dureeMois || '')} onChangeText={(v) => setInd({ ...ind, pret: { ...ind.pret, dureeMois: Number(v) || 0 } })} keyboardType="numeric" />
+            <DurationField
+              label="Durée (mois)"
+              required
+              unit="mois"
+              value={ind.pret.dureeMois}
+              onChange={(v) =>
+                setInd({ ...ind, pret: { ...ind.pret, dureeMois: v ?? 0 } })
+              }
+            />
             <MoneyField
               label="Montant prêt précédent"
               currency={ind.pret.devise}
@@ -453,7 +470,15 @@ export function RegisterScreen({ type, onCreated, onCancel }: Props) {
                 setInd({ ...ind, pret: { ...ind.pret, montantPretPrecedent: v } })
               }
             />
-            <Field label="Durée prêt précédent" value={ind.pret.dureePretPrecedent != null ? String(ind.pret.dureePretPrecedent) : ''} onChangeText={(v) => setInd({ ...ind, pret: { ...ind.pret, dureePretPrecedent: v ? Number(v) : undefined } })} keyboardType="numeric" />
+            <DurationField
+              label="Durée prêt précédent"
+              unit="mois"
+              allowEmpty
+              value={ind.pret.dureePretPrecedent}
+              onChange={(v) =>
+                setInd({ ...ind, pret: { ...ind.pret, dureePretPrecedent: v } })
+              }
+            />
             <MoneyField
               label="Capacité mensuelle de remboursement"
               required
@@ -465,7 +490,20 @@ export function RegisterScreen({ type, onCreated, onCancel }: Props) {
             />
             <Field label="But de l’investissement" required value={ind.pret.butInvestissement} onChangeText={(v) => setInd({ ...ind, pret: { ...ind.pret, butInvestissement: v } })} />
             <Field label="Commentaire sur le but" required value={ind.pret.commentaireBut} onChangeText={(v) => setInd({ ...ind, pret: { ...ind.pret, commentaireBut: v } })} />
-            <SelectField label="Prêt autre institution ?" required value={ind.pret.pretAutreInstitution} options={PRET_AUTRE_INSTITUTION} onChange={(v) => setInd({ ...ind, pret: { ...ind.pret, pretAutreInstitution: v as any } })} />
+            <ListSelectField
+              label="Prêt autre institution ?"
+              required
+              searchable={false}
+              subtitle="Choisissez une option"
+              value={ind.pret.pretAutreInstitution}
+              options={PRET_AUTRE_INSTITUTION}
+              onChange={(v) =>
+                setInd({
+                  ...ind,
+                  pret: { ...ind.pret, pretAutreInstitution: v as any },
+                })
+              }
+            />
             {ind.pret.pretAutreInstitution !== 'Non' && (
               <Field label="Laquelle ?" required value={ind.pret.autreInstitutionNom || ''} onChangeText={(v) => setInd({ ...ind, pret: { ...ind.pret, autreInstitutionNom: v } })} />
             )}
@@ -481,6 +519,8 @@ export function RegisterScreen({ type, onCreated, onCancel }: Props) {
               options={communeNames}
               onChange={setCommuneByName}
               placeholder="Sélectionner une commune"
+              subtitle="Choisissez une commune"
+              searchPlaceholder="Rechercher une commune"
             />
             <Field label="Prénom" required value={sal.prenom} onChangeText={(v) => setSal({ ...sal, prenom: v })} />
             <Field label="Nom" required value={sal.nom} onChangeText={(v) => setSal({ ...sal, nom: v })} />
@@ -511,16 +551,34 @@ export function RegisterScreen({ type, onCreated, onCancel }: Props) {
               value={sal.montantSollicite}
               onChange={(v) => setSal({ ...sal, montantSollicite: v ?? 0 })}
             />
-            <Field label="Durée (mois)" required value={String(sal.dureeMois || '')} onChangeText={(v) => setSal({ ...sal, dureeMois: Number(v) || 0 })} keyboardType="numeric" />
-            <Field label="Durée (années)" required value={String(sal.dureeAnnees || '')} onChangeText={(v) => setSal({ ...sal, dureeAnnees: Number(v) || 0 })} keyboardType="numeric" />
-            <Field label="Durée (semaines)" required value={String(sal.dureeSemaines || '')} onChangeText={(v) => setSal({ ...sal, dureeSemaines: Number(v) || 0 })} keyboardType="numeric" />
+            <DurationField
+              label="Durée (mois)"
+              required
+              unit="mois"
+              value={sal.dureeMois}
+              onChange={(v) => setSal({ ...sal, dureeMois: v ?? 0 })}
+            />
+            <DurationField
+              label="Durée (années)"
+              required
+              unit="annees"
+              value={sal.dureeAnnees}
+              onChange={(v) => setSal({ ...sal, dureeAnnees: v ?? 0 })}
+            />
+            <DurationField
+              label="Durée (semaines)"
+              required
+              unit="semaines"
+              value={sal.dureeSemaines}
+              onChange={(v) => setSal({ ...sal, dureeSemaines: v ?? 0 })}
+            />
             <Field label="Motif" value={sal.motifCredit || ''} onChangeText={(v) => setSal({ ...sal, motifCredit: v })} />
-            <MoneyField
+            <Field
               label="Salaire net"
               required
-              currency={sal.devise}
+              placeholder="Salaire net * (ex. 500 USD ou 800.000 CDF)"
               value={sal.salaireNet}
-              onChange={(v) => setSal({ ...sal, salaireNet: v ?? 0 })}
+              onChangeText={(v) => setSal({ ...sal, salaireNet: v })}
             />
             <MoneyField
               label="Capacité mensuelle de remboursement"
