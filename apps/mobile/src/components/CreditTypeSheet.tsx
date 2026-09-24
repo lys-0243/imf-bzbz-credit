@@ -1,11 +1,14 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState, type RefObject } from 'react';
 import {
-  Modal,
+  Animated,
+  Dimensions,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fonts } from '@imf/assets';
@@ -29,111 +32,180 @@ const TYPE_ICONS: Record<CreditType, keyof typeof Ionicons.glyphMap> = {
   DARE_DARE: 'flash-outline',
 };
 
+const SHEET_SLIDE = Math.round(Dimensions.get('window').height * 0.55);
+
 type Props = {
   visible: boolean;
   onClose: () => void;
   onConfirm: (type: CreditType) => void;
+  /** Android: ref of BlurTargetView wrapping the screen content to blur */
+  blurTarget?: RefObject<View | null>;
 };
 
-export function CreditTypeSheet({ visible, onClose, onConfirm }: Props) {
+export function CreditTypeSheet({
+  visible,
+  onClose,
+  onConfirm,
+  blurTarget,
+}: Props) {
   const insets = useSafeAreaInsets();
   const [selected, setSelected] = useState<CreditType | null>(null);
+  const [mounted, setMounted] = useState(false);
+  const backdropOpacity = useRef(new Animated.Value(0)).current;
+  const sheetTranslate = useRef(new Animated.Value(SHEET_SLIDE)).current;
 
   useEffect(() => {
-    if (visible) setSelected(null);
-  }, [visible]);
+    if (visible) {
+      setSelected(null);
+      setMounted(true);
+      backdropOpacity.setValue(0);
+      sheetTranslate.setValue(SHEET_SLIDE);
+      requestAnimationFrame(() => {
+        Animated.parallel([
+          Animated.timing(backdropOpacity, {
+            toValue: 1,
+            duration: 360,
+            useNativeDriver: true,
+          }),
+          Animated.spring(sheetTranslate, {
+            toValue: 0,
+            damping: 22,
+            stiffness: 220,
+            mass: 0.9,
+            useNativeDriver: true,
+          }),
+        ]).start();
+      });
+    } else if (mounted) {
+      Animated.parallel([
+        Animated.timing(backdropOpacity, {
+          toValue: 0,
+          duration: 240,
+          useNativeDriver: true,
+        }),
+        Animated.timing(sheetTranslate, {
+          toValue: SHEET_SLIDE,
+          duration: 260,
+          useNativeDriver: true,
+        }),
+      ]).start(({ finished }) => {
+        if (finished) setMounted(false);
+      });
+    }
+  }, [visible, mounted, backdropOpacity, sheetTranslate]);
+
+  if (!mounted) return null;
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}
-    >
-      <View style={styles.root}>
-        <Pressable style={styles.scrim} onPress={onClose} />
-        <View
-          style={[
-            styles.sheet,
-            { paddingBottom: Math.max(insets.bottom, 16) + 8 },
-          ]}
-        >
-          <View style={styles.handle} />
+    <View style={styles.root} pointerEvents="box-none">
+      <Animated.View
+        style={[styles.backdropWrap, { opacity: backdropOpacity }]}
+      >
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose}>
+          <BlurView
+            intensity={48}
+            tint="dark"
+            style={StyleSheet.absoluteFill}
+            {...(Platform.OS === 'android' && blurTarget
+              ? {
+                  blurTarget,
+                  blurMethod: 'dimezisBlurView' as const,
+                }
+              : {})}
+          />
+          <View style={styles.dim} pointerEvents="none" />
+        </Pressable>
+      </Animated.View>
 
-          <View style={styles.header}>
-            <View style={styles.headerSpacer} />
-            <Text style={styles.title}>Nouveau dossier</Text>
-            <Pressable
-              style={styles.closeBtn}
-              onPress={onClose}
-              accessibilityLabel="Fermer"
-            >
-              <Ionicons name="close" size={20} color={colors.neutral.textMuted} />
-            </Pressable>
-          </View>
+      <Animated.View
+        style={[
+          styles.sheet,
+          {
+            paddingBottom: Math.max(insets.bottom, 16) + 8,
+            transform: [{ translateY: sheetTranslate }],
+          },
+        ]}
+      >
+        <View style={styles.handle} />
 
-          <Text style={styles.subtitle}>Choisissez le type de crédit</Text>
-
-          <View style={styles.options}>
-            {CREDIT_TYPES.map((t) => {
-              const active = selected === t;
-              return (
-                <Pressable
-                  key={t}
-                  style={[styles.option, active && styles.optionActive]}
-                  onPress={() => setSelected(t)}
-                >
-                  <View
-                    style={[styles.optionIcon, active && styles.optionIconActive]}
-                  >
-                    <Ionicons
-                      name={TYPE_ICONS[t]}
-                      size={22}
-                      color={active ? '#fff' : colors.primary.blue}
-                    />
-                  </View>
-                  <View style={styles.optionText}>
-                    <Text
-                      style={[styles.optionLabel, active && styles.optionLabelActive]}
-                    >
-                      {TYPE_LABELS[t]}
-                    </Text>
-                    <Text style={styles.optionHint}>{TYPE_HINTS[t]}</Text>
-                  </View>
-                  <View
-                    style={[styles.radio, active && styles.radioActive]}
-                  >
-                    {active ? <View style={styles.radioDot} /> : null}
-                  </View>
-                </Pressable>
-              );
-            })}
-          </View>
-
+        <View style={styles.header}>
+          <View style={styles.headerSpacer} />
+          <Text style={styles.title}>Nouveau dossier</Text>
           <Pressable
-            style={[styles.cta, !selected && styles.ctaDisabled]}
-            disabled={!selected}
-            onPress={() => {
-              if (!selected) return;
-              onConfirm(selected);
-            }}
+            style={styles.closeBtn}
+            onPress={onClose}
+            accessibilityLabel="Fermer"
           >
-            <Text style={styles.ctaText}>Continuer</Text>
+            <Ionicons name="close" size={20} color={colors.neutral.textMuted} />
           </Pressable>
         </View>
-      </View>
-    </Modal>
+
+        <Text style={styles.subtitle}>Choisissez le type de crédit</Text>
+
+        <View style={styles.options}>
+          {CREDIT_TYPES.map((t) => {
+            const active = selected === t;
+            return (
+              <Pressable
+                key={t}
+                style={[styles.option, active && styles.optionActive]}
+                onPress={() => setSelected(t)}
+              >
+                <View
+                  style={[styles.optionIcon, active && styles.optionIconActive]}
+                >
+                  <Ionicons
+                    name={TYPE_ICONS[t]}
+                    size={22}
+                    color={active ? '#fff' : colors.primary.blue}
+                  />
+                </View>
+                <View style={styles.optionText}>
+                  <Text
+                    style={[
+                      styles.optionLabel,
+                      active && styles.optionLabelActive,
+                    ]}
+                  >
+                    {TYPE_LABELS[t]}
+                  </Text>
+                  <Text style={styles.optionHint}>{TYPE_HINTS[t]}</Text>
+                </View>
+                <View style={[styles.radio, active && styles.radioActive]}>
+                  {active ? <View style={styles.radioDot} /> : null}
+                </View>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        <Pressable
+          style={[styles.cta, !selected && styles.ctaDisabled]}
+          disabled={!selected}
+          onPress={() => {
+            if (!selected) return;
+            onConfirm(selected);
+          }}
+        >
+          <Text style={styles.ctaText}>Continuer</Text>
+        </Pressable>
+      </Animated.View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  scrim: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'flex-end',
+    zIndex: 50,
+  },
+  backdropWrap: {
+    ...StyleSheet.absoluteFill,
+  },
+  dim: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(0,0,0,0.28)',
   },
   sheet: {
     backgroundColor: colors.neutral.surface,
