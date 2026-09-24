@@ -1,35 +1,24 @@
 import React, { useState } from 'react';
-import {
-  Modal,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import {
   SafeAreaView,
   useSafeAreaInsets,
 } from 'react-native-safe-area-context';
-import { colors, fonts } from '@imf/assets';
-import { CREDIT_TYPES, type CreditType } from '@imf/shared';
+import { colors } from '@imf/assets';
+import type { CreditType } from '@imf/shared';
 import { useAuth } from '../auth';
 import {
   BottomTabBar,
   type HomeTab,
 } from '../components/BottomTabBar';
+import { CreditTypeSheet } from '../components/CreditTypeSheet';
 import { HomeHeader } from '../components/HomeHeader';
 import { AlertsTab } from './AlertsTab';
 import { DetailScreen } from './DetailScreen';
 import { ProfileTab } from './ProfileTab';
 import { RegisterScreen } from './RegisterScreen';
 import { SearchScreen } from './SearchScreen';
-
-const TYPE_LABELS: Record<CreditType, string> = {
-  DARE_DARE: 'Crédit Dare-Dare',
-  INDIVIDUEL: 'Crédit Individuel',
-  SALAIRE: 'Crédit Salaire',
-};
 
 const COMPACT_TITLES: Record<Exclude<HomeTab, 'home'>, string> = {
   dossiers: 'Dossiers',
@@ -116,36 +105,14 @@ export function HomeScreen() {
         onNouveau={() => setTypeModal(true)}
       />
 
-      <Modal
+      <CreditTypeSheet
         visible={typeModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setTypeModal(false)}
-      >
-        <Pressable style={styles.overlay} onPress={() => setTypeModal(false)}>
-          <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
-            <Text style={styles.sheetTitle}>Type de crédit</Text>
-            {CREDIT_TYPES.map((t) => (
-              <Pressable
-                key={t}
-                style={styles.typeBtn}
-                onPress={() => {
-                  setTypeModal(false);
-                  setRegisterType(t);
-                }}
-              >
-                <Text style={styles.typeBtnText}>{TYPE_LABELS[t]}</Text>
-              </Pressable>
-            ))}
-            <Pressable
-              style={styles.cancelBtn}
-              onPress={() => setTypeModal(false)}
-            >
-              <Text style={styles.cancelText}>Annuler</Text>
-            </Pressable>
-          </Pressable>
-        </Pressable>
-      </Modal>
+        onClose={() => setTypeModal(false)}
+        onConfirm={(type) => {
+          setTypeModal(false);
+          setRegisterType(type);
+        }}
+      />
     </View>
   );
 }
@@ -153,36 +120,4 @@ export function HomeScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.neutral.background },
   body: { flex: 1 },
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    justifyContent: 'flex-end',
-  },
-  sheet: {
-    backgroundColor: colors.neutral.surface,
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    padding: 20,
-    paddingBottom: 32,
-  },
-  sheetTitle: {
-    fontSize: 18,
-    fontFamily: fonts.bold,
-    marginBottom: 16,
-    color: colors.primary.blue,
-  },
-  typeBtn: {
-    borderWidth: 1,
-    borderColor: colors.primary.blue,
-    borderRadius: 10,
-    padding: 14,
-    marginBottom: 10,
-  },
-  typeBtnText: {
-    fontFamily: fonts.semiBold,
-    color: colors.primary.blue,
-    textAlign: 'center',
-  },
-  cancelBtn: { padding: 14, alignItems: 'center' },
-  cancelText: { color: colors.neutral.textMuted, fontFamily: fonts.semiBold },
 });
