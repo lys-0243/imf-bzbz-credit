@@ -1,3 +1,10 @@
+import { pageMetadata } from '../../lib/seo';
+
+export const metadata = pageMetadata(
+  'Réception',
+  'Enregistrement des demandes de crédit.',
+);
+
 export default function ReceptionPage() {
   return (
     <div>

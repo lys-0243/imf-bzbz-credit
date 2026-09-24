@@ -41,6 +41,7 @@
   --imf-muted: #5c5c5c;
   --imf-border: #d8d8d8;
   --imf-font: 'Neutrif Pro', 'Segoe UI', sans-serif;
+  --imf-radius: 5px;
 }
 
 * {

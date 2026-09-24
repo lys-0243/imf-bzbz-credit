@@ -1,7 +1,8 @@
-'use client';
+import { redirect } from 'next/navigation';
+import { pageMetadata } from '../../../lib/seo';
 
-import AgentDashboard from '../../../components/dashboard/AgentDashboard';
+export const metadata = pageMetadata('Mes dossiers');
 
-export default function AgentMesDossiersPage() {
-  return <AgentDashboard section="dossiers" />;
+export default function AgentMesDossiersRedirect() {
+  redirect('/agent/dossiers-en-cours');
 }

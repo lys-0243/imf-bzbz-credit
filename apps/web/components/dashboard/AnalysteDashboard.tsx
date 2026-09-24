@@ -1,26 +1,31 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import AuthGate from '../AuthGate';
 import { ApiError, apiFetch } from '../../lib/api';
 import AnalysteDossierPanel from './AnalysteDossierPanel';
-import { DashboardShell, type SidebarDossier } from './DashboardShell';
+import { BoardHome } from './BoardHome';
 import {
-  BoardHome,
-  DossierListView,
-  matchesDossierQuery,
-} from './DossierViews';
+  DashboardShell,
+  type SidebarDossier,
+} from './DashboardShell';
+import { DossierListView, matchesDossierQuery } from './DossierViews';
+import { DossierSheet } from './DossierSheet';
 import { ProfileView } from './ProfileView';
 
 export type AnalysteSection =
   | 'dashboard'
   | 'nouveaux'
   | 'dossiers'
+  | 'retournes'
+  | 'termines'
   | 'profile'
   | 'detail';
 
 type AnalysteRow = SidebarDossier & {
+  bucket?: 'nouveaux' | 'en_cours' | 'retournes' | 'termines';
+  updatedAt?: string;
   agent?: { displayName: string } | null;
   scoreValue?: number | null;
 };
@@ -37,6 +42,11 @@ function AnalysteWorkspace({
   const [search, setSearch] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [openId, setOpenId] = useState<string | null>(selectedId ?? null);
+
+  useEffect(() => {
+    setOpenId(selectedId ?? null);
+  }, [selectedId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -60,52 +70,124 @@ function AnalysteWorkspace({
     };
   }, []);
 
+  const byBucket = useMemo(() => {
+    const aAnalyser = rows.filter((d) => d.bucket === 'nouveaux');
+    const retournes = rows.filter((d) => d.bucket === 'retournes');
+    const termines = rows.filter((d) => d.bucket === 'termines');
+    return {
+      nouveaux: aAnalyser,
+      enCours: aAnalyser,
+      retournes,
+      termines,
+    };
+  }, [rows]);
+
+  const counts = {
+    nouveaux: byBucket.nouveaux.length,
+    enCours: byBucket.enCours.length,
+    retournes: byBucket.retournes.length,
+    termines: byBucket.termines.length,
+  };
+
+  const viewSection = section === 'detail' ? 'dashboard' : section;
+
+  const listSource =
+    viewSection === 'nouveaux' || viewSection === 'dossiers'
+      ? byBucket.nouveaux
+      : viewSection === 'retournes'
+        ? byBucket.retournes
+        : viewSection === 'termines'
+          ? byBucket.termines
+          : rows;
+
   const filtered = useMemo(
-    () => rows.filter((d) => matchesDossierQuery(d, search)),
-    [rows, search],
+    () => listSource.filter((d) => matchesDossierQuery(d, search)),
+    [listSource, search],
   );
 
+  const listTitle =
+    viewSection === 'nouveaux'
+      ? 'Nouveaux dossiers'
+      : viewSection === 'dossiers'
+        ? 'Dossiers en cours'
+        : viewSection === 'retournes'
+          ? 'Dossiers retournés'
+          : viewSection === 'termines'
+            ? 'Dossiers terminés'
+            : 'Dossiers';
+
+  const recent = useMemo(() => rows.slice(0, 10), [rows]);
+
+  const closeSheet = useCallback(() => {
+    setOpenId(null);
+    if (section === 'detail') {
+      router.replace('/analyste');
+    }
+  }, [router, section]);
+
+  const openDossier = useCallback((id: string) => {
+    setOpenId(id);
+  }, []);
+
   return (
-    <DashboardShell base="analyste">
-      {section === 'dashboard' ? (
+    <DashboardShell base="analyste" counts={counts}>
+      {viewSection === 'dashboard' ? (
         <BoardHome
-          title="Tableau de bord"
+          recent={recent}
+          onSelectDossier={openDossier}
           stats={[
-            { label: 'À analyser', value: rows.length },
             {
-              label: 'Score moyen',
-              value:
-                rows.length === 0
-                  ? '—'
-                  : Math.round(
-                      rows.reduce((a, r) => a + (r.scoreValue ?? 0), 0) /
-                        rows.length,
-                    ),
+              key: 'nouveaux',
+              label: 'Nouveaux attribués',
+              value: counts.nouveaux,
+              href: '/analyste/nouveaux',
+              tone: counts.nouveaux > 0 ? 'ok' : 'muted',
             },
-            { label: 'Ouverts', value: rows.length },
+            {
+              key: 'en_cours',
+              label: 'En cours',
+              value: counts.enCours,
+              href: '/analyste/dossiers-en-cours',
+            },
+            {
+              key: 'retournes',
+              label: 'Retournés',
+              value: counts.retournes,
+              href: '/analyste/dossiers-retournes',
+              tone: counts.retournes > 0 ? 'warn' : 'muted',
+            },
+            {
+              key: 'termines',
+              label: 'Terminés',
+              value: counts.termines,
+              href: '/analyste/dossiers-termines',
+              tone: 'muted',
+            },
           ]}
         />
       ) : null}
 
-      {section === 'nouveaux' || section === 'dossiers' ? (
+      {viewSection === 'nouveaux' ||
+      viewSection === 'dossiers' ||
+      viewSection === 'retournes' ||
+      viewSection === 'termines' ? (
         <DossierListView
-          title={
-            section === 'nouveaux' ? 'Nouveaux dossiers' : 'Mes dossiers'
-          }
+          title={listTitle}
           dossiers={filtered}
+          selectedId={openId}
           search={search}
           onSearchChange={setSearch}
-          onSelect={(id) => router.push(`/analyste/${id}`)}
+          onSelect={openDossier}
           loading={loading}
           error={error}
         />
       ) : null}
 
-      {section === 'profile' ? <ProfileView /> : null}
+      {viewSection === 'profile' ? <ProfileView /> : null}
 
-      {section === 'detail' && selectedId ? (
-        <AnalysteDossierPanel id={selectedId} />
-      ) : null}
+      <DossierSheet open={Boolean(openId)} onClose={closeSheet}>
+        {openId ? <AnalysteDossierPanel id={openId} /> : null}
+      </DossierSheet>
     </DashboardShell>
   );
 }

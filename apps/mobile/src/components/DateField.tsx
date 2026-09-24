@@ -30,16 +30,17 @@ export function DateField({
   required?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const ph = required ? `${label} *` : label;
 
   return (
     <View style={styles.field}>
-      <Text style={styles.label}>
-        {label}
-        {required ? <Text style={styles.asterisk}> *</Text> : null}
-      </Text>
-      <Pressable style={styles.input} onPress={() => setOpen(true)}>
+      <Pressable
+        style={[styles.input, open && styles.inputFocused]}
+        onPress={() => setOpen(true)}
+        accessibilityLabel={label}
+      >
         <Text style={value ? styles.value : styles.placeholder}>
-          {value || 'Choisir une date'}
+          {value || ph}
         </Text>
       </Pressable>
       {open && (
@@ -65,25 +66,41 @@ export function DateField({
 }
 
 const styles = StyleSheet.create({
-  field: { marginBottom: 12 },
-  label: { marginBottom: 4, fontFamily: fonts.medium, color: '#333' },
-  asterisk: { color: colors.primary.red, fontFamily: fonts.bold },
+  field: { marginBottom: 14 },
   input: {
     borderWidth: 1,
-    borderColor: colors.neutral.border,
-    borderRadius: 8,
-    padding: 12,
+    borderColor: '#e8e8e8',
+    borderRadius: 16,
+    paddingHorizontal: 18,
+    minHeight: 58,
+    justifyContent: 'center',
     backgroundColor: colors.neutral.surface,
+    shadowColor: '#000',
+    shadowOpacity: 0.03,
+    shadowRadius: 5,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
   },
-  value: { color: colors.neutral.text, fontFamily: fonts.regular },
-  placeholder: { color: colors.neutral.placeholder, fontFamily: fonts.regular },
+  inputFocused: {
+    borderColor: colors.primary.blue,
+  },
+  value: {
+    color: colors.neutral.text,
+    fontFamily: fonts.medium,
+    fontSize: 16,
+  },
+  placeholder: {
+    color: colors.neutral.placeholder,
+    fontFamily: fonts.medium,
+    fontSize: 16,
+  },
   done: {
     alignSelf: 'flex-end',
-    marginTop: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    marginTop: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
     backgroundColor: colors.primary.blue,
-    borderRadius: 6,
+    borderRadius: 20,
   },
   doneText: { color: '#fff', fontFamily: fonts.semiBold },
 });

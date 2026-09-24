@@ -1,9 +1,9 @@
-.page {
+﻿.page {
   min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 24px;
+  padding: 24px 72px;
   background:
     radial-gradient(ellipse at 15% 20%, rgba(244, 223, 60, 0.18), transparent 45%),
     radial-gradient(ellipse at 85% 80%, rgba(154, 28, 32, 0.2), transparent 40%),
@@ -16,7 +16,7 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   background: #fff;
-  border-radius: 5px;
+  border-radius: var(--imf-radius);
   overflow: hidden;
   box-shadow: 0 28px 80px rgba(10, 20, 50, 0.35);
 }
@@ -73,7 +73,7 @@
   height: 52px;
   padding: 0 46px 0 18px;
   border: 1px solid #d6d6d6;
-  border-radius: 5px;
+  border-radius: var(--imf-radius);
   font-family: inherit;
   font-size: 0.98rem;
   background: #fff;
@@ -138,7 +138,7 @@
   margin-top: 8px;
   height: 52px;
   border: 0;
-  border-radius: 5px;
+  border-radius: var(--imf-radius);
   background: #284080;
   color: #fff;
   font-family: inherit;
@@ -178,14 +178,14 @@
   font-size: 0.76rem;
   background: #f3f3f3;
   padding: 1px 5px;
-  border-radius: 5px;
+  border-radius: var(--imf-radius);
 }
 
 .visualPane {
   position: relative;
   min-height: 320px;
   margin: 18px;
-  border-radius: 5px;
+  border-radius: var(--imf-radius);
   overflow: hidden;
 }
 
@@ -220,14 +220,14 @@
 
 @media (max-width: 860px) {
   .page {
-    padding: 12px;
+    padding: 16px 32px;
     align-items: stretch;
   }
 
   .card {
     grid-template-columns: 1fr;
     min-height: auto;
-    border-radius: 5px;
+    border-radius: var(--imf-radius);
   }
 
   .formPane {
@@ -239,7 +239,7 @@
     order: 0;
     min-height: 220px;
     margin: 14px 14px 0;
-    border-radius: 5px;
+    border-radius: var(--imf-radius);
   }
 
   .brand {

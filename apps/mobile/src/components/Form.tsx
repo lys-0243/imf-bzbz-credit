@@ -1,7 +1,5 @@
 import React, { useState } from 'react';
 import {
-  FlatList,
-  Modal,
   Pressable,
   StyleSheet,
   Switch,
@@ -11,15 +9,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, fonts } from '@imf/assets';
-
-function Label({ label, required }: { label: string; required?: boolean }) {
-  return (
-    <Text style={styles.label}>
-      {label}
-      {required ? <Text style={styles.asterisk}> *</Text> : null}
-    </Text>
-  );
-}
+import { OptionsSheet } from './OptionsSheet';
 
 export function Field({
   label,
@@ -38,16 +28,21 @@ export function Field({
   secureTextEntry?: boolean;
   required?: boolean;
 }) {
+  const [focused, setFocused] = useState(false);
+  const ph = placeholder ?? (required ? `${label} *` : label);
   return (
     <View style={styles.field}>
-      <Label label={label} required={required} />
       <TextInput
-        style={styles.input}
+        style={[styles.input, focused && styles.inputFocused]}
         value={value}
         onChangeText={onChangeText}
-        placeholder={placeholder}
+        placeholder={ph}
+        placeholderTextColor={colors.neutral.placeholder}
         keyboardType={keyboardType}
         secureTextEntry={secureTextEntry}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        accessibilityLabel={label}
       />
     </View>
   );
@@ -79,14 +74,17 @@ export function MoneyField({
         ? `${currency} ${value}`
         : '';
 
+  const ph = required ? `${label} *` : label;
+
   return (
     <View style={styles.field}>
-      <Label label={label} required={required} />
       <TextInput
-        style={styles.input}
+        style={[styles.input, focused && styles.inputFocused]}
         value={shown}
         keyboardType="numeric"
-        placeholder={`${currency} 0`}
+        placeholder={ph}
+        placeholderTextColor={colors.neutral.placeholder}
+        accessibilityLabel={label}
         onFocus={() => {
           setFocused(true);
           setDraft(value != null && value > 0 ? String(value) : '');
@@ -117,6 +115,79 @@ export function MoneyField({
   );
 }
 
+/** Champ durée affiché `12 mois` / `2 ans` / `3 semaines` hors édition. */
+export function DurationField({
+  label,
+  value,
+  unit,
+  onChange,
+  required,
+  allowEmpty,
+}: {
+  label: string;
+  value: number | undefined;
+  unit: 'mois' | 'annees' | 'semaines';
+  onChange: (v: number | undefined) => void;
+  required?: boolean;
+  allowEmpty?: boolean;
+}) {
+  const [focused, setFocused] = useState(false);
+  const [draft, setDraft] = useState('');
+
+  const unitLabel = (n: number) => {
+    if (unit === 'mois') return 'mois';
+    if (unit === 'annees') return n === 1 ? 'an' : 'ans';
+    return n === 1 ? 'semaine' : 'semaines';
+  };
+
+  const shown =
+    focused
+      ? draft
+      : value != null && value > 0
+        ? `${value} ${unitLabel(value)}`
+        : '';
+
+  const ph = required ? `${label} *` : label;
+
+  return (
+    <View style={styles.field}>
+      <TextInput
+        style={[styles.input, focused && styles.inputFocused]}
+        value={shown}
+        keyboardType="numeric"
+        placeholder={ph}
+        placeholderTextColor={colors.neutral.placeholder}
+        accessibilityLabel={label}
+        onFocus={() => {
+          setFocused(true);
+          setDraft(value != null && value > 0 ? String(value) : '');
+        }}
+        onBlur={() => {
+          setFocused(false);
+          const cleaned = draft.replace(/[^\d]/g, '');
+          if (!cleaned) {
+            onChange(allowEmpty ? undefined : 0);
+            setDraft('');
+            return;
+          }
+          const n = Number(cleaned);
+          onChange(Number.isFinite(n) ? n : allowEmpty ? undefined : 0);
+        }}
+        onChangeText={(t) => {
+          const cleaned = t.replace(/[^\d]/g, '');
+          setDraft(cleaned);
+          if (!cleaned) {
+            onChange(allowEmpty ? undefined : 0);
+            return;
+          }
+          const n = Number(cleaned);
+          if (Number.isFinite(n)) onChange(n);
+        }}
+      />
+    </View>
+  );
+}
+
 export function BoolField({
   label,
   value,
@@ -129,12 +200,59 @@ export function BoolField({
   required?: boolean;
 }) {
   return (
-    <View style={styles.row}>
-      <Text style={[styles.label, { flex: 1 }]}>
+    <View style={styles.boolRow}>
+      <Text style={styles.boolLabel}>
         {label}
         {required ? <Text style={styles.asterisk}> *</Text> : null}
       </Text>
-      <Switch value={value} onValueChange={onChange} />
+      <Switch
+        value={value}
+        onValueChange={onChange}
+        trackColor={{ false: '#d8d8d8', true: 'rgba(40, 64, 128, 0.45)' }}
+        thumbColor={value ? colors.primary.blue : '#f4f4f4'}
+      />
+    </View>
+  );
+}
+
+/** Flat switch capsule for exactly 2 options (e.g. Sexe). */
+function FlatSwitch({
+  value,
+  options,
+  onChange,
+  accessibilityLabel,
+}: {
+  value: string;
+  options: readonly [string, string] | readonly string[];
+  onChange: (v: string) => void;
+  accessibilityLabel?: string;
+}) {
+  const [a, b] = options;
+  return (
+    <View style={styles.flatSwitch} accessibilityLabel={accessibilityLabel}>
+      <Pressable
+        style={[styles.flatHalf, value === a && styles.flatHalfOn]}
+        onPress={() => onChange(a)}
+      >
+        <Text
+          style={[styles.flatText, value === a && styles.flatTextOn]}
+          numberOfLines={1}
+        >
+          {a}
+        </Text>
+      </Pressable>
+      <View style={styles.flatDivider} />
+      <Pressable
+        style={[styles.flatHalf, value === b && styles.flatHalfOn]}
+        onPress={() => onChange(b)}
+      >
+        <Text
+          style={[styles.flatText, value === b && styles.flatTextOn]}
+          numberOfLines={1}
+        >
+          {b}
+        </Text>
+      </Pressable>
     </View>
   );
 }
@@ -152,17 +270,32 @@ export function SelectField({
   onChange: (v: string) => void;
   required?: boolean;
 }) {
+  if (options.length === 2) {
+    return (
+      <View style={styles.field}>
+        <FlatSwitch
+          value={value}
+          options={options}
+          onChange={onChange}
+          accessibilityLabel={label}
+        />
+      </View>
+    );
+  }
+
   return (
     <View style={styles.field}>
-      <Label label={label} required={required} />
       <View style={styles.chips}>
         {options.map((o) => (
           <Pressable
             key={o}
             onPress={() => onChange(o)}
             style={[styles.chip, value === o && styles.chipOn]}
+            accessibilityLabel={`${label}: ${o}`}
           >
-            <Text style={value === o ? styles.chipTextOn : undefined}>{o}</Text>
+            <Text style={[styles.chipText, value === o && styles.chipTextOn]}>
+              {o}
+            </Text>
           </Pressable>
         ))}
       </View>
@@ -170,14 +303,17 @@ export function SelectField({
   );
 }
 
-/** Liste déroulante (modal) — adaptée aux longues listes (ex. communes). */
+/** Liste → bottom sheet (communes, listes fermées, etc.). */
 export function ListSelectField({
   label,
   value,
   options,
   onChange,
   required,
-  placeholder = 'Sélectionner…',
+  placeholder,
+  subtitle,
+  searchable = true,
+  searchPlaceholder,
 }: {
   label: string;
   value: string;
@@ -185,14 +321,17 @@ export function ListSelectField({
   onChange: (v: string) => void;
   required?: boolean;
   placeholder?: string;
+  subtitle?: string;
+  searchable?: boolean;
+  searchPlaceholder?: string;
 }) {
   const [open, setOpen] = useState(false);
+  const ph = placeholder ?? (required ? `${label} *` : label);
 
   return (
     <View style={styles.field}>
-      <Label label={label} required={required} />
       <Pressable
-        style={styles.listTrigger}
+        style={[styles.listTrigger, open && styles.inputFocused]}
         onPress={() => setOpen(true)}
         accessibilityRole="button"
         accessibilityLabel={label}
@@ -201,61 +340,25 @@ export function ListSelectField({
           style={value ? styles.listTriggerValue : styles.listTriggerPlaceholder}
           numberOfLines={1}
         >
-          {value || placeholder}
+          {value || ph}
         </Text>
         <Ionicons name="chevron-down" size={18} color={colors.neutral.textMuted} />
       </Pressable>
 
-      <Modal
+      <OptionsSheet
         visible={open}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setOpen(false)}
-      >
-        <Pressable style={styles.listOverlay} onPress={() => setOpen(false)}>
-          <Pressable style={styles.listSheet} onPress={(e) => e.stopPropagation()}>
-            <View style={styles.listHeader}>
-              <Text style={styles.listTitle}>{label}</Text>
-              <Pressable onPress={() => setOpen(false)} hitSlop={8}>
-                <Text style={styles.listClose}>Fermer</Text>
-              </Pressable>
-            </View>
-            <FlatList
-              data={[...options]}
-              keyExtractor={(item) => item}
-              keyboardShouldPersistTaps="handled"
-              renderItem={({ item }) => {
-                const selected = item === value;
-                return (
-                  <Pressable
-                    style={[styles.listRow, selected && styles.listRowOn]}
-                    onPress={() => {
-                      onChange(item);
-                      setOpen(false);
-                    }}
-                  >
-                    <Text
-                      style={[
-                        styles.listRowText,
-                        selected && styles.listRowTextOn,
-                      ]}
-                    >
-                      {item}
-                    </Text>
-                    {selected ? (
-                      <Ionicons
-                        name="checkmark"
-                        size={20}
-                        color={colors.primary.blue}
-                      />
-                    ) : null}
-                  </Pressable>
-                );
-              }}
-            />
-          </Pressable>
-        </Pressable>
-      </Modal>
+        title={label}
+        subtitle={subtitle ?? 'Choisissez une option'}
+        options={options}
+        value={value}
+        searchable={searchable}
+        searchPlaceholder={searchPlaceholder ?? 'Rechercher…'}
+        onClose={() => setOpen(false)}
+        onConfirm={(v) => {
+          onChange(v);
+          setOpen(false);
+        }}
+      />
     </View>
   );
 }
@@ -275,124 +378,137 @@ export function Section({
   );
 }
 
+const softShadow = {
+  shadowColor: '#000',
+  shadowOpacity: 0.03,
+  shadowRadius: 5,
+  shadowOffset: { width: 0, height: 2 },
+  elevation: 1,
+} as const;
+
 const styles = StyleSheet.create({
-  field: { marginBottom: 12 },
-  label: { marginBottom: 4, fontFamily: fonts.medium, color: '#333' },
+  field: { marginBottom: 14 },
   asterisk: { color: colors.primary.red, fontFamily: fonts.bold },
   input: {
     borderWidth: 1,
-    borderColor: colors.neutral.border,
-    borderRadius: 8,
-    padding: 10,
+    borderColor: '#e8e8e8',
+    borderRadius: 16,
+    paddingHorizontal: 18,
+    minHeight: 58,
     backgroundColor: colors.neutral.surface,
-    fontFamily: fonts.regular,
+    fontFamily: fonts.medium,
+    fontSize: 16,
     color: colors.neutral.text,
+    ...softShadow,
   },
-  row: {
+  inputFocused: {
+    borderColor: colors.primary.blue,
+  },
+  boolRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 10,
-    gap: 8,
+    marginBottom: 12,
+    gap: 12,
+    backgroundColor: colors.neutral.surface,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#e8e8e8',
+    paddingHorizontal: 16,
+    minHeight: 58,
+    ...softShadow,
+  },
+  boolLabel: {
+    flex: 1,
+    fontFamily: fonts.medium,
+    fontSize: 15,
+    color: colors.neutral.text,
+  },
+  flatSwitch: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    minHeight: 58,
+    borderRadius: 28,
+    backgroundColor: '#eeeeee',
+    overflow: 'hidden',
+  },
+  flatHalf: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+  },
+  flatHalfOn: {
+    backgroundColor: colors.neutral.surface,
+  },
+  flatDivider: {
+    width: StyleSheet.hairlineWidth,
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    marginVertical: 12,
+  },
+  flatText: {
+    fontFamily: fonts.medium,
+    fontSize: 15,
+    color: colors.neutral.placeholder,
+    textAlign: 'center',
+  },
+  flatTextOn: {
+    color: colors.primary.blue,
+    fontFamily: fonts.semiBold,
   },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: {
     borderWidth: 1,
-    borderColor: '#bbb',
-    borderRadius: 16,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    borderColor: '#e8e8e8',
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    minHeight: 48,
+    justifyContent: 'center',
     backgroundColor: colors.neutral.surface,
+    ...softShadow,
   },
   chipOn: {
     backgroundColor: colors.primary.blue,
     borderColor: colors.primary.blue,
   },
-  chipTextOn: { color: '#fff' },
+  chipText: {
+    fontFamily: fonts.medium,
+    fontSize: 15,
+    color: colors.neutral.text,
+  },
+  chipTextOn: { color: '#fff', fontFamily: fonts.semiBold },
   listTrigger: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     borderWidth: 1,
-    borderColor: colors.neutral.border,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
+    borderColor: '#e8e8e8',
+    borderRadius: 16,
+    paddingHorizontal: 18,
+    minHeight: 58,
     backgroundColor: colors.neutral.surface,
     gap: 8,
+    ...softShadow,
   },
   listTriggerValue: {
     flex: 1,
-    fontFamily: fonts.regular,
+    fontFamily: fonts.medium,
+    fontSize: 16,
     color: colors.neutral.text,
   },
   listTriggerPlaceholder: {
     flex: 1,
-    fontFamily: fonts.regular,
+    fontFamily: fonts.medium,
+    fontSize: 16,
     color: colors.neutral.placeholder,
   },
-  listOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    justifyContent: 'flex-end',
-  },
-  listSheet: {
-    maxHeight: '70%',
-    backgroundColor: colors.neutral.surface,
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    paddingBottom: 24,
-  },
-  listHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e5e5',
-  },
-  listTitle: {
-    fontFamily: fonts.bold,
-    fontSize: 16,
-    color: colors.primary.blue,
-  },
-  listClose: {
-    fontFamily: fonts.semiBold,
-    color: colors.neutral.textMuted,
-  },
-  listRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#e5e5e5',
-  },
-  listRowOn: {
-    backgroundColor: '#dce3f0',
-  },
-  listRowText: {
-    fontFamily: fonts.regular,
-    color: colors.neutral.text,
-    flex: 1,
-  },
-  listRowTextOn: {
-    fontFamily: fonts.semiBold,
-    color: colors.primary.blue,
-  },
   section: {
-    marginBottom: 16,
-    padding: 12,
-    backgroundColor: colors.neutral.surface,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#e5e5e5',
+    marginBottom: 8,
   },
   sectionTitle: {
-    fontSize: 16,
-    fontFamily: fonts.bold,
-    marginBottom: 10,
-    color: colors.primary.blue,
+    fontSize: 15,
+    fontFamily: fonts.semiBold,
+    marginBottom: 14,
+    color: colors.neutral.textMuted,
   },
 });

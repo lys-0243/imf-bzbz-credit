@@ -32,10 +32,17 @@ function Root() {
   if (loading) {
     return <BrandSplash />;
   }
+  if (user) {
+    return (
+      <View style={styles.appFill}>
+        <HomeScreen />
+      </View>
+    );
+  }
   return (
     <SafeAreaView style={styles.appSafe} edges={['top', 'left', 'right']}>
       <StatusBar style="dark" />
-      {user ? <HomeScreen /> : <LoginScreen />}
+      <LoginScreen />
     </SafeAreaView>
   );
 }
@@ -82,6 +89,10 @@ const styles = StyleSheet.create({
     marginTop: 24,
   },
   appSafe: {
+    flex: 1,
+    backgroundColor: colors.neutral.background,
+  },
+  appFill: {
     flex: 1,
     backgroundColor: colors.neutral.background,
   },

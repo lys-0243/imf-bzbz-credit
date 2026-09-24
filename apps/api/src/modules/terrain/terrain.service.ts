@@ -9,6 +9,7 @@ import {
   ChecklistAnswers,
   DOSSIER_ETAT_LABELS,
   getApplicableChecklistItems,
+  montantSouhaiteFromPayload,
   validateAgentChecklist,
 } from '@imf/shared';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -21,7 +22,7 @@ type AuthUser = {
   zoneId?: string | null;
 };
 
-const AGENT_INBOX_ETATS: DossierEtat[] = [
+const AGENT_ACTIVE_ETATS: DossierEtat[] = [
   DossierEtat.AFFECTE,
   DossierEtat.DESCENTE,
   DossierEtat.RETOUR_AGENT,
@@ -54,8 +55,8 @@ export class TerrainService {
     }
     const where: Prisma.DossierWhereInput =
       user.role === Role.ADMIN
-        ? { etat: { in: AGENT_INBOX_ETATS } }
-        : { agentId: user.id, etat: { in: AGENT_INBOX_ETATS } };
+        ? {}
+        : { agentId: user.id };
 
     const rows = await this.prisma.dossier.findMany({
       where,
@@ -65,18 +66,40 @@ export class TerrainService {
         visite: true,
       },
     });
-    return rows.map((d) => ({
-      id: d.id,
-      reference: d.reference,
-      type: d.type,
-      etat: d.etat,
-      etatLabel: DOSSIER_ETAT_LABELS[d.etat],
-      client: d.client,
-      agentValideAt: d.agentValideAt,
-      visiteStartedAt: d.visite?.startedAt ?? null,
-      updatedAt: d.updatedAt,
-      createdAt: d.createdAt,
-    }));
+    return rows.map((d) => {
+      const montant = montantSouhaiteFromPayload(
+        d.type,
+        d.payload as Record<string, any>,
+      );
+      return {
+        id: d.id,
+        reference: d.reference,
+        type: d.type,
+        etat: d.etat,
+        etatLabel: DOSSIER_ETAT_LABELS[d.etat],
+        client: d.client,
+        agentValideAt: d.agentValideAt,
+        visiteStartedAt: d.visite?.startedAt ?? null,
+        updatedAt: d.updatedAt,
+        createdAt: d.createdAt,
+        bucket: this.agentBucket(d.etat, d.agentValideAt),
+        montantSouhaite: montant.montantSouhaite,
+        devise: montant.devise,
+      };
+    });
+  }
+
+  private agentBucket(
+    etat: DossierEtat,
+    agentValideAt: Date | null,
+  ): 'nouveaux' | 'en_cours' | 'retournes' | 'termines' {
+    if (etat === DossierEtat.AFFECTE) return 'nouveaux';
+    if (etat === DossierEtat.DESCENTE) return 'en_cours';
+    if (etat === DossierEtat.RETOUR_AGENT) return 'retournes';
+    if (agentValideAt != null || !AGENT_ACTIVE_ETATS.includes(etat)) {
+      return 'termines';
+    }
+    return 'en_cours';
   }
 
   async getOne(user: AuthUser, id: string) {
@@ -393,27 +416,57 @@ export class TerrainService {
       throw new ForbiddenException('Rôle analyste requis');
     }
     const rows = await this.prisma.dossier.findMany({
-      where: { etat: DossierEtat.ANALYSTE },
+      where: {
+        etat: {
+          in: [
+            DossierEtat.ANALYSTE,
+            DossierEtat.RETOUR_ANALYSTE,
+            DossierEtat.CONFORMITE,
+            DossierEtat.DIRECTION,
+            DossierEtat.CONSEIL,
+            DossierEtat.A_DECAISSER,
+            DossierEtat.REJETE,
+          ],
+        },
+      },
       orderBy: { updatedAt: 'desc' },
+      take: 200,
       include: {
         client: { include: { zone: true, commune: true } },
         agent: { select: { id: true, displayName: true, email: true } },
         visite: true,
       },
     });
-    return rows.map((d) => ({
-      id: d.id,
-      reference: d.reference,
-      type: d.type,
-      etat: d.etat,
-      etatLabel: DOSSIER_ETAT_LABELS[d.etat],
-      client: d.client,
-      agent: d.agent,
-      scoreValue: d.scoreValue,
-      agentValideAt: d.agentValideAt,
-      rapportTexte: d.visite?.rapportTexte ?? null,
-      updatedAt: d.updatedAt,
-    }));
+    return rows.map((d) => {
+      const montant = montantSouhaiteFromPayload(
+        d.type,
+        d.payload as Record<string, any>,
+      );
+      return {
+        id: d.id,
+        reference: d.reference,
+        type: d.type,
+        etat: d.etat,
+        etatLabel: DOSSIER_ETAT_LABELS[d.etat],
+        client: d.client,
+        agent: d.agent,
+        scoreValue: d.scoreValue,
+        agentValideAt: d.agentValideAt,
+        rapportTexte: d.visite?.rapportTexte ?? null,
+        updatedAt: d.updatedAt,
+        bucket: this.analysteBucket(d.etat),
+        montantSouhaite: montant.montantSouhaite,
+        devise: montant.devise,
+      };
+    });
+  }
+
+  private analysteBucket(
+    etat: DossierEtat,
+  ): 'nouveaux' | 'en_cours' | 'retournes' | 'termines' {
+    if (etat === DossierEtat.ANALYSTE) return 'nouveaux';
+    if (etat === DossierEtat.RETOUR_ANALYSTE) return 'retournes';
+    return 'termines';
   }
 
   async getForAnalyste(user: AuthUser, id: string) {

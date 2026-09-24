@@ -222,7 +222,8 @@ export const salairePayloadSchema = z.object({
   dureeAnnees: z.number().int().nonnegative(),
   dureeSemaines: z.number().int().nonnegative(),
   motifCredit: z.string().optional(),
-  salaireNet: z.number().positive(),
+  /** Free-text amount with currency, e.g. "500$", "500 USD", "800.000 CDF" */
+  salaireNet: z.string().min(1),
   capaciteMensuelle: z.number().positive(),
   cautionGarantie: z.string().optional(),
   numeroCompte: z.string().optional(),
@@ -269,6 +270,40 @@ export function clientFieldsFromPayload(
     activityAddress: payload.business.adresseBusiness,
     communeId: payload.communeId,
   };
+}
+
+/** Montant demandé par le client (individuel/dare → pret.montantDesire ; salaire → montantSollicite). */
+export function montantSouhaiteFromPayload(
+  type: CreditType,
+  payload: Record<string, any> | null | undefined,
+): { montantSouhaite: number | null; devise: Devise | null } {
+  const p = payload ?? {};
+  const asDevise = (v: unknown): Devise | null =>
+    typeof v === 'string' && (DEVISES as readonly string[]).includes(v)
+      ? (v as Devise)
+      : null;
+  if (type === 'SALAIRE') {
+    return {
+      montantSouhaite:
+        typeof p.montantSollicite === 'number' ? p.montantSollicite : null,
+      devise: asDevise(p.devise),
+    };
+  }
+  const pret = p.pret ?? {};
+  return {
+    montantSouhaite:
+      typeof pret.montantDesire === 'number' ? pret.montantDesire : null,
+    devise: asDevise(pret.devise),
+  };
+}
+
+export function formatMontantSouhaite(
+  montant: number | null | undefined,
+  devise: string | null | undefined,
+): string {
+  if (montant == null || Number.isNaN(montant)) return '—';
+  const n = montant.toLocaleString('fr-FR', { maximumFractionDigits: 0 });
+  return devise ? `${devise} ${n}` : n;
 }
 
 export const DOSSIER_ETAT_LABELS: Record<DossierEtat, string> = {

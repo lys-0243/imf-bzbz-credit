@@ -11,6 +11,10 @@ export type SidebarDossier = {
   type: string;
   etat: string;
   etatLabel: string;
+  bucket?: 'nouveaux' | 'en_cours' | 'retournes' | 'termines';
+  updatedAt?: string;
+  montantSouhaite?: number | null;
+  devise?: string | null;
   client: {
     fullName: string;
     activityAddress: string;
@@ -19,41 +23,101 @@ export type SidebarDossier = {
   };
 };
 
+export function formatMontantDossier(d: SidebarDossier): string {
+  if (d.montantSouhaite == null || Number.isNaN(d.montantSouhaite)) return '—';
+  const n = d.montantSouhaite.toLocaleString('fr-FR', {
+    maximumFractionDigits: 0,
+  });
+  return d.devise ? `${d.devise} ${n}` : n;
+}
+
 export type NavKey =
   | 'dashboard'
   | 'nouveaux'
   | 'dossiers'
+  | 'retournes'
+  | 'termines'
   | 'profile'
   | 'logout';
+
+export type NavCounts = {
+  nouveaux?: number;
+  enCours?: number;
+  retournes?: number;
+  termines?: number;
+};
 
 type NavItem = {
   key: NavKey;
   label: string;
   href?: string;
+  countKey?: keyof NavCounts;
 };
 
 const AGENT_NAV: NavItem[] = [
   { key: 'dashboard', label: 'Tableau de bord', href: '/agent' },
-  { key: 'nouveaux', label: 'Nouveaux dossiers', href: '/agent/nouveaux' },
-  { key: 'dossiers', label: 'Mes dossiers', href: '/agent/mes-dossiers' },
-  { key: 'profile', label: 'Profile', href: '/agent/profile' },
-  { key: 'logout', label: 'Deconnexion' },
+  {
+    key: 'nouveaux',
+    label: 'Nouveaux dossiers',
+    href: '/agent/nouveaux',
+    countKey: 'nouveaux',
+  },
+  {
+    key: 'dossiers',
+    label: 'Dossiers en cours',
+    href: '/agent/dossiers-en-cours',
+    countKey: 'enCours',
+  },
+  {
+    key: 'retournes',
+    label: 'Dossiers retournés',
+    href: '/agent/dossiers-retournes',
+    countKey: 'retournes',
+  },
+  {
+    key: 'termines',
+    label: 'Dossiers terminés',
+    href: '/agent/dossiers-termines',
+    countKey: 'termines',
+  },
 ];
 
 const ANALYSTE_NAV: NavItem[] = [
   { key: 'dashboard', label: 'Tableau de bord', href: '/analyste' },
-  { key: 'nouveaux', label: 'Nouveaux dossiers', href: '/analyste/nouveaux' },
-  { key: 'dossiers', label: 'Mes dossiers', href: '/analyste/mes-dossiers' },
-  { key: 'profile', label: 'Profile', href: '/analyste/profile' },
-  { key: 'logout', label: 'Deconnexion' },
+  {
+    key: 'nouveaux',
+    label: 'Nouveaux dossiers',
+    href: '/analyste/nouveaux',
+    countKey: 'nouveaux',
+  },
+  {
+    key: 'dossiers',
+    label: 'Dossiers en cours',
+    href: '/analyste/dossiers-en-cours',
+    countKey: 'enCours',
+  },
+  {
+    key: 'retournes',
+    label: 'Dossiers retournés',
+    href: '/analyste/dossiers-retournes',
+    countKey: 'retournes',
+  },
+  {
+    key: 'termines',
+    label: 'Dossiers terminés',
+    href: '/analyste/dossiers-termines',
+    countKey: 'termines',
+  },
 ];
 
 function activeKey(pathname: string, base: 'agent' | 'analyste'): NavKey {
   if (pathname.startsWith(`/${base}/profile`)) return 'profile';
   if (pathname.startsWith(`/${base}/nouveaux`)) return 'nouveaux';
+  if (pathname.startsWith(`/${base}/dossiers-en-cours`)) return 'dossiers';
   if (pathname.startsWith(`/${base}/mes-dossiers`)) return 'dossiers';
+  if (pathname.startsWith(`/${base}/dossiers-retournes`)) return 'retournes';
+  if (pathname.startsWith(`/${base}/dossiers-termines`)) return 'termines';
   if (pathname === `/${base}` || pathname === `/${base}/`) return 'dashboard';
-  // détail /agent/:id
   const rest = pathname.slice(`/${base}/`.length);
   if (rest && !rest.includes('/')) return 'dossiers';
   return 'dashboard';
@@ -61,41 +125,61 @@ function activeKey(pathname: string, base: 'agent' | 'analyste'): NavKey {
 
 export function DashboardShell({
   base,
+  counts,
   children,
 }: {
   base: 'agent' | 'analyste';
+  counts?: NavCounts;
   children: ReactNode;
 }) {
-  const { logout } = useAuth();
+  const { user, logout } = useAuth();
   const router = useRouter();
   const pathname = usePathname() || `/${base}`;
   const nav = base === 'agent' ? AGENT_NAV : ANALYSTE_NAV;
   const current = activeKey(pathname, base);
+  const profileHref = `/${base}/profile`;
+  const photoUrl =
+    (user as { photoUrl?: string | null } | null)?.photoUrl ||
+    '/images/logo.jpg';
 
   return (
     <div className={styles.shell}>
       <aside className={styles.sidebar}>
-        <div className={styles.brandRow}>
-          <img className={styles.logo} src="/images/logo.png" alt="" />
-          <p className={styles.brandTitle}>IMF Bisou Bisou</p>
+        <div className={styles.profileBlock}>
+          <div className={styles.avatarWrap}>
+            <img
+              className={styles.avatarImg}
+              src={photoUrl}
+              alt={user?.displayName || 'Profil'}
+            />
+            <button
+              type="button"
+              className={styles.avatarEdit}
+              aria-label="Modifier le profil"
+              onClick={() => router.push(profileHref)}
+            >
+              <PencilIcon />
+            </button>
+          </div>
+          <p className={styles.profileName}>{user?.displayName || '—'}</p>
+          <p className={styles.profileEmail}>{user?.email || '—'}</p>
         </div>
 
-        <nav>
+        <nav className={styles.nav}>
           <p className={styles.menuLabel}>Menu</p>
           <ul className={styles.menu}>
             {nav.map((item) => {
               const active = item.key === current;
+              const count =
+                item.countKey && counts
+                  ? counts[item.countKey]
+                  : undefined;
               return (
                 <li key={item.key}>
                   <button
                     type="button"
                     className={`${styles.menuItem} ${active ? styles.menuItemActive : ''}`}
                     onClick={() => {
-                      if (item.key === 'logout') {
-                        logout();
-                        router.replace('/login');
-                        return;
-                      }
                       if (item.href) router.push(item.href);
                     }}
                   >
@@ -103,15 +187,47 @@ export function DashboardShell({
                       <NavIcon name={item.key} />
                     </span>
                     <span className={styles.menuText}>{item.label}</span>
-                    <span className={styles.menuChevron} aria-hidden>
-                      <ChevronIcon />
-                    </span>
+                    {typeof count === 'number' && count > 0 ? (
+                      <span
+                        className={
+                          item.key === 'retournes'
+                            ? styles.menuBadgeWarn
+                            : styles.menuBadge
+                        }
+                      >
+                        {count}
+                      </span>
+                    ) : (
+                      <span className={styles.menuChevron} aria-hidden>
+                        <ChevronIcon />
+                      </span>
+                    )}
                   </button>
                 </li>
               );
             })}
           </ul>
         </nav>
+
+        <div className={styles.footerActions}>
+          <button
+            type="button"
+            className={styles.profileBtn}
+            onClick={() => router.push(profileHref)}
+          >
+            Modifier le profil
+          </button>
+          <button
+            type="button"
+            className={styles.logoutBtn}
+            onClick={() => {
+              logout();
+              router.replace('/login');
+            }}
+          >
+            Deconnexion
+          </button>
+        </div>
       </aside>
 
       <div className={styles.main}>{children}</div>
@@ -138,7 +254,9 @@ export function DashboardEmpty({
 
 export function etatBadgeClass(etat: string) {
   if (etat === 'ANALYSTE' || etat === 'DESCENTE') return styles.badgeOk;
-  if (etat === 'REJETE') return `${styles.badge} ${styles.badgeWarn}`;
+  if (etat === 'REJETE' || etat === 'RETOUR_AGENT' || etat === 'RETOUR_ANALYSTE') {
+    return `${styles.badge} ${styles.badgeWarn}`;
+  }
   return styles.badge;
 }
 
@@ -146,6 +264,15 @@ function ChevronIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <path d="M9 6l6 6-6 6" />
+    </svg>
+  );
+}
+
+function PencilIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4 12.5-12.5z" />
     </svg>
   );
 }
@@ -179,6 +306,19 @@ function NavIcon({ name }: { name: NavKey }) {
       return (
         <svg {...props}>
           <path d="M3 7h6l2 2h10v10a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" />
+        </svg>
+      );
+    case 'retournes':
+      return (
+        <svg {...props}>
+          <path d="M9 14l-4-4 4-4" />
+          <path d="M5 10h11a4 4 0 010 8h-1" />
+        </svg>
+      );
+    case 'termines':
+      return (
+        <svg {...props}>
+          <path d="M20 6L9 17l-5-5" />
         </svg>
       );
     case 'profile':

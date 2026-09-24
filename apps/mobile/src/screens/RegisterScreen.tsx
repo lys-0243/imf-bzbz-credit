@@ -8,11 +8,15 @@ import {
   View,
 } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fonts } from '@imf/assets';
 import type { CreditType } from '@imf/shared';
 import { api } from '../api';
+import { useAuth } from '../auth';
 import { DateField } from '../components/DateField';
-import { BoolField, Field, ListSelectField, MoneyField, Section, SelectField } from '../components/Form';
+import { BoolField, DurationField, Field, ListSelectField, MoneyField, Section, SelectField } from '../components/Form';
+import { HomeHeader } from '../components/HomeHeader';
+import { ResultSheet } from '../components/ResultSheet';
 import {
   CLIENT_STATUTS,
   DEVISES,
@@ -28,9 +32,9 @@ import {
 } from '../formDefaults';
 
 const TYPE_LABELS: Record<CreditType, string> = {
-  DARE_DARE: 'Dare-Dare',
-  INDIVIDUEL: 'Individuel',
-  SALAIRE: 'Salaire',
+  DARE_DARE: 'Crédit Dare-Dare',
+  INDIVIDUEL: 'Crédit Individuel',
+  SALAIRE: 'Crédit Salaire',
 };
 
 type Props = {
@@ -43,106 +47,107 @@ function filled(v: string | undefined) {
   return Boolean(v && String(v).trim());
 }
 
+function missingMessage(missing: string[]): string | null {
+  if (missing.length === 0) return null;
+  if (missing.length === 1) {
+    return `Champ obligatoire manquant : ${missing[0]}`;
+  }
+  return `Champs obligatoires manquants : ${missing.join(', ')}`;
+}
+
 function validateIndStep(step: number, ind: IndividuelForm): string | null {
   if (step === 0) {
-    if (!ind.communeId) return 'Sélectionnez une commune';
+    const missing: string[] = [];
+    if (!ind.communeId) missing.push('Commune');
     if (ind.clientStatut === 'ANCIEN' && !filled(ind.numeroCompte)) {
-      return 'N° de compte obligatoire pour un ancien client';
+      missing.push('N° de compte');
     }
-    return null;
+    return missingMessage(missing);
   }
   if (step === 1) return null; // booleans always set
   if (step === 2) {
     const d = ind.demandeur;
-    if (
-      !filled(d.prenom) ||
-      !filled(d.nom) ||
-      !filled(d.postNom) ||
-      !filled(d.dateNaissance) ||
-      !filled(d.numeroPiece) ||
-      !filled(d.adresseDomicile) ||
-      !filled(d.telephone)
-    ) {
-      return 'Complétez tous les champs obligatoires du demandeur';
-    }
+    const missing: string[] = [];
+    if (!filled(d.prenom)) missing.push('Prénom');
+    if (!filled(d.nom)) missing.push('Nom');
+    if (!filled(d.postNom)) missing.push('Post-Nom');
+    if (!filled(d.dateNaissance)) missing.push('Date de naissance');
+    if (!filled(d.numeroPiece)) missing.push('N° de pièce');
+    if (!filled(d.adresseDomicile)) missing.push('Adresse domicile');
+    if (!filled(d.telephone)) missing.push('Téléphone');
     if (d.etatCivil === 'Marie') {
-      if (!filled(d.conjointNom) || !filled(d.conjointDateNaissance)) {
-        return 'Informations conjoint obligatoires si Marié';
-      }
+      if (!filled(d.conjointNom)) missing.push('Prénom et nom conjoint');
+      if (!filled(d.conjointDateNaissance)) missing.push('Date naissance conjoint');
     }
-    return null;
+    return missingMessage(missing);
   }
   if (step === 3) {
     const b = ind.business;
-    if (
-      !filled(b.nomBusiness) ||
-      !filled(b.adresseBusiness) ||
-      !filled(b.dureeAdresse) ||
-      !filled(b.typeBusiness) ||
-      !filled(b.dureeTypeBusiness) ||
-      !filled(b.secteurBusiness) ||
-      !filled(b.formeJuridique)
-    ) {
-      return 'Complétez tous les champs business obligatoires';
-    }
-    return null;
+    const missing: string[] = [];
+    if (!filled(b.nomBusiness)) missing.push('Nom du business');
+    if (!filled(b.adresseBusiness)) missing.push('Adresse physique');
+    if (!filled(b.dureeAdresse)) missing.push('Durée à cette adresse');
+    if (!filled(b.typeBusiness)) missing.push('Type de business');
+    if (!filled(b.dureeTypeBusiness)) missing.push('Durée de ce type');
+    if (!filled(b.secteurBusiness)) missing.push('Secteur');
+    if (!filled(b.formeJuridique)) missing.push('Forme juridique');
+    return missingMessage(missing);
   }
   if (step === 4) {
     const p = ind.pret;
-    if (
-      !(p.montantDesire > 0) ||
-      !(p.dureeMois > 0) ||
-      !(p.capaciteMensuelle > 0) ||
-      !filled(p.butInvestissement) ||
-      !filled(p.commentaireBut)
-    ) {
-      return 'Complétez tous les champs prêt obligatoires';
-    }
+    const missing: string[] = [];
+    if (!(p.montantDesire > 0)) missing.push('Montant désiré');
+    if (!(p.dureeMois > 0)) missing.push('Durée (mois)');
+    if (!(p.capaciteMensuelle > 0)) missing.push('Capacité mensuelle');
+    if (!filled(p.butInvestissement)) missing.push('But de l’investissement');
+    if (!filled(p.commentaireBut)) missing.push('Commentaire sur le but');
     if (p.pretAutreInstitution !== 'Non' && !filled(p.autreInstitutionNom)) {
-      return 'Indiquez l’institution de l’autre prêt';
+      missing.push('Institution de l’autre prêt');
     }
-    return null;
+    return missingMessage(missing);
   }
   return null;
 }
 
 function validateSalStep(step: number, sal: SalaireForm): string | null {
   if (step === 0) {
-    if (!sal.communeId) return 'Sélectionnez une commune';
-    if (
-      !filled(sal.prenom) ||
-      !filled(sal.nom) ||
-      !filled(sal.postNom) ||
-      !filled(sal.telephone) ||
-      !filled(sal.adresseDomicile)
-    ) {
-      return 'Complétez tous les champs identité obligatoires';
-    }
-    return null;
+    const missing: string[] = [];
+    if (!sal.communeId) missing.push('Commune');
+    if (!filled(sal.prenom)) missing.push('Prénom');
+    if (!filled(sal.nom)) missing.push('Nom');
+    if (!filled(sal.postNom)) missing.push('Post-Nom');
+    if (!filled(sal.telephone)) missing.push('Téléphone');
+    if (!filled(sal.adresseDomicile)) missing.push('Adresse domicile');
+    return missingMessage(missing);
   }
   if (step === 1) {
-    if (
-      !filled(sal.societe) ||
-      !filled(sal.adresseSociete) ||
-      !filled(sal.fonctionService) ||
-      !(sal.montantSollicite > 0) ||
-      !(sal.dureeMois > 0) ||
-      !(sal.salaireNet > 0) ||
-      !(sal.capaciteMensuelle > 0)
-    ) {
-      return 'Complétez tous les champs emploi / prêt obligatoires';
-    }
-    return null;
+    const missing: string[] = [];
+    if (!filled(sal.societe)) missing.push('Société');
+    if (!filled(sal.adresseSociete)) missing.push('Adresse société');
+    if (!filled(sal.fonctionService)) missing.push('Fonction / Service');
+    if (!(sal.montantSollicite > 0)) missing.push('Montant sollicité');
+    if (!(sal.dureeMois > 0)) missing.push('Durée (mois)');
+    if (!filled(sal.salaireNet)) missing.push('Salaire net');
+    if (!(sal.capaciteMensuelle > 0)) missing.push('Capacité mensuelle');
+    return missingMessage(missing);
   }
   return null;
 }
 
 export function RegisterScreen({ type, onCreated, onCancel }: Props) {
+  const { user } = useAuth();
+  const insets = useSafeAreaInsets();
   const [communes, setCommunes] = useState<Commune[]>([]);
   const [step, setStep] = useState(0);
   const [maxReached, setMaxReached] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<{
+    variant: 'success' | 'error';
+    title: string;
+    message?: string;
+    dossierId?: string;
+  } | null>(null);
   const [ind, setInd] = useState(() => defaultIndividuelPayload(''));
   const [sal, setSal] = useState(() => defaultSalairePayload(''));
 
@@ -208,7 +213,7 @@ export function RegisterScreen({ type, onCreated, onCancel }: Props) {
               dureeMois: Number(sal.dureeMois),
               dureeAnnees: Number(sal.dureeAnnees),
               dureeSemaines: Number(sal.dureeSemaines),
-              salaireNet: Number(sal.salaireNet),
+              salaireNet: sal.salaireNet.trim(),
               capaciteMensuelle: Number(sal.capaciteMensuelle),
               email: sal.email || undefined,
               motifCredit: sal.motifCredit || undefined,
@@ -249,13 +254,26 @@ export function RegisterScreen({ type, onCreated, onCancel }: Props) {
                     : undefined,
               },
             };
-      const created = await api<{ id: string }>('/dossiers', {
+      const created = await api<{ id: string; reference?: string }>('/dossiers', {
         method: 'POST',
         body: JSON.stringify({ type, payload }),
       });
-      onCreated(created.id);
+      setResult({
+        variant: 'success',
+        title: 'Dossier créé',
+        message: created.reference
+          ? `Référence ${created.reference}`
+          : 'Le dossier a été enregistré avec succès.',
+        dossierId: created.id,
+      });
     } catch (e: any) {
-      setError(e.message || 'Échec enregistrement');
+      const msg = e.message || 'Échec enregistrement';
+      setError(msg);
+      setResult({
+        variant: 'error',
+        title: 'Échec de l’enregistrement',
+        message: msg,
+      });
     } finally {
       setBusy(false);
     }
@@ -263,51 +281,56 @@ export function RegisterScreen({ type, onCreated, onCancel }: Props) {
 
   return (
     <View style={styles.root}>
-      <View style={styles.topBar}>
-        <Pressable onPress={onCancel}>
-          <Text style={styles.cancel}>Annuler</Text>
-        </Pressable>
-        <View style={styles.typeBadge}>
-          <Text style={styles.typeBadgeText}>{TYPE_LABELS[type]}</Text>
-        </View>
-      </View>
+      <HomeHeader
+        displayName={user?.displayName || ''}
+        variant="compact"
+        title={TYPE_LABELS[type]}
+        trailing="close"
+        onClose={onCancel}
+      />
 
       <KeyboardAwareScrollView
-        contentContainerStyle={styles.pad}
+        style={styles.scroll}
+        contentContainerStyle={[
+          styles.pad,
+          { paddingBottom: 100 + Math.max(insets.bottom, 8) },
+        ]}
         enableOnAndroid
         extraScrollHeight={Platform.OS === 'ios' ? 24 : 80}
         keyboardShouldPersistTaps="handled"
       >
+        <Text style={styles.stepMeta}>
+          Étape {step + 1} sur {steps.length}
+        </Text>
         <Text style={styles.h1}>Nouvelle demande</Text>
+        <View style={styles.typeChip}>
+          <Text style={styles.typeChipText}>{TYPE_LABELS[type]}</Text>
+        </View>
 
-        <View style={styles.steps}>
+        <View style={styles.progressTrack}>
           {steps.map((s, i) => {
-            const locked = i > maxReached && i > step;
+            const locked = i > maxReached;
+            const filled = i <= step;
             return (
               <Pressable
                 key={s}
+                style={styles.progressSegWrap}
                 onPress={() => !locked && tryGoTo(i)}
-                style={[
-                  styles.step,
-                  step === i && styles.stepOn,
-                  locked && styles.stepLocked,
-                ]}
+                disabled={locked}
+                accessibilityLabel={s}
               >
-                <Text
-                  style={
-                    step === i
-                      ? styles.stepTextOn
-                      : locked
-                        ? styles.stepTextLocked
-                        : undefined
-                  }
-                >
-                  {s}
-                </Text>
+                <View
+                  style={[
+                    styles.progressSeg,
+                    filled && styles.progressSegOn,
+                    locked && styles.progressSegLocked,
+                  ]}
+                />
               </Pressable>
             );
           })}
         </View>
+        <Text style={styles.stepLabel}>{steps[step]}</Text>
 
         {type !== 'SALAIRE' && step === 0 && (
           <Section title="Client">
@@ -318,6 +341,8 @@ export function RegisterScreen({ type, onCreated, onCancel }: Props) {
               options={communeNames}
               onChange={setCommuneByName}
               placeholder="Sélectionner une commune"
+              subtitle="Choisissez une commune"
+              searchPlaceholder="Rechercher une commune"
             />
             <SelectField
               label="Nouveau ou ancien"
@@ -374,11 +399,26 @@ export function RegisterScreen({ type, onCreated, onCancel }: Props) {
             <Field label="Post-Nom" required value={ind.demandeur.postNom} onChangeText={(v) => setInd({ ...ind, demandeur: { ...ind.demandeur, postNom: v } })} />
             <DateField label="Date de naissance" required value={ind.demandeur.dateNaissance} onChange={(v) => setInd({ ...ind, demandeur: { ...ind.demandeur, dateNaissance: v } })} />
             <SelectField label="Sexe" required value={ind.demandeur.sexe} options={SEXES} onChange={(v) => setInd({ ...ind, demandeur: { ...ind.demandeur, sexe: v as any } })} />
-            <SelectField label="Type de pièce" required value={ind.demandeur.typePiece} options={TYPES_PIECE} onChange={(v) => setInd({ ...ind, demandeur: { ...ind.demandeur, typePiece: v as any } })} />
+            <ListSelectField
+              label="Type de pièce"
+              required
+              searchable={false}
+              subtitle="Choisissez le type de pièce"
+              value={ind.demandeur.typePiece}
+              options={TYPES_PIECE}
+              onChange={(v) =>
+                setInd({
+                  ...ind,
+                  demandeur: { ...ind.demandeur, typePiece: v as any },
+                })
+              }
+            />
             <Field label="N° de pièce" required value={ind.demandeur.numeroPiece} onChangeText={(v) => setInd({ ...ind, demandeur: { ...ind.demandeur, numeroPiece: v } })} />
-            <SelectField
+            <ListSelectField
               label="État civil"
               required
+              searchable={false}
+              subtitle="Choisissez l’état civil"
               value={ind.demandeur.etatCivil}
               options={ETATS_CIVILS}
               onChange={(v) =>
@@ -406,7 +446,7 @@ export function RegisterScreen({ type, onCreated, onCancel }: Props) {
             <Field label="Adresse physique" required value={ind.business.adresseBusiness} onChangeText={(v) => setInd({ ...ind, business: { ...ind.business, adresseBusiness: v } })} />
             <Field label="Durée à cette adresse" required value={ind.business.dureeAdresse} onChangeText={(v) => setInd({ ...ind, business: { ...ind.business, dureeAdresse: v } })} />
             <Field label="Type de business" required value={ind.business.typeBusiness} onChangeText={(v) => setInd({ ...ind, business: { ...ind.business, typeBusiness: v } })} />
-            <Field label="Durée de ce type" required value={ind.business.dureeTypeBusiness} onChangeText={(v) => setInd({ ...ind, business: { ...ind.business, dureeTypeBusiness: v } })} />
+            <Field label="Durée de ce type de business" required value={ind.business.dureeTypeBusiness} onChangeText={(v) => setInd({ ...ind, business: { ...ind.business, dureeTypeBusiness: v } })} />
             <Field label="Secteur" required value={ind.business.secteurBusiness} onChangeText={(v) => setInd({ ...ind, business: { ...ind.business, secteurBusiness: v } })} />
             <Field label="Forme juridique" required value={ind.business.formeJuridique} onChangeText={(v) => setInd({ ...ind, business: { ...ind.business, formeJuridique: v } })} />
           </Section>
@@ -432,7 +472,15 @@ export function RegisterScreen({ type, onCreated, onCancel }: Props) {
                 setInd({ ...ind, pret: { ...ind.pret, montantDesire: v ?? 0 } })
               }
             />
-            <Field label="Durée (mois)" required value={String(ind.pret.dureeMois || '')} onChangeText={(v) => setInd({ ...ind, pret: { ...ind.pret, dureeMois: Number(v) || 0 } })} keyboardType="numeric" />
+            <DurationField
+              label="Durée (mois)"
+              required
+              unit="mois"
+              value={ind.pret.dureeMois}
+              onChange={(v) =>
+                setInd({ ...ind, pret: { ...ind.pret, dureeMois: v ?? 0 } })
+              }
+            />
             <MoneyField
               label="Montant prêt précédent"
               currency={ind.pret.devise}
@@ -442,7 +490,15 @@ export function RegisterScreen({ type, onCreated, onCancel }: Props) {
                 setInd({ ...ind, pret: { ...ind.pret, montantPretPrecedent: v } })
               }
             />
-            <Field label="Durée prêt précédent" value={ind.pret.dureePretPrecedent != null ? String(ind.pret.dureePretPrecedent) : ''} onChangeText={(v) => setInd({ ...ind, pret: { ...ind.pret, dureePretPrecedent: v ? Number(v) : undefined } })} keyboardType="numeric" />
+            <DurationField
+              label="Durée prêt précédent"
+              unit="mois"
+              allowEmpty
+              value={ind.pret.dureePretPrecedent}
+              onChange={(v) =>
+                setInd({ ...ind, pret: { ...ind.pret, dureePretPrecedent: v } })
+              }
+            />
             <MoneyField
               label="Capacité mensuelle de remboursement"
               required
@@ -454,7 +510,20 @@ export function RegisterScreen({ type, onCreated, onCancel }: Props) {
             />
             <Field label="But de l’investissement" required value={ind.pret.butInvestissement} onChangeText={(v) => setInd({ ...ind, pret: { ...ind.pret, butInvestissement: v } })} />
             <Field label="Commentaire sur le but" required value={ind.pret.commentaireBut} onChangeText={(v) => setInd({ ...ind, pret: { ...ind.pret, commentaireBut: v } })} />
-            <SelectField label="Prêt autre institution ?" required value={ind.pret.pretAutreInstitution} options={PRET_AUTRE_INSTITUTION} onChange={(v) => setInd({ ...ind, pret: { ...ind.pret, pretAutreInstitution: v as any } })} />
+            <ListSelectField
+              label="Prêt autre institution ?"
+              required
+              searchable={false}
+              subtitle="Choisissez une option"
+              value={ind.pret.pretAutreInstitution}
+              options={PRET_AUTRE_INSTITUTION}
+              onChange={(v) =>
+                setInd({
+                  ...ind,
+                  pret: { ...ind.pret, pretAutreInstitution: v as any },
+                })
+              }
+            />
             {ind.pret.pretAutreInstitution !== 'Non' && (
               <Field label="Laquelle ?" required value={ind.pret.autreInstitutionNom || ''} onChangeText={(v) => setInd({ ...ind, pret: { ...ind.pret, autreInstitutionNom: v } })} />
             )}
@@ -470,6 +539,8 @@ export function RegisterScreen({ type, onCreated, onCancel }: Props) {
               options={communeNames}
               onChange={setCommuneByName}
               placeholder="Sélectionner une commune"
+              subtitle="Choisissez une commune"
+              searchPlaceholder="Rechercher une commune"
             />
             <Field label="Prénom" required value={sal.prenom} onChangeText={(v) => setSal({ ...sal, prenom: v })} />
             <Field label="Nom" required value={sal.nom} onChangeText={(v) => setSal({ ...sal, nom: v })} />
@@ -500,16 +571,34 @@ export function RegisterScreen({ type, onCreated, onCancel }: Props) {
               value={sal.montantSollicite}
               onChange={(v) => setSal({ ...sal, montantSollicite: v ?? 0 })}
             />
-            <Field label="Durée (mois)" required value={String(sal.dureeMois || '')} onChangeText={(v) => setSal({ ...sal, dureeMois: Number(v) || 0 })} keyboardType="numeric" />
-            <Field label="Durée (années)" required value={String(sal.dureeAnnees || '')} onChangeText={(v) => setSal({ ...sal, dureeAnnees: Number(v) || 0 })} keyboardType="numeric" />
-            <Field label="Durée (semaines)" required value={String(sal.dureeSemaines || '')} onChangeText={(v) => setSal({ ...sal, dureeSemaines: Number(v) || 0 })} keyboardType="numeric" />
+            <DurationField
+              label="Durée (mois)"
+              required
+              unit="mois"
+              value={sal.dureeMois}
+              onChange={(v) => setSal({ ...sal, dureeMois: v ?? 0 })}
+            />
+            <DurationField
+              label="Durée (années)"
+              required
+              unit="annees"
+              value={sal.dureeAnnees}
+              onChange={(v) => setSal({ ...sal, dureeAnnees: v ?? 0 })}
+            />
+            <DurationField
+              label="Durée (semaines)"
+              required
+              unit="semaines"
+              value={sal.dureeSemaines}
+              onChange={(v) => setSal({ ...sal, dureeSemaines: v ?? 0 })}
+            />
             <Field label="Motif" value={sal.motifCredit || ''} onChangeText={(v) => setSal({ ...sal, motifCredit: v })} />
-            <MoneyField
+            <Field
               label="Salaire net"
               required
-              currency={sal.devise}
+              placeholder="Salaire net * (ex. 500 USD ou 800.000 CDF)"
               value={sal.salaireNet}
-              onChange={(v) => setSal({ ...sal, salaireNet: v ?? 0 })}
+              onChangeText={(v) => setSal({ ...sal, salaireNet: v })}
             />
             <MoneyField
               label="Capacité mensuelle de remboursement"
@@ -523,21 +612,37 @@ export function RegisterScreen({ type, onCreated, onCancel }: Props) {
             <Field label="Dépôt BC" value={sal.depotBc || ''} onChangeText={(v) => setSal({ ...sal, depotBc: v })} />
           </Section>
         )}
+      </KeyboardAwareScrollView>
 
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-
-        <View style={styles.nav}>
-          {step > 0 && (
-            <Pressable style={styles.secondary} onPress={() => tryGoTo(step - 1)}>
-              <Text>Précédent</Text>
+      <View
+        style={[
+          styles.footer,
+          { paddingBottom: Math.max(insets.bottom, 12) + 4 },
+        ]}
+      >
+        {error ? <Text style={styles.errorFooter}>{error}</Text> : null}
+        <View style={styles.footerRow}>
+          {step > 0 ? (
+            <Pressable
+              style={styles.secondary}
+              onPress={() => tryGoTo(step - 1)}
+            >
+              <Text style={styles.secondaryText}>Précédent</Text>
             </Pressable>
-          )}
+          ) : null}
           {step < steps.length - 1 ? (
-            <Pressable style={styles.primary} onPress={() => tryGoTo(step + 1)}>
+            <Pressable
+              style={styles.primary}
+              onPress={() => tryGoTo(step + 1)}
+            >
               <Text style={styles.primaryText}>Suivant</Text>
             </Pressable>
           ) : (
-            <Pressable style={styles.primary} onPress={submit} disabled={busy}>
+            <Pressable
+              style={styles.primary}
+              onPress={submit}
+              disabled={busy}
+            >
               {busy ? (
                 <ActivityIndicator color="#fff" />
               ) : (
@@ -546,68 +651,133 @@ export function RegisterScreen({ type, onCreated, onCancel }: Props) {
             </Pressable>
           )}
         </View>
-      </KeyboardAwareScrollView>
+      </View>
+
+      <ResultSheet
+        visible={result != null}
+        variant={result?.variant || 'success'}
+        title={result?.title || ''}
+        message={result?.message}
+        primaryLabel={
+          result?.variant === 'success' ? 'Voir le dossier' : 'Fermer'
+        }
+        onPrimary={() => {
+          if (result?.variant === 'success' && result.dossierId) {
+            const id = result.dossierId;
+            setResult(null);
+            onCreated(id);
+            return;
+          }
+          setResult(null);
+        }}
+        onClose={() => {
+          if (result?.variant === 'success' && result.dossierId) {
+            // Close without opening detail → back to home list via cancel
+            setResult(null);
+            onCancel();
+            return;
+          }
+          setResult(null);
+        }}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.neutral.background, paddingTop: 8 },
-  topBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    marginBottom: 4,
+  root: { flex: 1, backgroundColor: colors.neutral.background },
+  scroll: { flex: 1 },
+  pad: { paddingHorizontal: 20, paddingTop: 20 },
+  stepMeta: {
+    textAlign: 'center',
+    fontFamily: fonts.regular,
+    fontSize: 13,
+    color: colors.neutral.textMuted,
+    marginBottom: 8,
   },
-  cancel: { color: colors.primary.red, fontFamily: fonts.bold },
-  typeBadge: {
-    backgroundColor: colors.primary.blue,
+  h1: {
+    textAlign: 'center',
+    fontSize: 30,
+    lineHeight: 36,
+    fontFamily: fonts.bold,
+    color: colors.neutral.text,
+    marginBottom: 10,
+  },
+  typeChip: {
+    alignSelf: 'center',
+    backgroundColor: 'rgba(40, 64, 128, 0.1)',
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 12,
+    borderRadius: 16,
+    marginBottom: 18,
   },
-  typeBadgeText: { color: '#fff', fontFamily: fonts.bold },
-  pad: { padding: 16, paddingBottom: 80 },
-  h1: {
-    fontSize: 22,
-    fontFamily: fonts.bold,
-    marginBottom: 12,
+  typeChipText: {
+    fontFamily: fonts.semiBold,
+    fontSize: 12,
     color: colors.primary.blue,
   },
-  steps: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12 },
-  step: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: colors.neutral.border,
-    backgroundColor: colors.neutral.surface,
-  },
-  stepOn: { backgroundColor: '#dce3f0', borderColor: colors.primary.blue },
-  stepLocked: { opacity: 0.45 },
-  stepTextOn: { fontFamily: fonts.bold },
-  stepTextLocked: { color: colors.neutral.placeholder },
-  nav: {
+  progressTrack: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 12,
-    marginTop: 8,
+    gap: 6,
+    marginBottom: 8,
+  },
+  progressSegWrap: { flex: 1 },
+  progressSeg: {
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#e0e0e0',
+  },
+  progressSegOn: {
+    backgroundColor: colors.primary.blue,
+  },
+  progressSegLocked: {
+    opacity: 0.5,
+  },
+  stepLabel: {
+    textAlign: 'center',
+    fontFamily: fonts.semiBold,
+    fontSize: 13,
+    color: colors.primary.blue,
+    marginBottom: 18,
+  },
+  footer: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#e5e5e5',
+    backgroundColor: colors.neutral.background,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+  },
+  errorFooter: {
+    color: colors.primary.red,
+    fontFamily: fonts.regular,
+    fontSize: 13,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  footerRow: {
+    flexDirection: 'row',
+    gap: 10,
   },
   primary: {
     flex: 1,
     backgroundColor: colors.primary.blue,
-    padding: 14,
-    borderRadius: 8,
+    paddingVertical: 16,
+    borderRadius: 28,
     alignItems: 'center',
   },
-  primaryText: { color: '#fff', fontFamily: fonts.semiBold },
+  primaryText: { color: '#fff', fontFamily: fonts.bold, fontSize: 16 },
   secondary: {
-    padding: 14,
-    borderRadius: 8,
+    paddingVertical: 16,
+    paddingHorizontal: 18,
+    borderRadius: 28,
     borderWidth: 1,
-    borderColor: '#aaa',
+    borderColor: colors.neutral.border,
     backgroundColor: colors.neutral.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  error: { color: colors.primary.red, marginVertical: 8, fontFamily: fonts.regular },
+  secondaryText: {
+    fontFamily: fonts.semiBold,
+    color: colors.neutral.text,
+  },
 });

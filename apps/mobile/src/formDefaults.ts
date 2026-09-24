@@ -88,7 +88,7 @@ export function defaultSalairePayload(communeId: string) {
     dureeAnnees: 0,
     dureeSemaines: 0,
     motifCredit: '',
-    salaireNet: 0,
+    salaireNet: '',
     capaciteMensuelle: 0,
     cautionGarantie: '',
     numeroCompte: '',

@@ -1,7 +1,8 @@
 'use client';
 
 export {
-  BoardHome,
   DossierListView,
+  DossierSearchField,
   matchesDossierQuery,
 } from './DossierViewsCore';
+export { BoardHome } from './BoardHome';
