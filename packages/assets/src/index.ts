@@ -16,6 +16,16 @@ export const colors = {
     border: '#cccccc',
     placeholder: '#999999',
   },
+  /** Sidebar / header stack — matches web dashboard.module.css */
+  gradient: {
+    sidebar: {
+      deep: '#1c2f66',
+      mid: '#284080',
+      darkest: '#1a274f',
+      yellowGlow: 'rgba(244, 223, 60, 0.18)',
+      redGlow: 'rgba(154, 28, 32, 0.22)',
+    },
+  },
 } as const;
 
 /** Font family names registered with expo-font / useFonts */

@@ -6,12 +6,22 @@ import {
   Text,
   View,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from 'react-native-safe-area-context';
 import { colors, fonts } from '@imf/assets';
 import { CREDIT_TYPES, type CreditType } from '@imf/shared';
 import { useAuth } from '../auth';
+import {
+  BottomTabBar,
+  type HomeTab,
+} from '../components/BottomTabBar';
+import { HomeHeader } from '../components/HomeHeader';
+import { AlertsTab } from './AlertsTab';
 import { DetailScreen } from './DetailScreen';
+import { ProfileTab } from './ProfileTab';
 import { RegisterScreen } from './RegisterScreen';
 import { SearchScreen } from './SearchScreen';
 
@@ -21,54 +31,90 @@ const TYPE_LABELS: Record<CreditType, string> = {
   SALAIRE: 'Crédit Salaire',
 };
 
+const COMPACT_TITLES: Record<Exclude<HomeTab, 'home'>, string> = {
+  dossiers: 'Dossiers',
+  alertes: 'Alertes',
+  profil: 'Profil',
+};
+
 export function HomeScreen() {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const insets = useSafeAreaInsets();
   const [detailId, setDetailId] = useState<string | null>(null);
   const [registerType, setRegisterType] = useState<CreditType | null>(null);
   const [typeModal, setTypeModal] = useState(false);
+  const [activeTab, setActiveTab] = useState<HomeTab>('home');
+  const [q, setQ] = useState('');
+  const [searchKey, setSearchKey] = useState(0);
 
   if (detailId) {
-    return <DetailScreen id={detailId} onBack={() => setDetailId(null)} />;
+    return (
+      <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
+        <StatusBar style="dark" />
+        <DetailScreen id={detailId} onBack={() => setDetailId(null)} />
+      </SafeAreaView>
+    );
   }
 
   if (registerType) {
     return (
-      <RegisterScreen
-        type={registerType}
-        onCancel={() => setRegisterType(null)}
-        onCreated={(id) => {
-          setRegisterType(null);
-          setDetailId(id);
-        }}
-      />
+      <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
+        <StatusBar style="dark" />
+        <RegisterScreen
+          type={registerType}
+          onCancel={() => setRegisterType(null)}
+          onCreated={(id) => {
+            setRegisterType(null);
+            setDetailId(id);
+          }}
+        />
+      </SafeAreaView>
     );
   }
 
+  const displayName = user?.displayName || '';
+  const showList = activeTab === 'home' || activeTab === 'dossiers';
+  const listBottomInset = Math.max(insets.bottom, 12) + 4;
+
   return (
     <View style={styles.root}>
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.name}>{user?.displayName}</Text>
-          <Text style={styles.role}>{user?.role}</Text>
-        </View>
-        <Pressable onPress={logout}>
-          <Text style={styles.logout}>Déconnexion</Text>
-        </Pressable>
-      </View>
+      <StatusBar style="light" />
+      {activeTab === 'home' ? (
+        <HomeHeader
+          displayName={displayName}
+          variant="home"
+          searchQuery={q}
+          onChangeSearch={setQ}
+          onSubmitSearch={() => setSearchKey((k) => k + 1)}
+          onBellPress={() => setActiveTab('alertes')}
+        />
+      ) : (
+        <HomeHeader
+          displayName={displayName}
+          variant="compact"
+          title={COMPACT_TITLES[activeTab]}
+          onBellPress={() => setActiveTab('alertes')}
+        />
+      )}
 
       <View style={styles.body}>
-        <SearchScreen onOpen={setDetailId} />
+        {showList ? (
+          <SearchScreen
+            onOpen={setDetailId}
+            q={q}
+            searchKey={searchKey}
+            bottomInset={listBottomInset}
+          />
+        ) : null}
+        {activeTab === 'alertes' ? <AlertsTab /> : null}
+        {activeTab === 'profil' ? <ProfileTab /> : null}
       </View>
 
-      <Pressable
-        style={[styles.fab, { bottom: Math.max(insets.bottom, 12) + 36 }]}
-        onPress={() => setTypeModal(true)}
-        accessibilityLabel="Nouvelle demande"
-      >
-        <Ionicons name="add" size={28} color="#fff" />
-        <Text style={styles.fabText}>Nouvelle demande</Text>
-      </Pressable>
+      <BottomTabBar
+        active={activeTab}
+        onChange={setActiveTab}
+        onNouveau={() => setTypeModal(true)}
+      />
 
       <Modal
         visible={typeModal}
@@ -106,35 +152,7 @@ export function HomeScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.neutral.background },
-  header: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  name: { fontFamily: fonts.bold, fontSize: 16, color: colors.neutral.text },
-  role: { color: colors.neutral.textMuted, fontSize: 12, fontFamily: fonts.regular },
-  logout: { color: colors.primary.blue, fontFamily: fonts.semiBold },
   body: { flex: 1 },
-  fab: {
-    position: 'absolute',
-    right: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: colors.primary.blue,
-    paddingVertical: 14,
-    paddingHorizontal: 18,
-    borderRadius: 28,
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
-  },
-  fabText: { color: '#fff', fontFamily: fonts.bold },
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.45)',
