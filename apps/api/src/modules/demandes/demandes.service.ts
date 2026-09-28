@@ -11,6 +11,7 @@ import {
 } from '@imf/shared';
 import { ZodError } from 'zod';
 import { PrismaService } from '../../prisma/prisma.service';
+import { AuditService } from '../audit/audit.service';
 
 type AuthUser = {
   id: string;
@@ -22,7 +23,10 @@ const CLOSED: DossierEtat[] = [DossierEtat.A_DECAISSER, DossierEtat.REJETE];
 
 @Injectable()
 export class DemandesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
+  ) {}
 
   async listZones() {
     return this.prisma.zone.findMany({ orderBy: { code: 'asc' } });
@@ -46,7 +50,7 @@ export class DemandesService {
 
   async assignLeastBusyAgent(zoneId: string) {
     const agents = await this.prisma.user.findMany({
-      where: { role: Role.AGENT, zoneId },
+      where: { role: Role.AGENT, zoneId, disabledAt: null },
     });
     if (!agents.length) {
       throw new BadRequestException('Aucun agent pour cette zone');
@@ -138,14 +142,22 @@ export class DemandesService {
           actorId: user.id,
         },
       });
-      await tx.auditLog.create({
-        data: {
+      await this.audit.log(
+        {
           dossierId: created.id,
           actorId: user.id,
           action: 'DOSSIER_CREATED',
-          payload: { reference, type, agentId: agent.id, communeId: commune.id },
+          entityType: 'DOSSIER',
+          entityId: created.id,
+          payload: {
+            reference,
+            type,
+            agentId: agent.id,
+            communeId: commune.id,
+          },
         },
-      });
+        tx,
+      );
       return created;
     });
 
@@ -218,14 +230,17 @@ export class DemandesService {
         where: { id },
         data: { payload: payload as Prisma.InputJsonValue },
       });
-      await tx.auditLog.create({
-        data: {
+      await this.audit.log(
+        {
           dossierId: id,
           actorId: user.id,
           action: 'DOSSIER_UPDATED',
+          entityType: 'DOSSIER',
+          entityId: id,
           payload: { reference: existing.reference },
         },
-      });
+        tx,
+      );
     });
     return this.findOne(id);
   }

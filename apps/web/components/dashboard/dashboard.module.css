@@ -1854,3 +1854,96 @@
     transform: translateY(0);
   }
 }
+
+.adminToolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  margin: 0 0 18px;
+}
+
+.adminToolbarGrow {
+  flex: 1;
+  min-width: 200px;
+}
+
+.adminForm {
+  border: 1px solid #ececec;
+  background: #fff;
+  padding: 18px;
+  margin-bottom: 18px;
+  display: grid;
+  gap: 12px;
+  max-width: 720px;
+}
+
+.adminFormTitle {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 650;
+}
+
+.adminFormGrid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+
+.adminField {
+  display: grid;
+  gap: 6px;
+}
+
+.adminField label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--imf-muted);
+}
+
+.adminField input,
+.adminField select {
+  border: 1px solid #d8dde8;
+  background: #fff;
+  padding: 10px 12px;
+  font: inherit;
+  font-size: 0.9rem;
+}
+
+.adminField input:focus,
+.adminField select:focus {
+  outline: 2px solid #c5d0ea;
+  border-color: var(--imf-blue);
+}
+
+.adminActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.adminMuted {
+  color: var(--imf-muted);
+  font-size: 0.85rem;
+}
+
+.adminPanel {
+  border: 1px solid #ececec;
+  background: #fff;
+  padding: 16px;
+  margin-top: 16px;
+}
+
+.adminPanel h3 {
+  margin: 0 0 12px;
+  font-size: 0.98rem;
+}
+
+.adminInlineSelect {
+  border: 1px solid #d8dde8;
+  padding: 6px 8px;
+  font: inherit;
+  font-size: 0.82rem;
+  max-width: 160px;
+}

@@ -11,7 +11,7 @@ const ROLE_HOME: Record<string, string> = {
   CONFORMITE: '/conformite',
   DG: '/direction',
   CA: '/direction',
-  ADMIN: '/agent',
+  ADMIN: '/admin',
 };
 
 export function RequireAuth({

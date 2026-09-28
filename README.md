@@ -36,10 +36,11 @@ Comptes seed :
 | CONFORMITE | André Ntumba | `a.ntumba@imf.local` | `Ntumba1!` | — |
 | CONFORMITE | Clarisse Mpiana | `c.mpiana@imf.local` | `Mpiana1!` | — |
 | DG | Dieudonné Kabila | `d.kabila@imf.local` | `Kabila1!` | — |
+| ADMIN | Véronique Mbombo | `v.mbombo@imf.local` | `Mbombo1!` | — |
 
 - API : http://localhost:3001/health  
 - Swagger : http://localhost:3001/api  
-- Web : http://localhost:3000 (login agent → `/agent`, analyste → `/analyste`)
+- Web : http://localhost:3000 (login agent → `/agent`, analyste → `/analyste`, admin → `/admin`)
 - Mobile : Expo (émulateur Android → API `http://10.0.2.2:3001` ; appareil → IP LAN via `EXPO_PUBLIC_API_URL`)
 
 ## Flux agent (web)

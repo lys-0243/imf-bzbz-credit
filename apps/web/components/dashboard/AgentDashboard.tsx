@@ -185,7 +185,7 @@ export default function AgentDashboard({
   selectedId?: string;
 }) {
   return (
-    <AuthGate roles={['AGENT', 'ADMIN']} hideSession>
+    <AuthGate roles={['AGENT']} hideSession>
       <AgentWorkspace section={section} selectedId={selectedId} />
     </AuthGate>
   );

@@ -47,14 +47,13 @@ export class ApiError extends Error {
   status: number;
   body: unknown;
   constructor(status: number, body: unknown) {
-    super(
-      typeof body === 'object' &&
-        body &&
-        'message' in body &&
-        typeof (body as any).message === 'string'
-        ? (body as any).message
-        : `Erreur HTTP ${status}`,
-    );
+    let msg = `Erreur HTTP ${status}`;
+    if (typeof body === 'object' && body && 'message' in body) {
+      const m = (body as { message: unknown }).message;
+      if (typeof m === 'string') msg = m;
+      else if (Array.isArray(m)) msg = m.join(', ');
+    }
+    super(msg);
     this.status = status;
     this.body = body;
   }

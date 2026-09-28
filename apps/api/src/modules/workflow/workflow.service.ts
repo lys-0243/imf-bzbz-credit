@@ -31,10 +31,10 @@ export const ALLOWED_TRANSITIONS: Partial<
 export const ROLE_CAN_TRANSITION: Partial<
   Record<DossierEtat, Role[]>
 > = {
-  [DossierEtat.DESCENTE]: [Role.AGENT, Role.ADMIN],
-  [DossierEtat.RAPPORT_AGENT]: [Role.AGENT, Role.ADMIN],
-  [DossierEtat.SCORING]: [Role.AGENT, Role.ADMIN, Role.ANALYSTE],
-  [DossierEtat.ANALYSTE]: [Role.AGENT, Role.ADMIN, Role.ANALYSTE],
+  [DossierEtat.DESCENTE]: [Role.AGENT],
+  [DossierEtat.RAPPORT_AGENT]: [Role.AGENT],
+  [DossierEtat.SCORING]: [Role.AGENT, Role.ANALYSTE],
+  [DossierEtat.ANALYSTE]: [Role.AGENT, Role.ANALYSTE],
 };
 
 @Injectable()
@@ -52,7 +52,7 @@ export class WorkflowService {
     }
     if (role) {
       const roles = ROLE_CAN_TRANSITION[to];
-      if (roles && !roles.includes(role) && role !== Role.ADMIN) {
+      if (roles && !roles.includes(role)) {
         throw new BadRequestException(
           `Rôle ${role} non autorisé pour passer à ${to}`,
         );
