@@ -10,7 +10,11 @@ export const ALLOWED_TRANSITIONS: Partial<
   [DossierEtat.AFFECTE]: [DossierEtat.DESCENTE],
   [DossierEtat.DESCENTE]: [DossierEtat.RAPPORT_AGENT],
   [DossierEtat.RAPPORT_AGENT]: [DossierEtat.SCORING],
-  [DossierEtat.SCORING]: [DossierEtat.ANALYSTE],
+  [DossierEtat.SCORING]: [DossierEtat.EN_ATTENTE_VALIDATION_RC],
+  [DossierEtat.EN_ATTENTE_VALIDATION_RC]: [
+    DossierEtat.RETOUR_AGENT,
+    DossierEtat.CONFORMITE,
+  ],
   [DossierEtat.ANALYSTE]: [
     DossierEtat.RETOUR_AGENT,
     DossierEtat.CONFORMITE,
@@ -35,8 +39,10 @@ export const ROLE_CAN_TRANSITION: Partial<
   [DossierEtat.AFFECTE]: [Role.RESPONSABLE_CREDIT],
   [DossierEtat.DESCENTE]: [Role.AGENT],
   [DossierEtat.RAPPORT_AGENT]: [Role.AGENT],
-  [DossierEtat.SCORING]: [Role.AGENT, Role.ANALYSTE],
-  [DossierEtat.ANALYSTE]: [Role.AGENT, Role.ANALYSTE],
+  [DossierEtat.SCORING]: [Role.AGENT],
+  [DossierEtat.EN_ATTENTE_VALIDATION_RC]: [Role.AGENT],
+  [DossierEtat.RETOUR_AGENT]: [Role.RESPONSABLE_CREDIT, Role.ANALYSTE],
+  [DossierEtat.CONFORMITE]: [Role.RESPONSABLE_CREDIT, Role.ANALYSTE],
 };
 
 @Injectable()

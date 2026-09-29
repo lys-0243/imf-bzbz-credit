@@ -1,7 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -142,6 +143,7 @@ export function DetailScreen({ id, onBack, bottomInset = 24 }: Props) {
   const [d, setD] = useState<Dossier | null>(null);
   const [pieces, setPieces] = useState<Piece[]>([]);
   const [busy, setBusy] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState('recap');
 
@@ -185,7 +187,7 @@ export function DetailScreen({ id, onBack, bottomInset = 24 }: Props) {
 
   useEffect(() => {
     let cancelled = false;
-    const load = async () => {
+    (async () => {
       setBusy(true);
       setError(null);
       try {
@@ -202,11 +204,27 @@ export function DetailScreen({ id, onBack, bottomInset = 24 }: Props) {
       } finally {
         if (!cancelled) setBusy(false);
       }
-    };
-    load();
+    })();
     return () => {
       cancelled = true;
     };
+  }, [id]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    setError(null);
+    try {
+      const [dossier, docs] = await Promise.all([
+        api<Dossier>(`/dossiers/${id}`),
+        api<Piece[]>(`/documents/dossiers/${id}`).catch(() => [] as Piece[]),
+      ]);
+      setD(dossier);
+      setPieces(docs);
+    } catch (e: any) {
+      setError(e.message || 'Chargement impossible');
+    } finally {
+      setRefreshing(false);
+    }
   }, [id]);
 
   const attributionDate = useMemo(() => {
@@ -665,6 +683,14 @@ export function DetailScreen({ id, onBack, bottomInset = 24 }: Props) {
           { paddingBottom: bottomInset + 16 },
         ]}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.primary.blue}
+            colors={[colors.primary.blue]}
+          />
+        }
       >
         <View style={styles.hero}>
           <Text style={styles.heroName} numberOfLines={1}>

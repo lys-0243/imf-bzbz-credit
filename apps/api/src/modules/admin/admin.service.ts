@@ -93,6 +93,7 @@ export class AdminService {
       DossierEtat.RETOUR_AGENT,
       DossierEtat.RAPPORT_AGENT,
       DossierEtat.SCORING,
+      DossierEtat.EN_ATTENTE_VALIDATION_RC,
       DossierEtat.ANALYSTE,
       DossierEtat.RETOUR_ANALYSTE,
       DossierEtat.CONFORMITE,

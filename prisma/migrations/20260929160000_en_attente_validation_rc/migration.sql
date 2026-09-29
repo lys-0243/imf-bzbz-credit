@@ -1,0 +1,2 @@
+-- AlterEnum DossierEtat
+ALTER TYPE "DossierEtat" ADD VALUE IF NOT EXISTS 'EN_ATTENTE_VALIDATION_RC';

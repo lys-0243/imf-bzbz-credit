@@ -36,9 +36,12 @@ export type NavKey =
   | 'dashboard'
   | 'nouveaux'
   | 'file'
+  | 'a_valider'
   | 'dossiers'
   | 'retournes'
   | 'termines'
+  | 'soumis'
+  | 'agents'
   | 'utilisateurs'
   | 'zones'
   | 'produits'
@@ -49,9 +52,11 @@ export type NavKey =
 export type NavCounts = {
   nouveaux?: number;
   file?: number;
+  aValider?: number;
   enCours?: number;
   retournes?: number;
   termines?: number;
+  soumis?: number;
 };
 
 type NavItem = {
@@ -138,6 +143,35 @@ const RESPONSABLE_CREDIT_NAV: NavItem[] = [
     href: '/responsable-credit/file',
     countKey: 'file',
   },
+  {
+    key: 'dossiers',
+    label: 'Dossiers en cours',
+    href: '/responsable-credit/en-cours',
+    countKey: 'enCours',
+  },
+  {
+    key: 'a_valider',
+    label: 'À valider',
+    href: '/responsable-credit/a-valider',
+    countKey: 'aValider',
+  },
+  {
+    key: 'retournes',
+    label: 'Renvoyés',
+    href: '/responsable-credit/renvoyes',
+    countKey: 'retournes',
+  },
+  {
+    key: 'soumis',
+    label: 'Soumis',
+    href: '/responsable-credit/soumis',
+    countKey: 'soumis',
+  },
+  {
+    key: 'agents',
+    label: 'Agents',
+    href: '/responsable-credit/agents',
+  },
 ];
 
 type ShellBase = 'agent' | 'analyste' | 'admin' | 'responsable-credit';
@@ -154,11 +188,16 @@ function activeKey(pathname: string, base: ShellBase): NavKey {
   }
   if (base === 'responsable-credit') {
     if (pathname.startsWith('/responsable-credit/file')) return 'file';
+    if (pathname.startsWith('/responsable-credit/en-cours')) return 'dossiers';
+    if (pathname.startsWith('/responsable-credit/a-valider')) return 'a_valider';
+    if (pathname.startsWith('/responsable-credit/renvoyes')) return 'retournes';
+    if (pathname.startsWith('/responsable-credit/soumis')) return 'soumis';
+    if (pathname.startsWith('/responsable-credit/agents')) return 'agents';
     if (pathname === '/responsable-credit' || pathname === '/responsable-credit/') {
       return 'dashboard';
     }
     const rest = pathname.slice('/responsable-credit/'.length);
-    if (rest && !rest.includes('/')) return 'file';
+    if (rest && !rest.includes('/')) return 'dossiers';
     return 'dashboard';
   }
   if (pathname.startsWith(`/${base}/nouveaux`)) return 'nouveaux';
@@ -309,7 +348,13 @@ export function DashboardEmpty({
 }
 
 export function etatBadgeClass(etat: string) {
-  if (etat === 'ANALYSTE' || etat === 'DESCENTE') return styles.badgeOk;
+  if (
+    etat === 'ANALYSTE' ||
+    etat === 'DESCENTE' ||
+    etat === 'EN_ATTENTE_VALIDATION_RC'
+  ) {
+    return styles.badgeOk;
+  }
   if (etat === 'REJETE' || etat === 'RETOUR_AGENT' || etat === 'RETOUR_ANALYSTE') {
     return `${styles.badge} ${styles.badgeWarn}`;
   }
@@ -363,6 +408,28 @@ function NavIcon({ name }: { name: NavKey }) {
         <svg {...props}>
           <path d="M8 6h13M8 12h13M8 18h13" />
           <path d="M3 6h.01M3 12h.01M3 18h.01" />
+        </svg>
+      );
+    case 'a_valider':
+      return (
+        <svg {...props}>
+          <circle cx="12" cy="12" r="8" />
+          <path d="M12 8v4l3 2" />
+        </svg>
+      );
+    case 'soumis':
+      return (
+        <svg {...props}>
+          <path d="M12 19V5M5 12l7-7 7 7" />
+        </svg>
+      );
+    case 'agents':
+      return (
+        <svg {...props}>
+          <circle cx="9" cy="8" r="3.2" />
+          <path d="M3 19a6 6 0 0112 0" />
+          <circle cx="17" cy="9" r="2.5" />
+          <path d="M15 19a4.5 4.5 0 016 0" />
         </svg>
       );
     case 'dossiers':

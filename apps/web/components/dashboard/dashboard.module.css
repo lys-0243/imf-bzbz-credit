@@ -248,9 +248,9 @@
 
 .main {
   margin-left: 280px;
-  margin-right: 32px;
+  margin-right: 50px;
   min-height: 100vh;
-  padding: 28px 0 40px 32px;
+  padding: 50px 0 50px 50px;
   background: #fff;
 }
 
@@ -1853,8 +1853,8 @@
 
   .main {
     margin-left: 0;
-    margin-right: 16px;
-    padding: 20px 0 32px 16px;
+    margin-right: 50px;
+    padding: 50px 0 50px 50px;
   }
 
   .stats {
@@ -2178,4 +2178,67 @@
   margin: 10px 0 0;
   font-size: 0.85rem;
   color: var(--imf-muted);
+}
+
+.assignTextarea {
+  width: 100%;
+  margin-top: 6px;
+  border: 1px solid #e8e8e8;
+  border-radius: 12px;
+  padding: 10px 12px;
+  font: inherit;
+  font-size: 0.9rem;
+  resize: vertical;
+  background: #fff;
+}
+
+.agentsList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.agentCard {
+  border: 1px solid #e8e8e8;
+  border-radius: 16px;
+  background: #fff;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+}
+
+.agentCardHeader {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  text-align: left;
+  padding: 16px 18px;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+}
+
+.agentCardHeader:hover {
+  background: #fafafa;
+}
+
+.agentCardMeta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.agentCharge {
+  font-size: 0.85rem;
+  color: var(--imf-muted);
+  font-weight: 600;
+}
+
+.agentCardBody {
+  border-top: 1px solid #eee;
+  padding: 12px 18px 16px;
 }

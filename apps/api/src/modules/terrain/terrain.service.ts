@@ -528,8 +528,8 @@ export class TerrainService {
         },
         {
           from: DossierEtat.SCORING,
-          to: DossierEtat.ANALYSTE,
-          comment: 'Transmission à l’analyste',
+          to: DossierEtat.EN_ATTENTE_VALIDATION_RC,
+          comment: 'Transmission au responsable crédit',
         },
       ];
 
@@ -545,7 +545,7 @@ export class TerrainService {
       await tx.dossier.update({
         where: { id },
         data: {
-          etat: DossierEtat.ANALYSTE,
+          etat: DossierEtat.EN_ATTENTE_VALIDATION_RC,
           agentValideAt: now,
           scoreValue: 50,
           scoreReasons: {
@@ -572,7 +572,10 @@ export class TerrainService {
           action: 'AGENT_SOUMIS',
           entityType: 'DOSSIER',
           entityId: id,
-          payload: { reference: d.reference, toEtat: DossierEtat.ANALYSTE },
+          payload: {
+            reference: d.reference,
+            toEtat: DossierEtat.EN_ATTENTE_VALIDATION_RC,
+          },
         },
         tx,
       );

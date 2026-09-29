@@ -7,7 +7,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { Role } from '@prisma/client';
-import { IsString } from 'class-validator';
+import { IsString, MinLength } from 'class-validator';
 import { CurrentUser } from '../identity/current-user.decorator';
 import { JwtAuthGuard } from '../identity/jwt-auth.guard';
 import { Roles, RolesGuard } from '../identity/roles.guard';
@@ -16,6 +16,12 @@ import { AffectationService } from './affectation.service';
 class AssignDto {
   @IsString()
   agentId!: string;
+}
+
+class RenvoyerDto {
+  @IsString()
+  @MinLength(3)
+  comment!: string;
 }
 
 @Controller('affectation')
@@ -27,6 +33,11 @@ export class AffectationController {
   @Get('file')
   listFile() {
     return this.affectation.listFile();
+  }
+
+  @Get('dossiers')
+  listDossiers() {
+    return this.affectation.listDossiers();
   }
 
   @Get('agents')
@@ -46,5 +57,22 @@ export class AffectationController {
     @Body() dto: AssignDto,
   ) {
     return this.affectation.assign(user, id, dto.agentId);
+  }
+
+  @Post('dossiers/:id/renvoyer')
+  renvoyer(
+    @CurrentUser() user: { id: string; role: Role },
+    @Param('id') id: string,
+    @Body() dto: RenvoyerDto,
+  ) {
+    return this.affectation.renvoyer(user, id, dto.comment);
+  }
+
+  @Post('dossiers/:id/soumettre')
+  soumettre(
+    @CurrentUser() user: { id: string; role: Role },
+    @Param('id') id: string,
+  ) {
+    return this.affectation.soumettre(user, id);
   }
 }

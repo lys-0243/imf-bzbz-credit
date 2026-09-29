@@ -141,7 +141,7 @@ export function BoardHome({
   );
 
   return (
-    <div style={{ margin: 50 }}>
+    <div >
       <header className={styles.boardHero}>
         <p className={styles.boardHeroEyebrow}>{title}</p>
         <h1 className={styles.boardHeroTitle}>{msg.title}</h1>
