@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
   Pressable,
+  RefreshControl,
   StyleSheet,
   Text,
   View,
@@ -14,8 +15,8 @@ import {
   DOSSIER_ETAT_LABELS,
   formatMontantSouhaite,
   montantSouhaiteFromPayload,
-  type CreditType,
   type DossierEtat,
+  type ProduitCreditDto,
 } from '@imf/shared';
 import { api } from '../api';
 import { TAB_BAR_BASE_HEIGHT } from '../components/BottomTabBar';
@@ -23,7 +24,8 @@ import { TAB_BAR_BASE_HEIGHT } from '../components/BottomTabBar';
 type DossierRow = {
   id: string;
   reference: string;
-  type: CreditType;
+  type?: string;
+  produit?: ProduitCreditDto | null;
   etat: DossierEtat;
   editable: boolean;
   updatedAt: string;
@@ -38,10 +40,11 @@ type Props = {
   bottomInset?: number;
 };
 
-const TYPE_LABELS: Record<CreditType, string> = {
+const TYPE_LABELS: Record<string, string> = {
   DARE_DARE: 'Crédit Dare-Dare',
   INDIVIDUEL: 'Crédit Individuel',
   SALAIRE: 'Crédit Salaire',
+  AGR: 'Crédit AGR',
 };
 
 function etatTone(etat: DossierEtat): { bg: string; fg: string } {
@@ -73,10 +76,12 @@ export function SearchScreen({
 }: Props) {
   const [rows, setRows] = useState<DossierRow[]>([]);
   const [busy, setBusy] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const load = async (term: string) => {
-    setBusy(true);
+  const load = useCallback(async (term: string, mode: 'initial' | 'refresh') => {
+    if (mode === 'refresh') setRefreshing(true);
+    else setBusy(true);
     setError(null);
     try {
       const data = await api<DossierRow[]>(
@@ -86,12 +91,13 @@ export function SearchScreen({
     } catch (e: any) {
       setError(e.message || 'Recherche impossible');
     } finally {
-      setBusy(false);
+      if (mode === 'refresh') setRefreshing(false);
+      else setBusy(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    load(q);
+    load(q, 'initial');
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: reload on searchKey / initial
   }, [searchKey]);
 
@@ -114,14 +120,27 @@ export function SearchScreen({
           contentContainerStyle={{
             paddingBottom: TAB_BAR_BASE_HEIGHT + bottomInset + 24,
             paddingHorizontal: 16,
+            flexGrow: 1,
           }}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => load(q, 'refresh')}
+              tintColor={colors.primary.blue}
+              colors={[colors.primary.blue]}
+            />
+          }
           renderItem={({ item }) => {
             const tone = etatTone(item.etat);
             const { montantSouhaite, devise } = montantSouhaiteFromPayload(
-              item.type,
               item.payload as Record<string, any> | null | undefined,
             );
             const montantLabel = formatMontantSouhaite(montantSouhaite, devise);
+            const produitLabel =
+              item.produit?.label ||
+              TYPE_LABELS[item.type || ''] ||
+              item.type ||
+              '—';
             return (
               <Pressable style={styles.card} onPress={() => onOpen(item.id)}>
                 <View style={styles.cardTop}>
@@ -136,7 +155,10 @@ export function SearchScreen({
                     </Text>
                   </View>
                   <View style={[styles.etatPill, { backgroundColor: tone.bg }]}>
-                    <Text style={[styles.etatText, { color: tone.fg }]} numberOfLines={1}>
+                    <Text
+                      style={[styles.etatText, { color: tone.fg }]}
+                      numberOfLines={1}
+                    >
                       {DOSSIER_ETAT_LABELS[item.etat] || item.etat}
                     </Text>
                   </View>
@@ -150,7 +172,7 @@ export function SearchScreen({
                 <View style={styles.footerRow}>
                   <View style={styles.dot} />
                   <Text style={styles.typeLabel} numberOfLines={1}>
-                    {TYPE_LABELS[item.type] || item.type}
+                    {produitLabel}
                   </Text>
                 </View>
               </Pressable>

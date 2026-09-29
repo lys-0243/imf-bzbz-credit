@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import {
   Pressable,
   StyleSheet,
-  Switch,
   Text,
   TextInput,
   View,
@@ -19,6 +18,8 @@ export function Field({
   keyboardType,
   secureTextEntry,
   required,
+  autoCapitalize,
+  autoCorrect,
 }: {
   label: string;
   value: string;
@@ -27,6 +28,8 @@ export function Field({
   keyboardType?: 'default' | 'numeric' | 'email-address' | 'phone-pad';
   secureTextEntry?: boolean;
   required?: boolean;
+  autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
+  autoCorrect?: boolean;
 }) {
   const [focused, setFocused] = useState(false);
   const ph = placeholder ?? (required ? `${label} *` : label);
@@ -40,6 +43,8 @@ export function Field({
         placeholderTextColor={colors.neutral.placeholder}
         keyboardType={keyboardType}
         secureTextEntry={secureTextEntry}
+        autoCapitalize={autoCapitalize}
+        autoCorrect={autoCorrect}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
         accessibilityLabel={label}
@@ -188,33 +193,6 @@ export function DurationField({
   );
 }
 
-export function BoolField({
-  label,
-  value,
-  onChange,
-  required,
-}: {
-  label: string;
-  value: boolean;
-  onChange: (v: boolean) => void;
-  required?: boolean;
-}) {
-  return (
-    <View style={styles.boolRow}>
-      <Text style={styles.boolLabel}>
-        {label}
-        {required ? <Text style={styles.asterisk}> *</Text> : null}
-      </Text>
-      <Switch
-        value={value}
-        onValueChange={onChange}
-        trackColor={{ false: '#d8d8d8', true: 'rgba(40, 64, 128, 0.45)' }}
-        thumbColor={value ? colors.primary.blue : '#f4f4f4'}
-      />
-    </View>
-  );
-}
-
 /** Flat switch capsule for exactly 2 options (e.g. Sexe). */
 function FlatSwitch({
   value,
@@ -262,7 +240,6 @@ export function SelectField({
   value,
   options,
   onChange,
-  required,
 }: {
   label: string;
   value: string;
@@ -388,7 +365,6 @@ const softShadow = {
 
 const styles = StyleSheet.create({
   field: { marginBottom: 14 },
-  asterisk: { color: colors.primary.red, fontFamily: fonts.bold },
   input: {
     borderWidth: 1,
     borderColor: '#e8e8e8',
@@ -403,25 +379,6 @@ const styles = StyleSheet.create({
   },
   inputFocused: {
     borderColor: colors.primary.blue,
-  },
-  boolRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-    gap: 12,
-    backgroundColor: colors.neutral.surface,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#e8e8e8',
-    paddingHorizontal: 16,
-    minHeight: 58,
-    ...softShadow,
-  },
-  boolLabel: {
-    flex: 1,
-    fontFamily: fonts.medium,
-    fontSize: 15,
-    color: colors.neutral.text,
   },
   flatSwitch: {
     flexDirection: 'row',

@@ -1,7 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -11,20 +12,20 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors, fonts } from '@imf/assets';
 import {
   DOSSIER_ETAT_LABELS,
+  dureeFromPayload,
+  dureeUniteFromPayload,
+  ETAT_CIVIL_LABELS,
+  formatDureeLabel,
   formatMontantSouhaite,
   getApplicableChecklistItems,
   montantSouhaiteFromPayload,
-  type CreditType,
+  TYPE_PIECE_LABELS,
   type DossierEtat,
+  type FamilleProduit,
+  type ProduitCreditDto,
 } from '@imf/shared';
 import { api } from '../api';
 import { HomeHeader } from '../components/HomeHeader';
-
-const TYPE_LABELS: Record<CreditType, string> = {
-  DARE_DARE: 'Crédit Dare-Dare',
-  INDIVIDUEL: 'Crédit Individuel',
-  SALAIRE: 'Crédit Salaire',
-};
 
 /** Hero card — dark charcoal (maquette détail). */
 const HERO_BG = '#3a3a3c';
@@ -47,7 +48,8 @@ type Piece = {
 type Dossier = {
   id: string;
   reference: string;
-  type: CreditType;
+  type?: string;
+  produit?: ProduitCreditDto;
   etat: DossierEtat;
   editable: boolean;
   payload: Record<string, any>;
@@ -141,12 +143,30 @@ export function DetailScreen({ id, onBack, bottomInset = 24 }: Props) {
   const [d, setD] = useState<Dossier | null>(null);
   const [pieces, setPieces] = useState<Piece[]>([]);
   const [busy, setBusy] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState('recap');
 
   const tabs: TabDef[] = useMemo(() => {
     if (!d) return [{ key: 'recap', label: 'Récapitulatif' }];
-    if (d.type === 'SALAIRE') {
+    const p = d.payload ?? {};
+    const isReception =
+      p.prenom &&
+      p.montantSollicite != null &&
+      !p.demandeur &&
+      (p.dateNaissance != null || p.dureeSemaines != null || p.numeroCompte);
+    if (isReception) {
+      return [
+        { key: 'recap', label: 'Récapitulatif' },
+        { key: 'identite', label: 'Identité' },
+        { key: 'demande', label: 'Demande' },
+        { key: 'docs', label: 'Documents' },
+      ];
+    }
+    const famille: FamilleProduit =
+      d.produit?.famille ??
+      (d.type === 'SALAIRE' ? 'SALAIRE' : 'ACTIVITE');
+    if (famille === 'SALAIRE') {
       return [
         { key: 'recap', label: 'Récapitulatif' },
         { key: 'identite', label: 'Identité' },
@@ -167,7 +187,7 @@ export function DetailScreen({ id, onBack, bottomInset = 24 }: Props) {
 
   useEffect(() => {
     let cancelled = false;
-    const load = async () => {
+    (async () => {
       setBusy(true);
       setError(null);
       try {
@@ -184,11 +204,27 @@ export function DetailScreen({ id, onBack, bottomInset = 24 }: Props) {
       } finally {
         if (!cancelled) setBusy(false);
       }
-    };
-    load();
+    })();
     return () => {
       cancelled = true;
     };
+  }, [id]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    setError(null);
+    try {
+      const [dossier, docs] = await Promise.all([
+        api<Dossier>(`/dossiers/${id}`),
+        api<Piece[]>(`/documents/dossiers/${id}`).catch(() => [] as Piece[]),
+      ]);
+      setD(dossier);
+      setPieces(docs);
+    } catch (e: any) {
+      setError(e.message || 'Chargement impossible');
+    } finally {
+      setRefreshing(false);
+    }
   }, [id]);
 
   const attributionDate = useMemo(() => {
@@ -200,8 +236,11 @@ export function DetailScreen({ id, onBack, bottomInset = 24 }: Props) {
 
   const docRows = useMemo(() => {
     if (!d) return [];
+    const famille: FamilleProduit =
+      d.produit?.famille ??
+      (d.type === 'SALAIRE' ? 'SALAIRE' : 'ACTIVITE');
     const uploadItems = getApplicableChecklistItems(
-      d.type,
+      famille,
       d.payload ?? {},
       {},
       'ALL',
@@ -244,15 +283,19 @@ export function DetailScreen({ id, onBack, bottomInset = 24 }: Props) {
     );
   }
 
-  const { montantSouhaite, devise } = montantSouhaiteFromPayload(
-    d.type,
-    d.payload,
-  );
+  const { montantSouhaite, devise } = montantSouhaiteFromPayload(d.payload);
   const montantLabel = formatMontantSouhaite(montantSouhaite, devise);
   const tone = etatTone(d.etat);
   const p = d.payload ?? {};
+  const produitLabel = d.produit?.label || d.type || '—';
+  const dureeLabel = formatDureeLabel(
+    dureeFromPayload(p),
+    dureeUniteFromPayload(p, d.produit?.dureeUnite),
+  );
   const salaireNet =
-    d.type === 'SALAIRE' && p.salaireNet != null && String(p.salaireNet).trim()
+    (d.produit?.famille === 'SALAIRE' || d.type === 'SALAIRE') &&
+    p.salaireNet != null &&
+    String(p.salaireNet).trim()
       ? String(p.salaireNet).trim()
       : null;
 
@@ -304,13 +347,32 @@ export function DetailScreen({ id, onBack, bottomInset = 24 }: Props) {
   const renderSalaireIdentite = () => (
     <InfoCard>
       <InfoRow label="Commune" value={d.client.commune?.name || '—'} />
+      <InfoRow label="N° de compte" value={displayVal(p.numeroCompte)} />
       <InfoRow label="Prénom" value={displayVal(p.prenom)} />
       <InfoRow label="Nom" value={displayVal(p.nom)} />
-      <InfoRow label="Post-Nom" value={displayVal(p.postNom)} />
+      <InfoRow label="Postnom" value={displayVal(p.postNom)} />
+      <InfoRow label="Date de naissance" value={displayVal(p.dateNaissance)} />
+      <InfoRow
+        label="Type de pièce"
+        value={
+          p.typePiece && TYPE_PIECE_LABELS[p.typePiece as keyof typeof TYPE_PIECE_LABELS]
+            ? TYPE_PIECE_LABELS[p.typePiece as keyof typeof TYPE_PIECE_LABELS]
+            : displayVal(p.typePiece)
+        }
+      />
+      <InfoRow label="N° de pièce" value={displayVal(p.numeroPiece)} />
+      <InfoRow label="Genre" value={displayVal(p.sexe)} />
       <InfoRow label="Téléphone" value={displayVal(p.telephone)} />
-      <InfoRow label="Email" value={displayVal(p.email)} />
+      <InfoRow label="E-mail" value={displayVal(p.email)} />
+      <InfoRow
+        label="État civil"
+        value={
+          p.etatCivil && ETAT_CIVIL_LABELS[p.etatCivil as keyof typeof ETAT_CIVIL_LABELS]
+            ? ETAT_CIVIL_LABELS[p.etatCivil as keyof typeof ETAT_CIVIL_LABELS]
+            : displayVal(p.etatCivil)
+        }
+      />
       <InfoRow label="Adresse domicile" value={displayVal(p.adresseDomicile)} />
-      <InfoRow label="N° de compte" value={displayVal(p.numeroCompte)} />
     </InfoCard>
   );
 
@@ -342,6 +404,38 @@ export function DetailScreen({ id, onBack, bottomInset = 24 }: Props) {
         value={displayVal(p.cautionGarantie)}
       />
       <InfoRow label="Dépôt BC" value={displayVal(p.depotBc)} />
+    </InfoCard>
+  );
+
+  const renderReceptionDemande = () => (
+    <InfoCard>
+      <InfoRow
+        label="Montant sollicité"
+        value={formatMontantSouhaite(
+          typeof p.montantSollicite === 'number' ? p.montantSollicite : null,
+          p.devise || 'USD',
+        )}
+      />
+      <InfoRow label="Durée" value={dureeLabel} />
+      <InfoRow label="Motif du crédit" value={displayVal(p.motifCredit)} />
+      <InfoRow
+        label="Capacité de remboursement mensuel"
+        value={
+          typeof p.capaciteMensuelle === 'number'
+            ? formatMontantSouhaite(p.capaciteMensuelle, p.devise || 'USD')
+            : displayVal(p.capaciteMensuelle)
+        }
+      />
+      <InfoRow
+        label="Prêt autre institution"
+        value={displayVal(p.pretAutreInstitution)}
+      />
+      {p.pretAutreInstitution && p.pretAutreInstitution !== 'Non' ? (
+        <InfoRow
+          label="Nom de l'institution"
+          value={displayVal(p.autreInstitutionNom)}
+        />
+      ) : null}
     </InfoCard>
   );
 
@@ -548,6 +642,9 @@ export function DetailScreen({ id, onBack, bottomInset = 24 }: Props) {
     case 'emploi':
       tabContent = renderSalaireEmploi();
       break;
+    case 'demande':
+      tabContent = renderReceptionDemande();
+      break;
     case 'client':
       tabContent = renderIndClient();
       break;
@@ -586,6 +683,14 @@ export function DetailScreen({ id, onBack, bottomInset = 24 }: Props) {
           { paddingBottom: bottomInset + 16 },
         ]}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.primary.blue}
+            colors={[colors.primary.blue]}
+          />
+        }
       >
         <View style={styles.hero}>
           <Text style={styles.heroName} numberOfLines={1}>
@@ -597,7 +702,7 @@ export function DetailScreen({ id, onBack, bottomInset = 24 }: Props) {
           ) : null}
           <View style={styles.heroMeta}>
             <Text style={styles.heroType} numberOfLines={1}>
-              {TYPE_LABELS[d.type] || d.type}
+              {produitLabel}
             </Text>
             <View style={[styles.heroBadge, { backgroundColor: tone.bg }]}>
               <Text

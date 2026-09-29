@@ -4,11 +4,14 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   CHECKLIST_CATEGORY_LABELS,
   validateAgentChecklist,
+  validateAgentEnrichmentComplete,
   type ChecklistAnswers,
   type ChecklistCategory,
   type ChecklistItemDef,
+  type FamilleProduit,
 } from '@imf/shared';
 import { ApiError, apiFetch, getApiUrl, getToken } from '../../lib/api';
+import { AgentEnrichmentForm } from './AgentEnrichmentForm';
 import { dashStyles as styles } from './DashboardShell';
 import {
   DossierDetailView,
@@ -116,9 +119,27 @@ export default function AgentDossierPanel({
     if (!data) return [];
     const actions: PendingAction[] = [];
     const canEdit = data.editable && data.etat === 'DESCENTE';
+    const canEditPayload =
+      data.editable &&
+      (data.etat === 'AFFECTE' ||
+        data.etat === 'DESCENTE' ||
+        data.etat === 'RETOUR_AGENT');
     const canStart =
       data.editable &&
       (data.etat === 'AFFECTE' || data.etat === 'RETOUR_AGENT');
+    const famille = (data.produit?.famille ??
+      (data.type === 'SALAIRE' ? 'SALAIRE' : 'ACTIVITE')) as FamilleProduit;
+    const payload = (data.payload ?? {}) as Record<string, any>;
+
+    const enrichCheck = validateAgentEnrichmentComplete(famille, payload);
+    if (canEditPayload && !enrichCheck.ok) {
+      actions.push({
+        id: 'enrichissement',
+        label: 'Compléter les champs du dossier',
+        reason: enrichCheck.message,
+        tab: 'completer',
+      });
+    }
 
     if (canStart) {
       actions.push({
@@ -138,8 +159,8 @@ export default function AgentDossierPanel({
         });
       }
       const checklistIssues = validateAgentChecklist(
-        data.type as 'SALAIRE' | 'INDIVIDUEL' | 'DARE_DARE',
-        (data.payload ?? {}) as Record<string, any>,
+        famille,
+        payload,
         answers,
         uploadedKinds,
         rapport,
@@ -153,11 +174,11 @@ export default function AgentDossierPanel({
           tab: issue.reason === 'Pièce manquante' ? 'docs' : 'operations',
         });
       }
-      if (canEdit && checklistIssues.length === 0) {
+      if (canEdit && enrichCheck.ok && checklistIssues.length === 0) {
         actions.push({
           id: 'soumettre',
           label: 'Soumettre le dossier',
-          reason: 'Checklist complète — transmission à l’analyste',
+          reason: 'Checklist complète — transmission au responsable crédit',
           tab: 'operations',
         });
       }
@@ -268,6 +289,30 @@ export default function AgentDossierPanel({
       setMsg('Brouillon enregistré.');
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Échec enregistrement');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveEnrichment(
+    enrichment:
+      | import('@imf/shared').AgentSalaireEnrichment
+      | import('@imf/shared').AgentActiviteEnrichment,
+  ) {
+    setBusy(true);
+    setError(null);
+    setMsg(null);
+    try {
+      await apiFetch(`/agent/dossiers/${id}/payload`, {
+        method: 'PUT',
+        body: JSON.stringify({ enrichment }),
+      });
+      await load();
+      setMsg('Champs du dossier enregistrés.');
+    } catch (e) {
+      setError(
+        e instanceof ApiError ? e.message : 'Échec enregistrement des champs',
+      );
     } finally {
       setBusy(false);
     }
@@ -407,9 +452,17 @@ export default function AgentDossierPanel({
   }
 
   const canEdit = data.editable && data.etat === 'DESCENTE';
+  const canEditPayload =
+    data.editable &&
+    (data.etat === 'AFFECTE' ||
+      data.etat === 'DESCENTE' ||
+      data.etat === 'RETOUR_AGENT');
   const canStart =
     data.editable &&
     (data.etat === 'AFFECTE' || data.etat === 'RETOUR_AGENT');
+  const famille = (data.produit?.famille ??
+    (data.type === 'SALAIRE' ? 'SALAIRE' : 'ACTIVITE')) as FamilleProduit;
+  const payload = (data.payload ?? {}) as Record<string, any>;
 
   const operationsContent = (
     <div className={styles.descentePane}>
@@ -785,8 +838,23 @@ export default function AgentDossierPanel({
     <DossierDetailView
       data={data}
       backHref="/agent"
-      extraTabs={[{ key: 'operations', label: 'Opérations Agent' }]}
-      extraTabContent={{ operations: operationsContent }}
+      extraTabs={[
+        { key: 'completer', label: 'Compléter' },
+        { key: 'operations', label: 'Opérations Agent' },
+      ]}
+      extraTabContent={{
+        completer: (
+          <AgentEnrichmentForm
+            famille={famille}
+            etatCivil={payload.etatCivil}
+            payload={payload}
+            disabled={!canEditPayload}
+            busy={busy}
+            onSave={saveEnrichment}
+          />
+        ),
+        operations: operationsContent,
+      }}
       pendingActions={pendingActions}
       canManageDocs={canEdit}
       docBusy={busy}

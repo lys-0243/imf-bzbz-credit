@@ -15,7 +15,13 @@ import { DocumentsService } from './documents.service';
 
 @Controller('documents')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(Role.RECEPTION, Role.AGENT, Role.ANALYSTE)
+@Roles(
+  Role.RECEPTION,
+  Role.AGENT,
+  Role.RESPONSABLE_CREDIT,
+  Role.ANALYSTE,
+  Role.ADMIN,
+)
 export class DocumentsController {
   constructor(private readonly documents: DocumentsService) {}
 

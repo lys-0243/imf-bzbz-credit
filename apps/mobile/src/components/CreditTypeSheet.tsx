@@ -1,9 +1,11 @@
 import React, { useEffect, useRef, useState, type RefObject } from 'react';
 import {
+  ActivityIndicator,
   Animated,
   Dimensions,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -12,33 +14,28 @@ import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fonts } from '@imf/assets';
-import { CREDIT_TYPES, type CreditType } from '@imf/shared';
+import {
+  formatProduitBornesHint,
+  type ProduitCreditDto,
+} from '@imf/shared';
+import { api } from '../api';
 
-const TYPE_LABELS: Record<CreditType, string> = {
-  DARE_DARE: 'Crédit Dare-Dare',
-  INDIVIDUEL: 'Crédit Individuel',
-  SALAIRE: 'Crédit Salaire',
-};
+const SHEET_SLIDE = Math.round(Dimensions.get('window').height * 0.7);
 
-const TYPE_HINTS: Record<CreditType, string> = {
-  SALAIRE: 'Salariés du secteur public ou privé',
-  INDIVIDUEL: 'Entrepreneurs et commerçants',
-  DARE_DARE: 'Crédit express à déblocage rapide',
-};
-
-const TYPE_ICONS: Record<CreditType, keyof typeof Ionicons.glyphMap> = {
-  SALAIRE: 'briefcase-outline',
-  INDIVIDUEL: 'person-outline',
-  DARE_DARE: 'flash-outline',
-};
-
-const SHEET_SLIDE = Math.round(Dimensions.get('window').height * 0.55);
+function iconForProduit(
+  p: ProduitCreditDto,
+): keyof typeof Ionicons.glyphMap {
+  if (p.famille === 'SALAIRE') return 'briefcase-outline';
+  if (p.code.includes('DARE')) return 'flash-outline';
+  if (p.code.includes('AUTO')) return 'car-outline';
+  if (p.code.includes('LIKELEMBA')) return 'people-outline';
+  return 'cash-outline';
+}
 
 type Props = {
   visible: boolean;
   onClose: () => void;
-  onConfirm: (type: CreditType) => void;
-  /** Android: ref of BlurTargetView wrapping the screen content to blur */
+  onConfirm: (produit: ProduitCreditDto) => void;
   blurTarget?: RefObject<View | null>;
 };
 
@@ -49,14 +46,39 @@ export function CreditTypeSheet({
   blurTarget,
 }: Props) {
   const insets = useSafeAreaInsets();
-  const [selected, setSelected] = useState<CreditType | null>(null);
+  const [produits, setProduits] = useState<ProduitCreditDto[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
   const backdropOpacity = useRef(new Animated.Value(0)).current;
   const sheetTranslate = useRef(new Animated.Value(SHEET_SLIDE)).current;
 
   useEffect(() => {
+    if (!visible) return;
+    let cancelled = false;
+    setLoading(true);
+    setLoadError(null);
+    api<ProduitCreditDto[]>('/produits')
+      .then((rows) => {
+        if (!cancelled) setProduits(rows);
+      })
+      .catch((e) => {
+        if (!cancelled) {
+          setLoadError(e instanceof Error ? e.message : 'Erreur chargement');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [visible]);
+
+  useEffect(() => {
     if (visible) {
-      setSelected(null);
+      setSelectedId(null);
       setMounted(true);
       backdropOpacity.setValue(0);
       sheetTranslate.setValue(SHEET_SLIDE);
@@ -95,6 +117,8 @@ export function CreditTypeSheet({
   }, [visible, mounted, backdropOpacity, sheetTranslate]);
 
   if (!mounted) return null;
+
+  const selected = produits.find((p) => p.id === selectedId) ?? null;
 
   return (
     <View style={styles.root} pointerEvents="box-none">
@@ -140,44 +164,65 @@ export function CreditTypeSheet({
           </Pressable>
         </View>
 
-        <Text style={styles.subtitle}>Choisissez le type de crédit</Text>
+        <Text style={styles.subtitle}>Choisissez le produit de crédit</Text>
 
-        <View style={styles.options}>
-          {CREDIT_TYPES.map((t) => {
-            const active = selected === t;
-            return (
-              <Pressable
-                key={t}
-                style={[styles.option, active && styles.optionActive]}
-                onPress={() => setSelected(t)}
-              >
-                <View
-                  style={[styles.optionIcon, active && styles.optionIconActive]}
+        {loading ? (
+          <ActivityIndicator
+            color={colors.primary.blue}
+            style={{ marginVertical: 24 }}
+          />
+        ) : loadError ? (
+          <Text style={styles.error}>{loadError}</Text>
+        ) : (
+          <ScrollView
+            style={styles.list}
+            contentContainerStyle={styles.options}
+            showsVerticalScrollIndicator={false}
+          >
+            {produits.map((p) => {
+              const active = selectedId === p.id;
+              return (
+                <Pressable
+                  key={p.id}
+                  style={[styles.option, active && styles.optionActive]}
+                  onPress={() => setSelectedId(p.id)}
                 >
-                  <Ionicons
-                    name={TYPE_ICONS[t]}
-                    size={22}
-                    color={active ? '#fff' : colors.primary.blue}
-                  />
-                </View>
-                <View style={styles.optionText}>
-                  <Text
+                  <View
                     style={[
-                      styles.optionLabel,
-                      active && styles.optionLabelActive,
+                      styles.optionIcon,
+                      active && styles.optionIconActive,
                     ]}
                   >
-                    {TYPE_LABELS[t]}
-                  </Text>
-                  <Text style={styles.optionHint}>{TYPE_HINTS[t]}</Text>
-                </View>
-                <View style={[styles.radio, active && styles.radioActive]}>
-                  {active ? <View style={styles.radioDot} /> : null}
-                </View>
-              </Pressable>
-            );
-          })}
-        </View>
+                    <Ionicons
+                      name={iconForProduit(p)}
+                      size={22}
+                      color={active ? '#fff' : colors.primary.blue}
+                    />
+                  </View>
+                  <View style={styles.optionText}>
+                    <Text
+                      style={[
+                        styles.optionLabel,
+                        active && styles.optionLabelActive,
+                      ]}
+                    >
+                      {p.label}
+                    </Text>
+                    <Text style={styles.optionHint}>
+                      {formatProduitBornesHint(p)}
+                    </Text>
+                  </View>
+                  <View style={[styles.radio, active && styles.radioActive]}>
+                    {active ? <View style={styles.radioDot} /> : null}
+                  </View>
+                </Pressable>
+              );
+            })}
+            {!produits.length ? (
+              <Text style={styles.error}>Aucun produit actif</Text>
+            ) : null}
+          </ScrollView>
+        )}
 
         <Pressable
           style={[styles.cta, !selected && styles.ctaDisabled]}
@@ -213,6 +258,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 28,
     paddingHorizontal: 20,
     paddingTop: 10,
+    maxHeight: '85%',
   },
   handle: {
     alignSelf: 'center',
@@ -250,9 +296,10 @@ const styles = StyleSheet.create({
     color: colors.neutral.textMuted,
     marginBottom: 18,
   },
+  list: { maxHeight: 360, marginBottom: 12 },
   options: {
     gap: 10,
-    marginBottom: 20,
+    paddingBottom: 8,
   },
   option: {
     flexDirection: 'row',
@@ -326,5 +373,11 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontFamily: fonts.bold,
     fontSize: 16,
+  },
+  error: {
+    textAlign: 'center',
+    color: '#b00020',
+    fontFamily: fonts.regular,
+    marginVertical: 16,
   },
 });

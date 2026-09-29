@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
@@ -8,13 +9,15 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { Role } from '@prisma/client';
+import { DureeUnite, FamilleProduit, Role } from '@prisma/client';
 import {
   IsBoolean,
   IsEmail,
   IsEnum,
+  IsNumber,
   IsOptional,
   IsString,
+  Min,
   MinLength,
 } from 'class-validator';
 import { CurrentUser } from '../identity/current-user.decorator';
@@ -98,6 +101,104 @@ class ReassignCommuneDto {
   zoneId!: string;
 }
 
+class CreateProduitDto {
+  @IsString()
+  @MinLength(2)
+  code!: string;
+
+  @IsString()
+  @MinLength(2)
+  label!: string;
+
+  @IsNumber()
+  @Min(0.01)
+  montantMin!: number;
+
+  @IsNumber()
+  @Min(0.01)
+  montantMax!: number;
+
+  @IsNumber()
+  @Min(1)
+  dureeMin!: number;
+
+  @IsNumber()
+  @Min(1)
+  dureeMax!: number;
+
+  @IsEnum(DureeUnite)
+  dureeUnite!: DureeUnite;
+
+  @IsString()
+  @MinLength(1)
+  refPrefix!: string;
+
+  @IsEnum(FamilleProduit)
+  famille!: FamilleProduit;
+
+  @IsOptional()
+  @IsNumber()
+  sortOrder?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  actif?: boolean;
+}
+
+class UpdateProduitDto {
+  @IsOptional()
+  @IsString()
+  @MinLength(2)
+  code?: string;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(2)
+  label?: string;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0.01)
+  montantMin?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0.01)
+  montantMax?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  dureeMin?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  dureeMax?: number;
+
+  @IsOptional()
+  @IsEnum(DureeUnite)
+  dureeUnite?: DureeUnite;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  refPrefix?: string;
+
+  @IsOptional()
+  @IsEnum(FamilleProduit)
+  famille?: FamilleProduit;
+
+  @IsOptional()
+  @IsNumber()
+  sortOrder?: number;
+}
+
+class ProduitStatusDto {
+  @IsBoolean()
+  actif!: boolean;
+}
+
 @Controller('admin')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(Role.ADMIN)
@@ -109,11 +210,18 @@ export class AdminController {
     return this.admin.overview();
   }
 
+  @Get('dossiers')
+  listDossiers(@Query('q') q?: string) {
+    return this.admin.listDossiers(q);
+  }
+
+  @Get('dossiers/:id')
+  getDossier(@Param('id') id: string) {
+    return this.admin.getDossier(id);
+  }
+
   @Get('users')
-  listUsers(
-    @Query('q') q?: string,
-    @Query('role') role?: Role,
-  ) {
+  listUsers(@Query('q') q?: string, @Query('role') role?: Role) {
     return this.admin.listUsers(q, role);
   }
 
@@ -177,6 +285,45 @@ export class AdminController {
     @Body() dto: ReassignCommuneDto,
   ) {
     return this.admin.reassignCommune(user.id, id, dto.zoneId);
+  }
+
+  @Get('produits')
+  listProduits() {
+    return this.admin.listProduits();
+  }
+
+  @Post('produits')
+  createProduit(
+    @CurrentUser() user: { id: string },
+    @Body() dto: CreateProduitDto,
+  ) {
+    return this.admin.createProduit(user.id, dto);
+  }
+
+  @Patch('produits/:id')
+  updateProduit(
+    @CurrentUser() user: { id: string },
+    @Param('id') id: string,
+    @Body() dto: UpdateProduitDto,
+  ) {
+    return this.admin.updateProduit(user.id, id, dto);
+  }
+
+  @Patch('produits/:id/status')
+  setProduitStatus(
+    @CurrentUser() user: { id: string },
+    @Param('id') id: string,
+    @Body() dto: ProduitStatusDto,
+  ) {
+    return this.admin.setProduitStatus(user.id, id, dto.actif);
+  }
+
+  @Delete('produits/:id')
+  deleteProduit(
+    @CurrentUser() user: { id: string },
+    @Param('id') id: string,
+  ) {
+    return this.admin.deleteProduit(user.id, id);
   }
 
   @Get('audit')

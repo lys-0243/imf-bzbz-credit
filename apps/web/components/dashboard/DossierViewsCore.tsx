@@ -12,7 +12,7 @@ export function matchesDossierQuery(d: SidebarDossier, q: string) {
   if (!s) return true;
   const hay = [
     d.reference,
-    d.type,
+    d.produitLabel || d.type,
     d.etat,
     d.etatLabel,
     formatMontantDossier(d),
@@ -93,15 +93,21 @@ export function DossierListView({
   onSelect,
   loading,
   error,
+  lastColumn = 'address',
 }: {
   title: string;
-  dossiers: SidebarDossier[];
+  dossiers: Array<
+    SidebarDossier & {
+      agent?: { displayName: string } | null;
+    }
+  >;
   selectedId?: string | null;
   search: string;
   onSearchChange: (q: string) => void;
   onSelect: (id: string) => void;
   loading?: boolean;
   error?: string | null;
+  lastColumn?: 'address' | 'agent';
 }) {
   return (
     <div>
@@ -136,7 +142,9 @@ export function DossierListView({
                 <th>Type</th>
                 <th>Montant souhaité</th>
                 <th>État</th>
-                <th>Adresse</th>
+                <th>
+                  {lastColumn === 'agent' ? 'Agent en charge' : 'Adresse'}
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -150,7 +158,7 @@ export function DossierListView({
                     <strong>{d.reference}</strong>
                   </td>
                   <td>{d.client.fullName}</td>
-                  <td>{d.type}</td>
+                  <td>{d.produitLabel || d.type}</td>
                   <td>
                     <strong>{formatMontantDossier(d)}</strong>
                   </td>
@@ -158,8 +166,11 @@ export function DossierListView({
                     <span className={etatBadgeClass(d.etat)}>{d.etatLabel}</span>
                   </td>
                   <td>
-                    {d.client.activityAddress}
-                    {d.client.commune ? ` · ${d.client.commune.name}` : ''}
+                    {lastColumn === 'agent'
+                      ? d.agent?.displayName || '—'
+                      : `${d.client.activityAddress}${
+                          d.client.commune ? ` · ${d.client.commune.name}` : ''
+                        }`}
                   </td>
                 </tr>
               ))}

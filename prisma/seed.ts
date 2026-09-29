@@ -4,6 +4,130 @@ import { KINSHASA_COMMUNES, KINSHASA_ZONES } from '@imf/shared';
 
 const prisma = new PrismaClient();
 
+type SeedProduit = {
+  code: string;
+  label: string;
+  montantMin: number;
+  montantMax: number;
+  dureeMin: number;
+  dureeMax: number;
+  dureeUnite: 'MOIS' | 'SEMAINES';
+  refPrefix: string;
+  famille: 'SALAIRE' | 'ACTIVITE';
+  sortOrder: number;
+};
+
+const SEED_PRODUITS: SeedProduit[] = [
+  {
+    code: 'AGR',
+    label: 'Crédit AGR',
+    montantMin: 100,
+    montantMax: 300000,
+    dureeMin: 2,
+    dureeMax: 36,
+    dureeUnite: 'MOIS',
+    refPrefix: 'AGR',
+    famille: 'ACTIVITE',
+    sortOrder: 10,
+  },
+  {
+    code: 'SALAIRE',
+    label: 'Crédit salaire',
+    montantMin: 100,
+    montantMax: 80000,
+    dureeMin: 2,
+    dureeMax: 36,
+    dureeUnite: 'MOIS',
+    refPrefix: 'SAL',
+    famille: 'SALAIRE',
+    sortOrder: 20,
+  },
+  {
+    code: 'PERSONNEL',
+    label: 'Crédits au Personnel',
+    montantMin: 100,
+    montantMax: 15000,
+    dureeMin: 2,
+    dureeMax: 24,
+    dureeUnite: 'MOIS',
+    refPrefix: 'PER',
+    famille: 'SALAIRE',
+    sortOrder: 30,
+  },
+  {
+    code: 'DARE_DARE',
+    label: 'Crédit dare dare',
+    montantMin: 100,
+    montantMax: 10000,
+    dureeMin: 1,
+    dureeMax: 4,
+    dureeUnite: 'SEMAINES',
+    refPrefix: 'DDR',
+    famille: 'ACTIVITE',
+    sortOrder: 40,
+  },
+  {
+    code: 'AUTO',
+    label: 'Crédit Auto',
+    montantMin: 1000,
+    montantMax: 20000,
+    dureeMin: 12,
+    dureeMax: 24,
+    dureeUnite: 'MOIS',
+    refPrefix: 'AUT',
+    famille: 'ACTIVITE',
+    sortOrder: 50,
+  },
+  {
+    code: 'CONSO_LIKELEMBA',
+    label: 'Crédit Consommation Likelemba',
+    montantMin: 500,
+    montantMax: 10000,
+    dureeMin: 1,
+    dureeMax: 1,
+    dureeUnite: 'MOIS',
+    refPrefix: 'CLK',
+    famille: 'ACTIVITE',
+    sortOrder: 60,
+  },
+  {
+    code: 'AGR_LIKELEMBA',
+    label: 'Crédit AGR Likelemba',
+    montantMin: 100,
+    montantMax: 50000,
+    dureeMin: 1,
+    dureeMax: 12,
+    dureeUnite: 'MOIS',
+    refPrefix: 'ALK',
+    famille: 'ACTIVITE',
+    sortOrder: 70,
+  },
+  {
+    code: 'PROJET',
+    label: 'Crédit projet',
+    montantMin: 100,
+    montantMax: 80000,
+    dureeMin: 2,
+    dureeMax: 36,
+    dureeUnite: 'MOIS',
+    refPrefix: 'PRJ',
+    famille: 'ACTIVITE',
+    sortOrder: 80,
+  },
+  {
+    code: 'LONG_TERME',
+    label: 'Crédit à Long terme',
+    montantMin: 50000,
+    montantMax: 300000,
+    dureeMin: 37,
+    dureeMax: 60,
+    dureeUnite: 'MOIS',
+    refPrefix: 'LTM',
+    famille: 'ACTIVITE',
+    sortOrder: 90,
+  },
+];
+
 type SeedUser = {
   email: string;
   password: string;
@@ -60,6 +184,12 @@ const SEED_USERS: SeedUser[] = [
     role: Role.RECEPTION,
   },
   {
+    email: 'r.mukeba@imf.local',
+    password: 'Mukeba1!',
+    displayName: 'Ruth Mukeba',
+    role: Role.RESPONSABLE_CREDIT,
+  },
+  {
     email: 'c.mwamba@imf.local',
     password: 'Mwamba1!',
     displayName: 'Christian Mwamba',
@@ -110,6 +240,25 @@ const SEED_USERS: SeedUser[] = [
 ];
 
 async function main() {
+  for (const p of SEED_PRODUITS) {
+    await prisma.produitCredit.upsert({
+      where: { code: p.code },
+      update: {
+        label: p.label,
+        montantMin: p.montantMin,
+        montantMax: p.montantMax,
+        dureeMin: p.dureeMin,
+        dureeMax: p.dureeMax,
+        dureeUnite: p.dureeUnite,
+        refPrefix: p.refPrefix,
+        famille: p.famille,
+        sortOrder: p.sortOrder,
+        actif: true,
+      },
+      create: p,
+    });
+  }
+
   for (const z of KINSHASA_ZONES) {
     await prisma.zone.upsert({
       where: { code: z.code },
@@ -137,18 +286,23 @@ async function main() {
   }
 
   for (const u of SEED_USERS) {
+    const email = u.email.trim().toLowerCase();
     const passwordHash = await bcrypt.hash(u.password, 10);
-    const zoneId = u.zoneCode ? zoneByCode[u.zoneCode].id : null;
+    const zoneId = u.zoneCode ? zoneByCode[u.zoneCode]?.id ?? null : null;
+    if (u.zoneCode && !zoneId) {
+      throw new Error(`Zone introuvable pour ${u.email}: ${u.zoneCode}`);
+    }
     await prisma.user.upsert({
-      where: { email: u.email },
+      where: { email },
       update: {
         passwordHash,
         displayName: u.displayName,
         role: u.role,
         zoneId,
+        disabledAt: null,
       },
       create: {
-        email: u.email,
+        email,
         passwordHash,
         displayName: u.displayName,
         role: u.role,
@@ -156,6 +310,10 @@ async function main() {
       },
     });
   }
+
+  console.log(
+    `Seed OK — ${SEED_PRODUITS.length} produits, ${SEED_USERS.length} utilisateurs`,
+  );
 }
 
 main()

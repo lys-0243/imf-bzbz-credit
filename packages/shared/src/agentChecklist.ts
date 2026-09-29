@@ -1,5 +1,5 @@
-/** Aligné sur CREDIT_TYPES (évite import circulaire avec index). */
-export type CreditTypeRef = 'SALAIRE' | 'INDIVIDUEL' | 'DARE_DARE';
+/** Aligné sur FamilleProduit (évite import circulaire avec index). */
+export type FamilleProduitRef = 'SALAIRE' | 'ACTIVITE';
 
 export type ChecklistStage = 'AGENT' | 'LATER';
 export type ChecklistCategory =
@@ -10,7 +10,7 @@ export type ChecklistCategory =
 export type ChecklistInput = 'upload' | 'check' | 'boolean' | 'text';
 
 export type ChecklistWhen = {
-  creditTypes?: CreditTypeRef[];
+  familles?: FamilleProduitRef[];
   etatCivilMarie?: boolean;
   societe?: boolean;
   dat?: boolean;
@@ -70,11 +70,11 @@ export function isSocieteForme(formeJuridique?: string | null): boolean {
 }
 
 export function extractChecklistContext(
-  type: CreditTypeRef,
+  famille: FamilleProduitRef,
   payload: Record<string, any>,
   flags: ChecklistFlags = {},
 ): {
-  type: CreditTypeRef;
+  famille: FamilleProduitRef;
   etatCivilMarie: boolean;
   societe: boolean;
   dat: boolean;
@@ -82,16 +82,14 @@ export function extractChecklistContext(
   hasGarant: boolean;
 } {
   const etatCivil =
-    type === 'SALAIRE'
-      ? undefined
-      : (payload?.demandeur?.etatCivil as string | undefined);
+    (payload?.etatCivil as string | undefined) ??
+    (payload?.demandeur?.etatCivil as string | undefined);
   const forme =
-    type === 'SALAIRE'
-      ? undefined
-      : (payload?.business?.formeJuridique as string | undefined);
+    (payload?.business?.formeJuridique as string | undefined) ??
+    (payload?.formeJuridique as string | undefined);
 
   return {
-    type,
+    famille,
     etatCivilMarie: etatCivil === 'Marie',
     societe: isSocieteForme(forme),
     dat: Boolean(flags.dat),
@@ -105,7 +103,7 @@ function matchesWhen(
   ctx: ReturnType<typeof extractChecklistContext>,
 ): boolean {
   if (!when) return true;
-  if (when.creditTypes && !when.creditTypes.includes(ctx.type)) return false;
+  if (when.familles && !when.familles.includes(ctx.famille)) return false;
   if (when.etatCivilMarie === true && !ctx.etatCivilMarie) return false;
   if (when.societe === true && !ctx.societe) return false;
   if (when.dat === true && !ctx.dat) return false;
@@ -188,7 +186,7 @@ export const AGENT_CHECKLIST_CATALOG: ChecklistItemDef[] = [
     input: 'upload',
     kind: 'contrat_travail',
     required: true,
-    when: { creditTypes: ['SALAIRE'] },
+    when: { familles: ['SALAIRE'] },
   },
   {
     id: 'fiches_salaire_3',
@@ -198,7 +196,7 @@ export const AGENT_CHECKLIST_CATALOG: ChecklistItemDef[] = [
     input: 'upload',
     kind: 'fiches_salaire_3',
     required: true,
-    when: { creditTypes: ['SALAIRE'] },
+    when: { familles: ['SALAIRE'] },
   },
   {
     id: 'contrat_dat',
@@ -308,7 +306,7 @@ export const AGENT_CHECKLIST_CATALOG: ChecklistItemDef[] = [
     input: 'upload',
     kind: 'doc_rccm',
     required: true,
-    when: { creditTypes: ['INDIVIDUEL', 'DARE_DARE'] },
+    when: { familles: ['ACTIVITE'] },
   },
   {
     id: 'doc_patente',
@@ -318,7 +316,7 @@ export const AGENT_CHECKLIST_CATALOG: ChecklistItemDef[] = [
     input: 'upload',
     kind: 'doc_patente',
     required: true,
-    when: { creditTypes: ['INDIVIDUEL', 'DARE_DARE'] },
+    when: { familles: ['ACTIVITE'] },
   },
   {
     id: 'doc_id_nat',
@@ -328,7 +326,7 @@ export const AGENT_CHECKLIST_CATALOG: ChecklistItemDef[] = [
     input: 'upload',
     kind: 'doc_id_nat',
     required: true,
-    when: { creditTypes: ['INDIVIDUEL', 'DARE_DARE'] },
+    when: { familles: ['ACTIVITE'] },
   },
   {
     id: 'doc_ao',
@@ -338,7 +336,7 @@ export const AGENT_CHECKLIST_CATALOG: ChecklistItemDef[] = [
     input: 'upload',
     kind: 'doc_ao',
     required: false,
-    when: { creditTypes: ['INDIVIDUEL', 'DARE_DARE'] },
+    when: { familles: ['ACTIVITE'] },
   },
   {
     id: 'doc_autorisation_exploitation',
@@ -348,7 +346,7 @@ export const AGENT_CHECKLIST_CATALOG: ChecklistItemDef[] = [
     input: 'upload',
     kind: 'doc_autorisation_exploitation',
     required: false,
-    when: { creditTypes: ['INDIVIDUEL', 'DARE_DARE'] },
+    when: { familles: ['ACTIVITE'] },
   },
   {
     id: 'contrat_bail_business',
@@ -358,7 +356,7 @@ export const AGENT_CHECKLIST_CATALOG: ChecklistItemDef[] = [
     input: 'upload',
     kind: 'contrat_bail_business',
     required: true,
-    when: { creditTypes: ['INDIVIDUEL', 'DARE_DARE'] },
+    when: { familles: ['ACTIVITE'] },
   },
   {
     id: 'contrat_bail_domicile',
@@ -377,7 +375,7 @@ export const AGENT_CHECKLIST_CATALOG: ChecklistItemDef[] = [
     input: 'upload',
     kind: 'photo_business',
     required: true,
-    when: { creditTypes: ['INDIVIDUEL', 'DARE_DARE'] },
+    when: { familles: ['ACTIVITE'] },
   },
   {
     id: 'photo_garanties',
@@ -396,7 +394,7 @@ export const AGENT_CHECKLIST_CATALOG: ChecklistItemDef[] = [
     input: 'upload',
     kind: 'factures_marchandises',
     required: false,
-    when: { creditTypes: ['INDIVIDUEL', 'DARE_DARE'] },
+    when: { familles: ['ACTIVITE'] },
   },
 
   // —— GARANT ——
@@ -512,12 +510,12 @@ export const AGENT_CHECKLIST_CATALOG: ChecklistItemDef[] = [
 ];
 
 export function getApplicableChecklistItems(
-  type: CreditTypeRef,
+  famille: FamilleProduitRef,
   payload: Record<string, any>,
   flags: ChecklistFlags = {},
   stage: ChecklistStage | 'ALL' = 'AGENT',
 ): ChecklistItemDef[] {
-  const ctx = extractChecklistContext(type, payload, flags);
+  const ctx = extractChecklistContext(famille, payload, flags);
   return AGENT_CHECKLIST_CATALOG.filter((item) => {
     if (stage !== 'ALL' && item.stage !== stage) return false;
     return matchesWhen(item.when, ctx);
@@ -531,14 +529,14 @@ export type ChecklistValidationIssue = {
 };
 
 export function validateAgentChecklist(
-  type: CreditTypeRef,
+  famille: FamilleProduitRef,
   payload: Record<string, any>,
   answers: ChecklistAnswers,
   uploadedKinds: Set<string>,
   rapportTexte?: string | null,
 ): ChecklistValidationIssue[] {
   const flags = answers.flags ?? {};
-  const items = getApplicableChecklistItems(type, payload, flags, 'AGENT');
+  const items = getApplicableChecklistItems(famille, payload, flags, 'AGENT');
   const issues: ChecklistValidationIssue[] = [];
 
   for (const item of items) {

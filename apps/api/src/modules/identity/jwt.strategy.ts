@@ -18,7 +18,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       where: { id: payload.sub },
       include: { zone: true },
     });
-    if (!user) return null;
+    if (!user || user.disabledAt) return null;
     return {
       id: user.id,
       email: user.email,

@@ -4,8 +4,15 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { DossierEtat, Prisma, Role } from '@prisma/client';
+import {
+  DossierEtat,
+  DureeUnite,
+  FamilleProduit,
+  Prisma,
+  Role,
+} from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
+import { DOSSIER_ETAT_LABELS, montantSouhaiteFromPayload } from '@imf/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 
@@ -80,11 +87,13 @@ export class AdminService {
     const actorMap = Object.fromEntries(actors.map((a) => [a.id, a]));
 
     const activeEtats: DossierEtat[] = [
+      DossierEtat.EN_ATTENTE_ATTRIBUTION_AGENT,
       DossierEtat.AFFECTE,
       DossierEtat.DESCENTE,
       DossierEtat.RETOUR_AGENT,
       DossierEtat.RAPPORT_AGENT,
       DossierEtat.SCORING,
+      DossierEtat.EN_ATTENTE_VALIDATION_RC,
       DossierEtat.ANALYSTE,
       DossierEtat.RETOUR_ANALYSTE,
       DossierEtat.CONFORMITE,
@@ -119,6 +128,75 @@ export class AdminService {
         actor: a.actorId ? actorMap[a.actorId] ?? null : null,
       })),
       activeDossiersHint: activeEtats,
+    };
+  }
+
+  async listDossiers(q?: string) {
+    const term = (q || '').trim();
+    const where: Prisma.DossierWhereInput = term
+      ? {
+          OR: [
+            { reference: { contains: term, mode: 'insensitive' } },
+            { client: { fullName: { contains: term, mode: 'insensitive' } } },
+            { client: { phone: { contains: term, mode: 'insensitive' } } },
+            { produit: { label: { contains: term, mode: 'insensitive' } } },
+            { produit: { code: { contains: term, mode: 'insensitive' } } },
+          ],
+        }
+      : {};
+    const rows = await this.prisma.dossier.findMany({
+      where,
+      orderBy: { updatedAt: 'desc' },
+      take: 200,
+      include: {
+        client: { include: { zone: true, commune: true } },
+        agent: { select: { id: true, displayName: true, email: true } },
+        createdBy: { select: { id: true, displayName: true, email: true } },
+        produit: true,
+      },
+    });
+    return rows.map((d) => {
+      const montant = montantSouhaiteFromPayload(
+        d.payload as Record<string, any>,
+      );
+      return {
+        id: d.id,
+        reference: d.reference,
+        type: d.produit.code,
+        produit: d.produit,
+        produitLabel: d.produit.label,
+        etat: d.etat,
+        etatLabel: DOSSIER_ETAT_LABELS[d.etat],
+        client: d.client,
+        agent: d.agent,
+        createdBy: d.createdBy,
+        montantSouhaite: montant.montantSouhaite,
+        devise: montant.devise,
+        createdAt: d.createdAt,
+        updatedAt: d.updatedAt,
+      };
+    });
+  }
+
+  async getDossier(id: string) {
+    const d = await this.prisma.dossier.findUnique({
+      where: { id },
+      include: {
+        client: { include: { zone: true, commune: true } },
+        agent: { select: { id: true, displayName: true, email: true } },
+        createdBy: { select: { id: true, displayName: true, email: true } },
+        produit: true,
+        pieces: { orderBy: { createdAt: 'asc' } },
+        visite: true,
+        transitions: { orderBy: { createdAt: 'asc' } },
+      },
+    });
+    if (!d) throw new NotFoundException('Dossier introuvable');
+    return {
+      ...d,
+      type: d.produit.code,
+      etatLabel: DOSSIER_ETAT_LABELS[d.etat],
+      editable: false,
     };
   }
 
@@ -405,6 +483,192 @@ export class AdminService {
       },
     });
     return updated;
+  }
+
+  async listProduits() {
+    return this.prisma.produitCredit.findMany({
+      orderBy: [{ sortOrder: 'asc' }, { label: 'asc' }],
+      include: { _count: { select: { dossiers: true } } },
+    });
+  }
+
+  private assertProduitBornes(data: {
+    montantMin: number;
+    montantMax: number;
+    dureeMin: number;
+    dureeMax: number;
+  }) {
+    if (!(data.montantMin > 0) || !(data.montantMax > 0)) {
+      throw new BadRequestException('Montants invalides');
+    }
+    if (data.montantMin > data.montantMax) {
+      throw new BadRequestException('montantMin doit être ≤ montantMax');
+    }
+    if (!(data.dureeMin > 0) || !(data.dureeMax > 0)) {
+      throw new BadRequestException('Durées invalides');
+    }
+    if (data.dureeMin > data.dureeMax) {
+      throw new BadRequestException('dureeMin doit être ≤ dureeMax');
+    }
+  }
+
+  async createProduit(
+    actorId: string,
+    data: {
+      code: string;
+      label: string;
+      montantMin: number;
+      montantMax: number;
+      dureeMin: number;
+      dureeMax: number;
+      dureeUnite: DureeUnite;
+      refPrefix: string;
+      famille: FamilleProduit;
+      sortOrder?: number;
+      actif?: boolean;
+    },
+  ) {
+    const code = data.code.trim().toUpperCase().replace(/\s+/g, '_');
+    const label = data.label.trim();
+    const refPrefix = data.refPrefix.trim().toUpperCase();
+    if (!code || !label || !refPrefix) {
+      throw new BadRequestException('code, label et refPrefix requis');
+    }
+    this.assertProduitBornes(data);
+    const existing = await this.prisma.produitCredit.findUnique({
+      where: { code },
+    });
+    if (existing) throw new ConflictException('Code produit déjà utilisé');
+
+    const produit = await this.prisma.produitCredit.create({
+      data: {
+        code,
+        label,
+        montantMin: data.montantMin,
+        montantMax: data.montantMax,
+        dureeMin: data.dureeMin,
+        dureeMax: data.dureeMax,
+        dureeUnite: data.dureeUnite,
+        refPrefix,
+        famille: data.famille,
+        sortOrder: data.sortOrder ?? 100,
+        actif: data.actif ?? true,
+      },
+    });
+    await this.audit.log({
+      actorId,
+      action: 'PRODUIT_CREATED',
+      entityType: 'PRODUIT',
+      entityId: produit.id,
+      payload: { code: produit.code, label: produit.label },
+    });
+    return produit;
+  }
+
+  async updateProduit(
+    actorId: string,
+    id: string,
+    data: {
+      code?: string;
+      label?: string;
+      montantMin?: number;
+      montantMax?: number;
+      dureeMin?: number;
+      dureeMax?: number;
+      dureeUnite?: DureeUnite;
+      refPrefix?: string;
+      famille?: FamilleProduit;
+      sortOrder?: number;
+    },
+  ) {
+    const existing = await this.prisma.produitCredit.findUnique({
+      where: { id },
+    });
+    if (!existing) throw new NotFoundException('Produit introuvable');
+
+    if (data.code) {
+      const code = data.code.trim().toUpperCase().replace(/\s+/g, '_');
+      const clash = await this.prisma.produitCredit.findFirst({
+        where: { code, NOT: { id } },
+      });
+      if (clash) throw new ConflictException('Code produit déjà utilisé');
+    }
+
+    const montantMin = data.montantMin ?? existing.montantMin;
+    const montantMax = data.montantMax ?? existing.montantMax;
+    const dureeMin = data.dureeMin ?? existing.dureeMin;
+    const dureeMax = data.dureeMax ?? existing.dureeMax;
+    this.assertProduitBornes({ montantMin, montantMax, dureeMin, dureeMax });
+
+    const produit = await this.prisma.produitCredit.update({
+      where: { id },
+      data: {
+        ...(data.code
+          ? { code: data.code.trim().toUpperCase().replace(/\s+/g, '_') }
+          : {}),
+        ...(data.label ? { label: data.label.trim() } : {}),
+        ...(data.montantMin != null ? { montantMin: data.montantMin } : {}),
+        ...(data.montantMax != null ? { montantMax: data.montantMax } : {}),
+        ...(data.dureeMin != null ? { dureeMin: data.dureeMin } : {}),
+        ...(data.dureeMax != null ? { dureeMax: data.dureeMax } : {}),
+        ...(data.dureeUnite ? { dureeUnite: data.dureeUnite } : {}),
+        ...(data.refPrefix
+          ? { refPrefix: data.refPrefix.trim().toUpperCase() }
+          : {}),
+        ...(data.famille ? { famille: data.famille } : {}),
+        ...(data.sortOrder != null ? { sortOrder: data.sortOrder } : {}),
+      },
+    });
+    await this.audit.log({
+      actorId,
+      action: 'PRODUIT_UPDATED',
+      entityType: 'PRODUIT',
+      entityId: produit.id,
+      payload: { code: produit.code, label: produit.label },
+    });
+    return produit;
+  }
+
+  async setProduitStatus(actorId: string, id: string, actif: boolean) {
+    const existing = await this.prisma.produitCredit.findUnique({
+      where: { id },
+    });
+    if (!existing) throw new NotFoundException('Produit introuvable');
+
+    const produit = await this.prisma.produitCredit.update({
+      where: { id },
+      data: { actif },
+    });
+    await this.audit.log({
+      actorId,
+      action: actif ? 'PRODUIT_ENABLED' : 'PRODUIT_DISABLED',
+      entityType: 'PRODUIT',
+      entityId: produit.id,
+      payload: { code: produit.code, label: produit.label },
+    });
+    return produit;
+  }
+
+  async deleteProduit(actorId: string, id: string) {
+    const existing = await this.prisma.produitCredit.findUnique({
+      where: { id },
+      include: { _count: { select: { dossiers: true } } },
+    });
+    if (!existing) throw new NotFoundException('Produit introuvable');
+    if (existing._count.dossiers > 0) {
+      throw new BadRequestException(
+        'Des dossiers sont liés à ce produit — désactivez-le plutôt',
+      );
+    }
+    await this.prisma.produitCredit.delete({ where: { id } });
+    await this.audit.log({
+      actorId,
+      action: 'PRODUIT_DELETED',
+      entityType: 'PRODUIT',
+      entityId: id,
+      payload: { code: existing.code, label: existing.label },
+    });
+    return { ok: true };
   }
 
   async listAudit(filters: {

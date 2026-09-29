@@ -8,16 +8,16 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { CreditType, Role } from '@prisma/client';
-import { IsEnum, IsObject } from 'class-validator';
+import { Role } from '@prisma/client';
+import { IsObject, IsString } from 'class-validator';
 import { CurrentUser } from '../identity/current-user.decorator';
 import { JwtAuthGuard } from '../identity/jwt-auth.guard';
 import { Roles, RolesGuard } from '../identity/roles.guard';
 import { DemandesService } from './demandes.service';
 
 class CreateDossierDto {
-  @IsEnum(CreditType)
-  type!: CreditType;
+  @IsString()
+  produitId!: string;
 
   @IsObject()
   payload!: Record<string, unknown>;
@@ -44,22 +44,42 @@ export class DemandesController {
     return this.demandes.listCommunes();
   }
 
+  @Get('produits')
+  @Roles(
+    Role.RECEPTION,
+    Role.AGENT,
+    Role.ANALYSTE,
+    Role.CONFORMITE,
+    Role.DG,
+    Role.CA,
+    Role.ADMIN,
+  )
+  produits() {
+    return this.demandes.listProduitsActifs();
+  }
+
   @Post('dossiers')
   create(
     @CurrentUser() user: { id: string; role: Role },
     @Body() dto: CreateDossierDto,
   ) {
-    return this.demandes.create(user, dto.type, dto.payload);
+    return this.demandes.create(user, dto.produitId, dto.payload);
   }
 
   @Get('dossiers')
-  search(@Query('q') q?: string) {
-    return this.demandes.search(q);
+  search(
+    @CurrentUser() user: { id: string; role: Role },
+    @Query('q') q?: string,
+  ) {
+    return this.demandes.search(user, q);
   }
 
   @Get('dossiers/:id')
-  one(@Param('id') id: string) {
-    return this.demandes.findOne(id);
+  one(
+    @CurrentUser() user: { id: string; role: Role },
+    @Param('id') id: string,
+  ) {
+    return this.demandes.findOne(user, id);
   }
 
   @Patch('dossiers/:id')
@@ -72,7 +92,10 @@ export class DemandesController {
   }
 
   @Get('dossiers/:id/timeline')
-  timeline(@Param('id') id: string) {
-    return this.demandes.timeline(id);
+  timeline(
+    @CurrentUser() user: { id: string; role: Role },
+    @Param('id') id: string,
+  ) {
+    return this.demandes.timeline(user, id);
   }
 }

@@ -9,9 +9,10 @@ export type SidebarDossier = {
   id: string;
   reference: string;
   type: string;
+  produitLabel?: string | null;
   etat: string;
   etatLabel: string;
-  bucket?: 'nouveaux' | 'en_cours' | 'retournes' | 'termines';
+  bucket?: string;
   updatedAt?: string;
   montantSouhaite?: number | null;
   devise?: string | null;
@@ -34,20 +35,28 @@ export function formatMontantDossier(d: SidebarDossier): string {
 export type NavKey =
   | 'dashboard'
   | 'nouveaux'
+  | 'file'
+  | 'a_valider'
   | 'dossiers'
   | 'retournes'
   | 'termines'
+  | 'soumis'
+  | 'agents'
   | 'utilisateurs'
   | 'zones'
+  | 'produits'
   | 'journal'
   | 'profile'
   | 'logout';
 
 export type NavCounts = {
   nouveaux?: number;
+  file?: number;
+  aValider?: number;
   enCours?: number;
   retournes?: number;
   termines?: number;
+  soumis?: number;
 };
 
 type NavItem = {
@@ -115,20 +124,80 @@ const ANALYSTE_NAV: NavItem[] = [
 
 const ADMIN_NAV: NavItem[] = [
   { key: 'dashboard', label: 'Tableau de bord', href: '/admin' },
+  { key: 'dossiers', label: 'Dossiers', href: '/admin/dossiers' },
   { key: 'utilisateurs', label: 'Utilisateurs', href: '/admin/utilisateurs' },
   { key: 'zones', label: 'Zones', href: '/admin/zones' },
+  { key: 'produits', label: 'Produits', href: '/admin/produits' },
   { key: 'journal', label: 'Journal d’activité', href: '/admin/journal' },
 ];
 
-function activeKey(
-  pathname: string,
-  base: 'agent' | 'analyste' | 'admin',
-): NavKey {
+const RESPONSABLE_CREDIT_NAV: NavItem[] = [
+  {
+    key: 'dashboard',
+    label: 'Tableau de bord',
+    href: '/responsable-credit',
+  },
+  {
+    key: 'file',
+    label: 'File d’attente',
+    href: '/responsable-credit/file',
+    countKey: 'file',
+  },
+  {
+    key: 'dossiers',
+    label: 'Dossiers en cours',
+    href: '/responsable-credit/en-cours',
+    countKey: 'enCours',
+  },
+  {
+    key: 'a_valider',
+    label: 'À valider',
+    href: '/responsable-credit/a-valider',
+    countKey: 'aValider',
+  },
+  {
+    key: 'retournes',
+    label: 'Renvoyés',
+    href: '/responsable-credit/renvoyes',
+    countKey: 'retournes',
+  },
+  {
+    key: 'soumis',
+    label: 'Soumis',
+    href: '/responsable-credit/soumis',
+    countKey: 'soumis',
+  },
+  {
+    key: 'agents',
+    label: 'Agents',
+    href: '/responsable-credit/agents',
+  },
+];
+
+type ShellBase = 'agent' | 'analyste' | 'admin' | 'responsable-credit';
+
+function activeKey(pathname: string, base: ShellBase): NavKey {
   if (pathname.startsWith(`/${base}/profile`)) return 'profile';
   if (base === 'admin') {
+    if (pathname.startsWith('/admin/dossiers')) return 'dossiers';
     if (pathname.startsWith('/admin/utilisateurs')) return 'utilisateurs';
     if (pathname.startsWith('/admin/zones')) return 'zones';
+    if (pathname.startsWith('/admin/produits')) return 'produits';
     if (pathname.startsWith('/admin/journal')) return 'journal';
+    return 'dashboard';
+  }
+  if (base === 'responsable-credit') {
+    if (pathname.startsWith('/responsable-credit/file')) return 'file';
+    if (pathname.startsWith('/responsable-credit/en-cours')) return 'dossiers';
+    if (pathname.startsWith('/responsable-credit/a-valider')) return 'a_valider';
+    if (pathname.startsWith('/responsable-credit/renvoyes')) return 'retournes';
+    if (pathname.startsWith('/responsable-credit/soumis')) return 'soumis';
+    if (pathname.startsWith('/responsable-credit/agents')) return 'agents';
+    if (pathname === '/responsable-credit' || pathname === '/responsable-credit/') {
+      return 'dashboard';
+    }
+    const rest = pathname.slice('/responsable-credit/'.length);
+    if (rest && !rest.includes('/')) return 'dossiers';
     return 'dashboard';
   }
   if (pathname.startsWith(`/${base}/nouveaux`)) return 'nouveaux';
@@ -147,7 +216,7 @@ export function DashboardShell({
   counts,
   children,
 }: {
-  base: 'agent' | 'analyste' | 'admin';
+  base: ShellBase;
   counts?: NavCounts;
   children: ReactNode;
 }) {
@@ -159,7 +228,9 @@ export function DashboardShell({
       ? AGENT_NAV
       : base === 'analyste'
         ? ANALYSTE_NAV
-        : ADMIN_NAV;
+        : base === 'responsable-credit'
+          ? RESPONSABLE_CREDIT_NAV
+          : ADMIN_NAV;
   const current = activeKey(pathname, base);
   const profileHref = `/${base}/profile`;
   const photoUrl =
@@ -259,25 +330,14 @@ export function DashboardShell({
   );
 }
 
-export function DashboardEmpty({
-  title = 'Sélectionnez un dossier',
-  hint = 'Choisissez un dossier dans la liste pour afficher ses détails.',
-}: {
-  title?: string;
-  hint?: string;
-}) {
-  return (
-    <div className={styles.emptyState}>
-      <div>
-        <h2>{title}</h2>
-        <p>{hint}</p>
-      </div>
-    </div>
-  );
-}
-
 export function etatBadgeClass(etat: string) {
-  if (etat === 'ANALYSTE' || etat === 'DESCENTE') return styles.badgeOk;
+  if (
+    etat === 'ANALYSTE' ||
+    etat === 'DESCENTE' ||
+    etat === 'EN_ATTENTE_VALIDATION_RC'
+  ) {
+    return styles.badgeOk;
+  }
   if (etat === 'REJETE' || etat === 'RETOUR_AGENT' || etat === 'RETOUR_ANALYSTE') {
     return `${styles.badge} ${styles.badgeWarn}`;
   }
@@ -326,6 +386,35 @@ function NavIcon({ name }: { name: NavKey }) {
           <path d="M12 5v14M5 12h14" />
         </svg>
       );
+    case 'file':
+      return (
+        <svg {...props}>
+          <path d="M8 6h13M8 12h13M8 18h13" />
+          <path d="M3 6h.01M3 12h.01M3 18h.01" />
+        </svg>
+      );
+    case 'a_valider':
+      return (
+        <svg {...props}>
+          <circle cx="12" cy="12" r="8" />
+          <path d="M12 8v4l3 2" />
+        </svg>
+      );
+    case 'soumis':
+      return (
+        <svg {...props}>
+          <path d="M12 19V5M5 12l7-7 7 7" />
+        </svg>
+      );
+    case 'agents':
+      return (
+        <svg {...props}>
+          <circle cx="9" cy="8" r="3.2" />
+          <path d="M3 19a6 6 0 0112 0" />
+          <circle cx="17" cy="9" r="2.5" />
+          <path d="M15 19a4.5 4.5 0 016 0" />
+        </svg>
+      );
     case 'dossiers':
       return (
         <svg {...props}>
@@ -359,6 +448,15 @@ function NavIcon({ name }: { name: NavKey }) {
         <svg {...props}>
           <path d="M12 21s7-4.5 7-11a7 7 0 10-14 0c0 6.5 7 11 7 11z" />
           <circle cx="12" cy="10" r="2.5" />
+        </svg>
+      );
+    case 'produits':
+      return (
+        <svg {...props}>
+          <rect x="4" y="4" width="7" height="7" rx="1.5" />
+          <rect x="13" y="4" width="7" height="7" rx="1.5" />
+          <rect x="4" y="13" width="7" height="7" rx="1.5" />
+          <rect x="13" y="13" width="7" height="7" rx="1.5" />
         </svg>
       );
     case 'journal':

@@ -10,6 +10,7 @@ datasource db {
 enum Role {
   RECEPTION
   AGENT
+  RESPONSABLE_CREDIT
   ANALYSTE
   CONFORMITE
   DG
@@ -17,18 +18,24 @@ enum Role {
   ADMIN
 }
 
-enum CreditType {
+enum DureeUnite {
+  MOIS
+  SEMAINES
+}
+
+enum FamilleProduit {
   SALAIRE
-  INDIVIDUEL
-  DARE_DARE
+  ACTIVITE
 }
 
 enum DossierEtat {
   ENREGISTRE
+  EN_ATTENTE_ATTRIBUTION_AGENT
   AFFECTE
   DESCENTE
   RAPPORT_AGENT
   SCORING
+  EN_ATTENTE_VALIDATION_RC
   ANALYSTE
   RETOUR_AGENT
   CONFORMITE
@@ -51,6 +58,7 @@ model User {
   disabledAt    DateTime?
   createdAt     DateTime  @default(now())
   dossiersAgent Dossier[] @relation("AgentDossiers")
+  dossiersCrees Dossier[] @relation("CreatedByDossiers")
 }
 
 model Zone {
@@ -90,14 +98,37 @@ model Client {
   @@index([communeId])
 }
 
+model ProduitCredit {
+  id         String         @id @default(cuid())
+  code       String         @unique
+  label      String
+  montantMin Float
+  montantMax Float
+  dureeMin   Int
+  dureeMax   Int
+  dureeUnite DureeUnite
+  refPrefix  String
+  famille    FamilleProduit
+  actif      Boolean        @default(true)
+  sortOrder  Int            @default(0)
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+  dossiers   Dossier[]
+
+  @@index([actif, sortOrder])
+}
+
 model Dossier {
   id            String         @id @default(cuid())
   reference     String         @unique
-  type          CreditType
+  produitId     String
+  produit       ProduitCredit  @relation(fields: [produitId], references: [id])
   etat          DossierEtat    @default(ENREGISTRE)
   payload       Json
   clientId      String
   client        Client         @relation(fields: [clientId], references: [id])
+  createdById   String?
+  createdBy     User?          @relation("CreatedByDossiers", fields: [createdById], references: [id])
   agentId       String?
   agent         User?          @relation("AgentDossiers", fields: [agentId], references: [id])
   agentValideAt DateTime?
@@ -113,6 +144,8 @@ model Dossier {
   @@index([reference])
   @@index([etat])
   @@index([agentId])
+  @@index([produitId])
+  @@index([createdById])
 }
 
 model VisiteTerrain {

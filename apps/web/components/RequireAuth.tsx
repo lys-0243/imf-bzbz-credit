@@ -8,6 +8,7 @@ const ROLE_HOME: Record<string, string> = {
   AGENT: '/agent',
   ANALYSTE: '/analyste',
   RECEPTION: '/reception',
+  RESPONSABLE_CREDIT: '/responsable-credit',
   CONFORMITE: '/conformite',
   DG: '/direction',
   CA: '/direction',

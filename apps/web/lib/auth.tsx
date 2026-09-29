@@ -21,7 +21,11 @@ import {
 type AuthState = {
   user: WebUser | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<WebUser>;
+  login: (
+    email: string,
+    password: string,
+    remember?: boolean,
+  ) => Promise<WebUser>;
   logout: () => void;
   refresh: () => Promise<void>;
 };
@@ -55,11 +59,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     void refresh();
   }, [refresh]);
 
-  const login = useCallback(async (email: string, password: string) => {
-    const u = await apiLogin(email, password);
-    setUser(u);
-    return u;
-  }, []);
+  const login = useCallback(
+    async (email: string, password: string, remember = true) => {
+      const u = await apiLogin(email, password, remember);
+      setUser(u);
+      return u;
+    },
+    [],
+  );
 
   const logout = useCallback(() => {
     clearSession();

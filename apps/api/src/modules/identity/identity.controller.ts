@@ -20,6 +20,7 @@ export class IdentityController {
   @Roles(
     Role.RECEPTION,
     Role.AGENT,
+    Role.RESPONSABLE_CREDIT,
     Role.ANALYSTE,
     Role.CONFORMITE,
     Role.DG,

@@ -38,6 +38,11 @@ class UploadMetaDto {
   kind!: string;
 }
 
+class PayloadDto {
+  @IsObject()
+  enrichment!: Record<string, unknown>;
+}
+
 @Controller()
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class TerrainController {
@@ -84,6 +89,16 @@ export class TerrainController {
     @Body() dto: ChecklistDto,
   ) {
     return this.terrain.saveChecklist(user, id, dto.answers);
+  }
+
+  @Put('agent/dossiers/:id/payload')
+  @Roles(Role.AGENT)
+  payload(
+    @CurrentUser() user: { id: string; role: Role },
+    @Param('id') id: string,
+    @Body() dto: PayloadDto,
+  ) {
+    return this.terrain.savePayload(user, id, dto.enrichment);
   }
 
   @Post('agent/dossiers/:id/rapport')

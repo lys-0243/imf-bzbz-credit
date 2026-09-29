@@ -8,10 +8,18 @@ import { DossierEtat, Prisma, Role } from '@prisma/client';
 import {
   ChecklistAnswers,
   DOSSIER_ETAT_LABELS,
+  clientFieldsFromPayload,
   getApplicableChecklistItems,
+  mergeAgentEnrichmentIntoPayload,
   montantSouhaiteFromPayload,
+  parseAgentEnrichment,
   validateAgentChecklist,
+  validateAgentEnrichmentComplete,
+  type AgentActiviteEnrichment,
+  type AgentSalaireEnrichment,
+  type FamilleProduit,
 } from '@imf/shared';
+import { ZodError } from 'zod';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { DocumentsService } from '../documents/documents.service';
@@ -61,18 +69,20 @@ export class TerrainService {
       orderBy: { updatedAt: 'desc' },
       include: {
         client: { include: { zone: true, commune: true } },
+        produit: true,
         visite: true,
       },
     });
     return rows.map((d) => {
       const montant = montantSouhaiteFromPayload(
-        d.type,
         d.payload as Record<string, any>,
       );
       return {
         id: d.id,
         reference: d.reference,
-        type: d.type,
+        produit: d.produit,
+        produitLabel: d.produit.label,
+        type: d.produit.code,
         etat: d.etat,
         etatLabel: DOSSIER_ETAT_LABELS[d.etat],
         client: d.client,
@@ -106,6 +116,7 @@ export class TerrainService {
       include: {
         client: { include: { zone: true, commune: true } },
         agent: { select: { id: true, displayName: true, email: true } },
+        produit: true,
         pieces: { orderBy: { createdAt: 'asc' } },
         visite: true,
         transitions: { orderBy: { createdAt: 'asc' } },
@@ -121,7 +132,7 @@ export class TerrainService {
     const flags = answers.flags ?? { hasGarant: true };
     const payload = (d.payload ?? {}) as Record<string, any>;
     const checklist = getApplicableChecklistItems(
-      d.type,
+      d.produit.famille,
       payload,
       flags,
       'AGENT',
@@ -129,6 +140,7 @@ export class TerrainService {
 
     return {
       ...d,
+      type: d.produit.code,
       etatLabel: DOSSIER_ETAT_LABELS[d.etat],
       editable: d.agentValideAt == null,
       checklist,
@@ -247,6 +259,7 @@ export class TerrainService {
       include: {
         client: { include: { commune: true, zone: true } },
         agent: { select: { displayName: true } },
+        produit: true,
         pieces: true,
         visite: true,
         transitions: { orderBy: { createdAt: 'asc' } },
@@ -259,13 +272,12 @@ export class TerrainService {
     }
 
     const payload = (d.payload ?? {}) as Record<string, any>;
-    const { montantSouhaite, devise } = montantSouhaiteFromPayload(
-      d.type,
-      payload,
-    );
+    const { montantSouhaite, devise } = montantSouhaiteFromPayload(payload);
     const context = {
       reference: d.reference,
-      type: d.type,
+      type: d.produit.code,
+      produitLabel: d.produit.label,
+      famille: d.produit.famille,
       etat: d.etat,
       etatLabel: DOSSIER_ETAT_LABELS[d.etat],
       client: {
@@ -338,7 +350,8 @@ export class TerrainService {
     const payload = (context.payload ?? {}) as Record<string, any>;
     const montant = context.montantSouhaite;
     const devise = context.devise || '';
-    const type = String(context.type || '');
+    const type = String(context.produitLabel || context.type || '');
+    const famille = String(context.famille || '');
     const pieces = Array.isArray(context.pieces)
       ? (context.pieces as string[])
       : [];
@@ -352,17 +365,21 @@ export class TerrainService {
       `Montant sollicité : ${montant != null ? `${devise} ${Number(montant).toLocaleString('fr-FR')}` : 'non précisé'}.`,
     ];
 
-    if (type === 'SALAIRE') {
+    if (famille === 'SALAIRE' || payload.societe != null) {
       lines.push(
         `Emploi : ${payload.societe || '—'}, fonction ${payload.fonctionService || '—'}, salaire net déclaré ${payload.salaireNet || '—'}, capacité mensuelle ${payload.capaciteMensuelle || '—'}. Motif : ${payload.motifCredit || '—'}.`,
       );
-    } else {
+    } else if (payload.demandeur) {
       const dem = payload.demandeur ?? {};
       const biz = payload.business ?? {};
       const pret = payload.pret ?? {};
       lines.push(
         `Demandeur : ${[dem.prenom, dem.nom, dem.postNom].filter(Boolean).join(' ') || client.fullName || '—'}. Activité : ${biz.nomBusiness || '—'} (${biz.typeBusiness || '—'}, secteur ${biz.secteurBusiness || '—'}).`,
         `Prêt souhaité : ${pret.montantDesire != null ? `${pret.devise || ''} ${pret.montantDesire}` : '—'} sur ${pret.dureeMois || '—'} mois. But : ${pret.butInvestissement || '—'}.`,
+      );
+    } else {
+      lines.push(
+        `Client : ${[payload.prenom, payload.nom, payload.postNom].filter(Boolean).join(' ') || client.fullName || '—'}. Motif : ${payload.motifCredit || '—'}. Durée : ${payload.duree ?? '—'}.`,
       );
     }
 
@@ -426,6 +443,88 @@ export class TerrainService {
     return this.getOne(user, id);
   }
 
+  async savePayload(user: AuthUser, id: string, enrichmentRaw: unknown) {
+    const d = await this.prisma.dossier.findUnique({
+      where: { id },
+      include: { produit: true },
+    });
+    if (!d) throw new NotFoundException('Dossier introuvable');
+    this.assertAgentOwns(d, user);
+    if (d.agentValideAt) {
+      throw new ForbiddenException(
+        'Dossier déjà soumis — modification interdite',
+      );
+    }
+    if (
+      d.etat !== DossierEtat.AFFECTE &&
+      d.etat !== DossierEtat.DESCENTE &&
+      d.etat !== DossierEtat.RETOUR_AGENT
+    ) {
+      throw new BadRequestException(
+        `Impossible de modifier le dossier depuis l'état ${d.etat}`,
+      );
+    }
+
+    const existing = (d.payload ?? {}) as Record<string, any>;
+    const famille = d.produit.famille as FamilleProduit;
+    let enrichment: AgentSalaireEnrichment | AgentActiviteEnrichment;
+    try {
+      enrichment = parseAgentEnrichment(famille, enrichmentRaw, {
+        etatCivil: existing.etatCivil,
+      }).data;
+    } catch (e) {
+      if (e instanceof ZodError) {
+        throw new BadRequestException({
+          message: 'Enrichissement invalide',
+          issues: e.issues,
+        });
+      }
+      throw e;
+    }
+
+    const merged = mergeAgentEnrichmentIntoPayload(
+      existing,
+      famille,
+      enrichment,
+    );
+    const fields = clientFieldsFromPayload(merged);
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.dossier.update({
+        where: { id },
+        data: { payload: merged as Prisma.InputJsonValue },
+      });
+      await tx.client.update({
+        where: { id: d.clientId },
+        data: {
+          ...(fields.fullName ? { fullName: fields.fullName } : {}),
+          ...(fields.phone ? { phone: fields.phone } : {}),
+          activityAddress:
+            famille === 'SALAIRE'
+              ? String(merged.adresseSociete || fields.activityAddress || '')
+              : String(
+                  merged.business?.adresseBusiness ||
+                    fields.activityAddress ||
+                    '',
+                ),
+        },
+      });
+      await this.audit.log(
+        {
+          dossierId: id,
+          actorId: user.id,
+          action: 'AGENT_PAYLOAD_UPDATED',
+          entityType: 'DOSSIER',
+          entityId: id,
+          payload: { famille },
+        },
+        tx,
+      );
+    });
+
+    return this.getOne(user, id);
+  }
+
   async uploadPiece(
     user: AuthUser,
     id: string,
@@ -468,7 +567,7 @@ export class TerrainService {
   async soumettre(user: AuthUser, id: string) {
     const d = await this.prisma.dossier.findUnique({
       where: { id },
-      include: { visite: true, pieces: true },
+      include: { visite: true, pieces: true, produit: true },
     });
     if (!d) throw new NotFoundException('Dossier introuvable');
     this.assertAgentOwns(d, user);
@@ -488,10 +587,17 @@ export class TerrainService {
       flags: {},
       values: {},
     };
-    const uploadedKinds = new Set(d.pieces.map((p) => p.kind));
     const payload = (d.payload ?? {}) as Record<string, any>;
+    const enrichCheck = validateAgentEnrichmentComplete(
+      d.produit.famille as FamilleProduit,
+      payload,
+    );
+    if (!enrichCheck.ok) {
+      throw new BadRequestException(enrichCheck.message);
+    }
+    const uploadedKinds = new Set(d.pieces.map((p) => p.kind));
     const issues = validateAgentChecklist(
-      d.type,
+      d.produit.famille,
       payload,
       answers,
       uploadedKinds,
@@ -519,8 +625,8 @@ export class TerrainService {
         },
         {
           from: DossierEtat.SCORING,
-          to: DossierEtat.ANALYSTE,
-          comment: 'Transmission à l’analyste',
+          to: DossierEtat.EN_ATTENTE_VALIDATION_RC,
+          comment: 'Transmission au responsable crédit',
         },
       ];
 
@@ -536,7 +642,7 @@ export class TerrainService {
       await tx.dossier.update({
         where: { id },
         data: {
-          etat: DossierEtat.ANALYSTE,
+          etat: DossierEtat.EN_ATTENTE_VALIDATION_RC,
           agentValideAt: now,
           scoreValue: 50,
           scoreReasons: {
@@ -563,7 +669,10 @@ export class TerrainService {
           action: 'AGENT_SOUMIS',
           entityType: 'DOSSIER',
           entityId: id,
-          payload: { reference: d.reference, toEtat: DossierEtat.ANALYSTE },
+          payload: {
+            reference: d.reference,
+            toEtat: DossierEtat.EN_ATTENTE_VALIDATION_RC,
+          },
         },
         tx,
       );
@@ -604,18 +713,20 @@ export class TerrainService {
       include: {
         client: { include: { zone: true, commune: true } },
         agent: { select: { id: true, displayName: true, email: true } },
+        produit: true,
         visite: true,
       },
     });
     return rows.map((d) => {
       const montant = montantSouhaiteFromPayload(
-        d.type,
         d.payload as Record<string, any>,
       );
       return {
         id: d.id,
         reference: d.reference,
-        type: d.type,
+        produit: d.produit,
+        produitLabel: d.produit.label,
+        type: d.produit.code,
         etat: d.etat,
         etatLabel: DOSSIER_ETAT_LABELS[d.etat],
         client: d.client,
