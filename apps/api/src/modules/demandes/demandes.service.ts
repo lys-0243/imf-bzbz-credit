@@ -4,10 +4,10 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { CreditType, DossierEtat, Prisma, Role } from '@prisma/client';
+import { DossierEtat, Prisma, Role } from '@prisma/client';
 import {
   clientFieldsFromPayload,
-  parseDossierPayload,
+  parseReceptionPayloadAgainstProduit,
 } from '@imf/shared';
 import { ZodError } from 'zod';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -20,6 +20,13 @@ type AuthUser = {
 };
 
 const CLOSED: DossierEtat[] = [DossierEtat.A_DECAISSER, DossierEtat.REJETE];
+
+const DOSSIER_INCLUDE = {
+  client: { include: { zone: true, commune: true } },
+  agent: { select: { id: true, displayName: true, email: true } },
+  produit: true,
+  transitions: true,
+} as const;
 
 @Injectable()
 export class DemandesService {
@@ -39,6 +46,13 @@ export class DemandesService {
     });
   }
 
+  async listProduitsActifs() {
+    return this.prisma.produitCredit.findMany({
+      where: { actif: true },
+      orderBy: [{ sortOrder: 'asc' }, { label: 'asc' }],
+    });
+  }
+
   private async resolveCommune(communeId: string) {
     const commune = await this.prisma.commune.findUnique({
       where: { id: communeId },
@@ -46,6 +60,17 @@ export class DemandesService {
     });
     if (!commune) throw new BadRequestException('Commune invalide');
     return commune;
+  }
+
+  private async resolveProduitActif(produitId: string) {
+    const produit = await this.prisma.produitCredit.findUnique({
+      where: { id: produitId },
+    });
+    if (!produit) throw new BadRequestException('Produit invalide');
+    if (!produit.actif) {
+      throw new BadRequestException('Produit désactivé');
+    }
+    return produit;
   }
 
   async assignLeastBusyAgent(zoneId: string) {
@@ -72,9 +97,8 @@ export class DemandesService {
     return best;
   }
 
-  private nextReference(type: CreditType) {
-    const prefix =
-      type === 'SALAIRE' ? 'SAL' : type === 'DARE_DARE' ? 'DDR' : 'IND';
+  private nextReference(refPrefix: string) {
+    const prefix = (refPrefix || 'CRD').toUpperCase().slice(0, 6);
     const stamp = Date.now().toString(36).toUpperCase();
     const rand = Math.floor(Math.random() * 1000)
       .toString()
@@ -82,9 +106,21 @@ export class DemandesService {
     return `${prefix}-${stamp}-${rand}`;
   }
 
-  private validatePayload(type: CreditType, payload: unknown) {
+  private validatePayload(
+    payload: unknown,
+    produit: {
+      montantMin: number;
+      montantMax: number;
+      dureeMin: number;
+      dureeMax: number;
+      dureeUnite: 'MOIS' | 'SEMAINES';
+    },
+  ) {
     try {
-      return parseDossierPayload(type, payload) as Record<string, any>;
+      return parseReceptionPayloadAgainstProduit(payload, produit) as Record<
+        string,
+        any
+      >;
     } catch (e) {
       if (e instanceof ZodError) {
         throw new BadRequestException({
@@ -96,17 +132,15 @@ export class DemandesService {
     }
   }
 
-  async create(user: AuthUser, type: CreditType, payloadRaw: unknown) {
-    if (!['SALAIRE', 'INDIVIDUEL', 'DARE_DARE'].includes(type)) {
-      throw new BadRequestException('Type de crédit invalide');
-    }
-    const payload = this.validatePayload(type, payloadRaw);
-    const fields = clientFieldsFromPayload(type, payload);
+  async create(user: AuthUser, produitId: string, payloadRaw: unknown) {
+    const produit = await this.resolveProduitActif(produitId);
+    const payload = this.validatePayload(payloadRaw, produit);
+    const fields = clientFieldsFromPayload(payload);
     const commune = await this.resolveCommune(fields.communeId);
     const zoneId = commune.zoneId;
 
     const agent = await this.assignLeastBusyAgent(zoneId);
-    const reference = this.nextReference(type);
+    const reference = this.nextReference(produit.refPrefix);
 
     const dossier = await this.prisma.$transaction(async (tx) => {
       const client = await tx.client.create({
@@ -121,7 +155,7 @@ export class DemandesService {
       const created = await tx.dossier.create({
         data: {
           reference,
-          type,
+          produitId: produit.id,
           etat: DossierEtat.AFFECTE,
           payload: payload as Prisma.InputJsonValue,
           clientId: client.id,
@@ -130,6 +164,7 @@ export class DemandesService {
         include: {
           client: true,
           agent: { select: { id: true, displayName: true, email: true } },
+          produit: true,
           transitions: true,
         },
       });
@@ -151,7 +186,8 @@ export class DemandesService {
           entityId: created.id,
           payload: {
             reference,
-            type,
+            produitId: produit.id,
+            produitCode: produit.code,
             agentId: agent.id,
             communeId: commune.id,
           },
@@ -172,6 +208,8 @@ export class DemandesService {
             { reference: { contains: term, mode: 'insensitive' } },
             { client: { fullName: { contains: term, mode: 'insensitive' } } },
             { client: { phone: { contains: term, mode: 'insensitive' } } },
+            { produit: { label: { contains: term, mode: 'insensitive' } } },
+            { produit: { code: { contains: term, mode: 'insensitive' } } },
           ],
         }
       : {};
@@ -182,6 +220,7 @@ export class DemandesService {
       include: {
         client: { include: { zone: true, commune: true } },
         agent: { select: { id: true, displayName: true, email: true } },
+        produit: true,
       },
     });
     return rows.map((d) => ({
@@ -194,8 +233,7 @@ export class DemandesService {
     const d = await this.prisma.dossier.findUnique({
       where: { id },
       include: {
-        client: { include: { zone: true, commune: true } },
-        agent: { select: { id: true, displayName: true, email: true } },
+        ...DOSSIER_INCLUDE,
         transitions: { orderBy: { createdAt: 'asc' } },
       },
     });
@@ -204,15 +242,18 @@ export class DemandesService {
   }
 
   async update(user: AuthUser, id: string, payloadRaw: unknown) {
-    const existing = await this.prisma.dossier.findUnique({ where: { id } });
+    const existing = await this.prisma.dossier.findUnique({
+      where: { id },
+      include: { produit: true },
+    });
     if (!existing) throw new NotFoundException('Dossier introuvable');
     if (existing.agentValideAt != null) {
       throw new ForbiddenException(
         "Dossier déjà validé par l'agent — modification interdite",
       );
     }
-    const payload = this.validatePayload(existing.type, payloadRaw);
-    const fields = clientFieldsFromPayload(existing.type, payload);
+    const payload = this.validatePayload(payloadRaw, existing.produit);
+    const fields = clientFieldsFromPayload(payload);
     const commune = await this.resolveCommune(fields.communeId);
 
     await this.prisma.$transaction(async (tx) => {

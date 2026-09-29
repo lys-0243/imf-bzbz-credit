@@ -1,7 +1,26 @@
 import { z } from 'zod';
 
-export const CREDIT_TYPES = ['SALAIRE', 'INDIVIDUEL', 'DARE_DARE'] as const;
-export type CreditType = (typeof CREDIT_TYPES)[number];
+export const DUREE_UNITES = ['MOIS', 'SEMAINES'] as const;
+export type DureeUnite = (typeof DUREE_UNITES)[number];
+
+export const FAMILLES_PRODUIT = ['SALAIRE', 'ACTIVITE'] as const;
+export type FamilleProduit = (typeof FAMILLES_PRODUIT)[number];
+
+/** Produit crédit tel que renvoyé par l’API (admin / réception). */
+export type ProduitCreditDto = {
+  id: string;
+  code: string;
+  label: string;
+  montantMin: number;
+  montantMax: number;
+  dureeMin: number;
+  dureeMax: number;
+  dureeUnite: DureeUnite;
+  refPrefix: string;
+  famille: FamilleProduit;
+  actif: boolean;
+  sortOrder: number;
+};
 
 export const ROLES = [
   'RECEPTION',
@@ -77,10 +96,6 @@ export const KINSHASA_COMMUNES: ReadonlyArray<{
   { code: 'MALUKU', name: 'Maluku', zoneCode: 'ZONE_E' },
 ];
 
-const dateIso = z
-  .string()
-  .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date invalide (AAAA-MM-JJ)');
-
 export const SEXES = ['Masculin', 'Feminin'] as const;
 export const TYPES_PIECE = [
   'Carte Electeur',
@@ -102,179 +117,114 @@ export const CLIENT_STATUTS = ['NOUVEAU', 'ANCIEN'] as const;
 export const DEVISES = ['USD', 'CDF'] as const;
 export type Devise = (typeof DEVISES)[number];
 
-const eligibilitySchema = z.object({
-  age18OuPlus: z.boolean().default(true),
-  proprietaireActivite: z.boolean().default(true),
-  exerceActiviteActuellement: z.boolean().default(true),
-  activiteListeExclusion: z.boolean().default(false),
-  congolaisOuDomiciile: z.boolean().default(true),
-  activiteZoneOperationnelle: z.boolean().default(true),
-  activite6MoisConsecutifs: z.boolean().default(true),
-  activiteEnregistreeLegalement: z.boolean().default(true),
-});
-
-const demandeurBaseSchema = z.object({
+/** Payload minimal réception — commun à tous les produits. */
+export const receptionPayloadSchema = z.object({
+  communeId: z.string().min(1),
   prenom: z.string().min(1),
   nom: z.string().min(1),
   postNom: z.string().min(1),
-  dateNaissance: dateIso,
-  sexe: z.enum(SEXES),
-  typePiece: z.enum(TYPES_PIECE),
-  numeroPiece: z.string().min(1),
-  etatCivil: z.enum(ETATS_CIVILS),
-  conjointNom: z.string().optional(),
-  conjointDateNaissance: z.union([dateIso, z.literal('')]).optional(),
-  adresseDomicile: z.string().min(1),
-  telephone: z.string().min(1),
-  email: z.union([z.string().email(), z.literal('')]).optional(),
-});
-
-const businessSchema = z.object({
-  nomBusiness: z.string().min(1),
-  adresseBusiness: z.string().min(1),
-  dureeAdresse: z.string().min(1),
-  typeBusiness: z.string().min(1),
-  dureeTypeBusiness: z.string().min(1),
-  secteurBusiness: z.string().min(1),
-  formeJuridique: z.string().min(1),
-});
-
-const pretIndividuelSchema = z.object({
-  devise: z.enum(DEVISES),
-  montantDesire: z.number().positive(),
-  dureeMois: z.number().int().positive(),
-  montantPretPrecedent: z.number().nonnegative().optional(),
-  dureePretPrecedent: z.number().int().nonnegative().optional(),
-  capaciteMensuelle: z.number().positive(),
-  butInvestissement: z.string().min(1),
-  commentaireBut: z.string().min(1),
-  pretAutreInstitution: z.enum(PRET_AUTRE_INSTITUTION),
-  autreInstitutionNom: z.string().optional(),
-});
-
-function refineIndividuelLike<T extends z.ZodTypeAny>(schema: T) {
-  return schema.superRefine((data: any, ctx) => {
-    if (data.clientStatut === 'ANCIEN' && !data.numeroCompte?.trim()) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'numeroCompte obligatoire pour un ancien client',
-        path: ['numeroCompte'],
-      });
-    }
-    if (data.demandeur?.etatCivil === 'Marie') {
-      if (!data.demandeur.conjointNom?.trim()) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: 'conjointNom obligatoire si Marie',
-          path: ['demandeur', 'conjointNom'],
-        });
-      }
-      if (!data.demandeur.conjointDateNaissance?.trim()) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: 'conjointDateNaissance obligatoire si Marie',
-          path: ['demandeur', 'conjointDateNaissance'],
-        });
-      }
-    }
-    if (
-      data.pret?.pretAutreInstitution &&
-      data.pret.pretAutreInstitution !== 'Non' &&
-      !data.pret.autreInstitutionNom?.trim()
-    ) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'autreInstitutionNom obligatoire',
-        path: ['pret', 'autreInstitutionNom'],
-      });
-    }
-  });
-}
-
-const individuelLikeObject = z.object({
-  communeId: z.string().min(1),
-  clientStatut: z.enum(CLIENT_STATUTS),
-  numeroCompte: z.string().optional(),
-  eligibilite: eligibilitySchema,
-  demandeur: demandeurBaseSchema,
-  business: businessSchema,
-  pret: pretIndividuelSchema,
-});
-
-export const individuelPayloadSchema = refineIndividuelLike(individuelLikeObject);
-export const dareDarePayloadSchema = refineIndividuelLike(individuelLikeObject);
-
-export const salairePayloadSchema = z.object({
-  communeId: z.string().min(1),
-  nom: z.string().min(1),
-  postNom: z.string().min(1),
-  prenom: z.string().min(1),
   sexe: z.enum(SEXES),
   telephone: z.string().min(1),
   email: z.union([z.string().email(), z.literal('')]).optional(),
   adresseDomicile: z.string().min(1),
-  societe: z.string().min(1),
-  adresseSociete: z.string().min(1),
-  fonctionService: z.string().min(1),
   devise: z.enum(DEVISES),
   montantSollicite: z.number().positive(),
-  dureeMois: z.number().int().positive(),
-  dureeAnnees: z.number().int().nonnegative(),
-  dureeSemaines: z.number().int().nonnegative(),
+  duree: z.number().int().positive(),
   motifCredit: z.string().optional(),
-  /** Free-text amount with currency, e.g. "500$", "500 USD", "800.000 CDF" */
-  salaireNet: z.string().min(1),
-  capaciteMensuelle: z.number().positive(),
-  cautionGarantie: z.string().optional(),
-  numeroCompte: z.string().optional(),
-  depotBc: z.string().optional(),
 });
 
-export type IndividuelPayload = z.infer<typeof individuelPayloadSchema>;
-export type DareDarePayload = z.infer<typeof dareDarePayloadSchema>;
-export type SalairePayload = z.infer<typeof salairePayloadSchema>;
+export type ReceptionPayload = z.infer<typeof receptionPayloadSchema>;
 
-export function parseDossierPayload(type: CreditType, payload: unknown) {
-  switch (type) {
-    case 'SALAIRE':
-      return salairePayloadSchema.parse(payload);
-    case 'INDIVIDUEL':
-      return individuelPayloadSchema.parse(payload);
-    case 'DARE_DARE':
-      return dareDarePayloadSchema.parse(payload);
-    default:
-      throw new Error(`Type de crédit inconnu: ${type}`);
-  }
+export type ProduitBornes = {
+  montantMin: number;
+  montantMax: number;
+  dureeMin: number;
+  dureeMax: number;
+  dureeUnite: DureeUnite;
+};
+
+export function parseReceptionPayload(payload: unknown): ReceptionPayload {
+  return receptionPayloadSchema.parse(payload);
 }
 
-export function clientFieldsFromPayload(
-  type: CreditType,
-  payload: Record<string, any>,
-): {
+/** Valide le payload réception et les bornes du produit. */
+export function parseReceptionPayloadAgainstProduit(
+  payload: unknown,
+  produit: ProduitBornes,
+): ReceptionPayload {
+  const data = receptionPayloadSchema.parse(payload);
+  if (
+    data.montantSollicite < produit.montantMin ||
+    data.montantSollicite > produit.montantMax
+  ) {
+    throw new z.ZodError([
+      {
+        code: z.ZodIssueCode.custom,
+        message: `Montant hors bornes (${produit.montantMin} – ${produit.montantMax})`,
+        path: ['montantSollicite'],
+      },
+    ]);
+  }
+  if (data.duree < produit.dureeMin || data.duree > produit.dureeMax) {
+    const u = produit.dureeUnite === 'SEMAINES' ? 'semaines' : 'mois';
+    throw new z.ZodError([
+      {
+        code: z.ZodIssueCode.custom,
+        message: `Durée hors bornes (${produit.dureeMin} – ${produit.dureeMax} ${u})`,
+        path: ['duree'],
+      },
+    ]);
+  }
+  return data;
+}
+
+export function clientFieldsFromPayload(payload: Record<string, any>): {
   fullName: string;
   phone: string;
   activityAddress: string;
   communeId: string;
 } {
-  if (type === 'SALAIRE') {
+  // Nouveau format réception
+  if (payload?.prenom && payload?.telephone && !payload?.demandeur) {
     return {
       fullName: `${payload.prenom} ${payload.nom} ${payload.postNom}`.trim(),
       phone: payload.telephone,
-      activityAddress: payload.adresseSociete || payload.adresseDomicile,
+      activityAddress: payload.adresseDomicile || '',
+      communeId: payload.communeId,
+    };
+  }
+  // Legacy salaire
+  if (payload?.prenom && payload?.telephone && payload?.societe != null) {
+    return {
+      fullName: `${payload.prenom} ${payload.nom} ${payload.postNom}`.trim(),
+      phone: payload.telephone,
+      activityAddress: payload.adresseSociete || payload.adresseDomicile || '',
+      communeId: payload.communeId,
+    };
+  }
+  // Legacy individuel / dare-dare
+  if (payload?.demandeur) {
+    return {
+      fullName:
+        `${payload.demandeur.prenom} ${payload.demandeur.nom} ${payload.demandeur.postNom}`.trim(),
+      phone: payload.demandeur.telephone,
+      activityAddress:
+        payload.business?.adresseBusiness ||
+        payload.demandeur.adresseDomicile ||
+        '',
       communeId: payload.communeId,
     };
   }
   return {
-    fullName: `${payload.demandeur.prenom} ${payload.demandeur.nom} ${payload.demandeur.postNom}`.trim(),
-    phone: payload.demandeur.telephone,
-    activityAddress: payload.business.adresseBusiness,
-    communeId: payload.communeId,
+    fullName: `${payload.prenom || ''} ${payload.nom || ''} ${payload.postNom || ''}`.trim(),
+    phone: payload.telephone || '',
+    activityAddress: payload.adresseDomicile || '',
+    communeId: payload.communeId || '',
   };
 }
 
-/** Montant demandé par le client (individuel/dare → pret.montantDesire ; salaire → montantSollicite). */
+/** Montant demandé — nouveau format + fallbacks legacy. */
 export function montantSouhaiteFromPayload(
-  type: CreditType,
   payload: Record<string, any> | null | undefined,
 ): { montantSouhaite: number | null; devise: Devise | null } {
   const p = payload ?? {};
@@ -282,10 +232,10 @@ export function montantSouhaiteFromPayload(
     typeof v === 'string' && (DEVISES as readonly string[]).includes(v)
       ? (v as Devise)
       : null;
-  if (type === 'SALAIRE') {
+
+  if (typeof p.montantSollicite === 'number') {
     return {
-      montantSouhaite:
-        typeof p.montantSollicite === 'number' ? p.montantSollicite : null,
+      montantSouhaite: p.montantSollicite,
       devise: asDevise(p.devise),
     };
   }
@@ -293,8 +243,18 @@ export function montantSouhaiteFromPayload(
   return {
     montantSouhaite:
       typeof pret.montantDesire === 'number' ? pret.montantDesire : null,
-    devise: asDevise(pret.devise),
+    devise: asDevise(pret.devise ?? p.devise),
   };
+}
+
+export function dureeFromPayload(
+  payload: Record<string, any> | null | undefined,
+): number | null {
+  const p = payload ?? {};
+  if (typeof p.duree === 'number') return p.duree;
+  if (typeof p.dureeMois === 'number') return p.dureeMois;
+  if (typeof p.pret?.dureeMois === 'number') return p.pret.dureeMois;
+  return null;
 }
 
 export function formatMontantSouhaite(
@@ -304,6 +264,25 @@ export function formatMontantSouhaite(
   if (montant == null || Number.isNaN(montant)) return '—';
   const n = montant.toLocaleString('fr-FR', { maximumFractionDigits: 0 });
   return devise ? `${devise} ${n}` : n;
+}
+
+export function formatDureeLabel(
+  duree: number | null | undefined,
+  unite: DureeUnite | string | null | undefined,
+): string {
+  if (duree == null || Number.isNaN(duree)) return '—';
+  const u = unite === 'SEMAINES' ? (duree > 1 ? 'semaines' : 'semaine') : duree > 1 ? 'mois' : 'mois';
+  return `${duree} ${u}`;
+}
+
+export function formatProduitBornesHint(p: ProduitBornes): string {
+  const montant = `${p.montantMin.toLocaleString('fr-FR')} – ${p.montantMax.toLocaleString('fr-FR')} US$`;
+  const u = p.dureeUnite === 'SEMAINES' ? 'sem.' : 'mois';
+  const d =
+    p.dureeMin === p.dureeMax
+      ? `${p.dureeMin} ${u}`
+      : `${p.dureeMin}–${p.dureeMax} ${u}`;
+  return `${montant} · ${d}`;
 }
 
 export const DOSSIER_ETAT_LABELS: Record<DossierEtat, string> = {
@@ -320,6 +299,11 @@ export const DOSSIER_ETAT_LABELS: Record<DossierEtat, string> = {
   CONSEIL: "Conseil d'administration",
   A_DECAISSER: 'À décaisser',
   REJETE: 'Rejeté',
+};
+
+export const FAMILLE_PRODUIT_LABELS: Record<FamilleProduit, string> = {
+  SALAIRE: 'Salaire',
+  ACTIVITE: 'Activité',
 };
 
 export * from './agentChecklist';

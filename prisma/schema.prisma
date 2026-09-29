@@ -17,10 +17,14 @@ enum Role {
   ADMIN
 }
 
-enum CreditType {
+enum DureeUnite {
+  MOIS
+  SEMAINES
+}
+
+enum FamilleProduit {
   SALAIRE
-  INDIVIDUEL
-  DARE_DARE
+  ACTIVITE
 }
 
 enum DossierEtat {
@@ -90,10 +94,31 @@ model Client {
   @@index([communeId])
 }
 
+model ProduitCredit {
+  id         String         @id @default(cuid())
+  code       String         @unique
+  label      String
+  montantMin Float
+  montantMax Float
+  dureeMin   Int
+  dureeMax   Int
+  dureeUnite DureeUnite
+  refPrefix  String
+  famille    FamilleProduit
+  actif      Boolean        @default(true)
+  sortOrder  Int            @default(0)
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+  dossiers   Dossier[]
+
+  @@index([actif, sortOrder])
+}
+
 model Dossier {
   id            String         @id @default(cuid())
   reference     String         @unique
-  type          CreditType
+  produitId     String
+  produit       ProduitCredit  @relation(fields: [produitId], references: [id])
   etat          DossierEtat    @default(ENREGISTRE)
   payload       Json
   clientId      String
@@ -113,6 +138,7 @@ model Dossier {
   @@index([reference])
   @@index([etat])
   @@index([agentId])
+  @@index([produitId])
 }
 
 model VisiteTerrain {

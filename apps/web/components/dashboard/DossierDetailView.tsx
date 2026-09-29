@@ -4,20 +4,17 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   DOSSIER_ETAT_LABELS,
+  dureeFromPayload,
+  formatDureeLabel,
   formatMontantSouhaite,
   getApplicableChecklistItems,
   montantSouhaiteFromPayload,
-  type CreditType,
   type DossierEtat,
+  type FamilleProduit,
+  type ProduitCreditDto,
 } from '@imf/shared';
 import { getApiUrl, getToken } from '../../lib/api';
 import { dashStyles as styles } from './DashboardShell';
-
-const TYPE_LABELS: Record<string, string> = {
-  DARE_DARE: 'Crédit Dare-Dare',
-  INDIVIDUEL: 'Crédit Individuel',
-  SALAIRE: 'Crédit Salaire',
-};
 
 export type DetailTransition = {
   id: string;
@@ -37,7 +34,8 @@ export type DetailPiece = {
 export type DossierDetailData = {
   id: string;
   reference: string;
-  type: string;
+  type?: string;
+  produit?: ProduitCreditDto | null;
   etat: string;
   etatLabel?: string;
   editable?: boolean;
@@ -186,12 +184,25 @@ export function DossierDetailView({
   const replaceInputRef = useRef<HTMLInputElement | null>(null);
   const replaceKindRef = useRef<string | null>(null);
   const p = data.payload ?? {};
-  const type = data.type as CreditType;
+  const famille: FamilleProduit =
+    data.produit?.famille ??
+    (data.type === 'SALAIRE' ? 'SALAIRE' : 'ACTIVITE');
+  const isReception = Boolean(
+    p.prenom && p.montantSollicite != null && !p.demandeur,
+  );
   const pieces = data.pieces ?? [];
   const transitions = data.transitions ?? [];
 
   const baseTabs: TabDef[] = useMemo(() => {
-    if (type === 'SALAIRE') {
+    if (isReception) {
+      return [
+        { key: 'recap', label: 'Récapitulatif' },
+        { key: 'identite', label: 'Identité' },
+        { key: 'demande', label: 'Demande' },
+        { key: 'docs', label: 'Documents' },
+      ];
+    }
+    if (famille === 'SALAIRE') {
       return [
         { key: 'recap', label: 'Récapitulatif' },
         { key: 'identite', label: 'Identité' },
@@ -208,7 +219,7 @@ export function DossierDetailView({
       { key: 'pret', label: 'Prêt' },
       { key: 'docs', label: 'Documents' },
     ];
-  }, [type]);
+  }, [famille, isReception]);
 
   const tabs = useMemo(
     () => [...baseTabs, ...(extraTabs ?? [])],
@@ -233,7 +244,7 @@ export function DossierDetailView({
 
   const docRows = useMemo(() => {
     const uploadItems = getApplicableChecklistItems(
-      type,
+      famille,
       p,
       {},
       'ALL',
@@ -250,16 +261,23 @@ export function DossierDetailView({
         received: Boolean(piece),
       };
     });
-  }, [type, p, pieces]);
+  }, [famille, p, pieces]);
 
-  const { montantSouhaite, devise } = montantSouhaiteFromPayload(type, p);
+  const { montantSouhaite, devise } = montantSouhaiteFromPayload(p);
   const montantLabel = formatMontantSouhaite(montantSouhaite, devise);
+  const dureeLabel = formatDureeLabel(
+    dureeFromPayload(p),
+    data.produit?.dureeUnite,
+  );
+  const produitLabel = data.produit?.label || data.type || '—';
   const etatLabel =
     data.etatLabel ||
     DOSSIER_ETAT_LABELS[data.etat as DossierEtat] ||
     data.etat;
   const salaireNet =
-    type === 'SALAIRE' && p.salaireNet != null && String(p.salaireNet).trim()
+    famille === 'SALAIRE' &&
+    p.salaireNet != null &&
+    String(p.salaireNet).trim()
       ? String(p.salaireNet).trim()
       : null;
 
@@ -405,6 +423,26 @@ export function DossierDetailView({
               value: displayVal(p.cautionGarantie),
             },
             { label: 'Dépôt BC', value: displayVal(p.depotBc) },
+          ]}
+        />
+      );
+      break;
+    case 'demande':
+      tabContent = (
+        <FieldsTable
+          rows={[
+            {
+              label: 'Montant sollicité',
+              value: formatMontantSouhaite(
+                typeof p.montantSollicite === 'number'
+                  ? p.montantSollicite
+                  : null,
+                p.devise,
+              ),
+            },
+            { label: 'Devise', value: displayVal(p.devise) },
+            { label: 'Durée', value: dureeLabel },
+            { label: 'Motif crédit', value: displayVal(p.motifCredit) },
           ]}
         />
       );
@@ -716,7 +754,7 @@ export function DossierDetailView({
           ) : null}
           <div className={styles.detailHeroMeta}>
             <span className={styles.detailHeroType}>
-              {TYPE_LABELS[data.type] || data.type}
+              {produitLabel}
             </span>
             <span className={styles.detailHeroBadge}>{etatLabel}</span>
           </div>

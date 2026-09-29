@@ -1,8 +1,135 @@
-import { PrismaClient, Role } from '@prisma/client';
+import {
+  DureeUnite,
+  FamilleProduit,
+  PrismaClient,
+  Role,
+} from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import { KINSHASA_COMMUNES, KINSHASA_ZONES } from '@imf/shared';
 
 const prisma = new PrismaClient();
+
+const SEED_PRODUITS: Array<{
+  code: string;
+  label: string;
+  montantMin: number;
+  montantMax: number;
+  dureeMin: number;
+  dureeMax: number;
+  dureeUnite: DureeUnite;
+  refPrefix: string;
+  famille: FamilleProduit;
+  sortOrder: number;
+}> = [
+  {
+    code: 'AGR',
+    label: 'Crédit AGR',
+    montantMin: 100,
+    montantMax: 300000,
+    dureeMin: 2,
+    dureeMax: 36,
+    dureeUnite: DureeUnite.MOIS,
+    refPrefix: 'AGR',
+    famille: FamilleProduit.ACTIVITE,
+    sortOrder: 10,
+  },
+  {
+    code: 'SALAIRE',
+    label: 'Crédit salaire',
+    montantMin: 100,
+    montantMax: 80000,
+    dureeMin: 2,
+    dureeMax: 36,
+    dureeUnite: DureeUnite.MOIS,
+    refPrefix: 'SAL',
+    famille: FamilleProduit.SALAIRE,
+    sortOrder: 20,
+  },
+  {
+    code: 'PERSONNEL',
+    label: 'Crédits au Personnel',
+    montantMin: 100,
+    montantMax: 15000,
+    dureeMin: 2,
+    dureeMax: 24,
+    dureeUnite: DureeUnite.MOIS,
+    refPrefix: 'PER',
+    famille: FamilleProduit.SALAIRE,
+    sortOrder: 30,
+  },
+  {
+    code: 'DARE_DARE',
+    label: 'Crédit dare dare',
+    montantMin: 100,
+    montantMax: 10000,
+    dureeMin: 1,
+    dureeMax: 4,
+    dureeUnite: DureeUnite.SEMAINES,
+    refPrefix: 'DDR',
+    famille: FamilleProduit.ACTIVITE,
+    sortOrder: 40,
+  },
+  {
+    code: 'AUTO',
+    label: 'Crédit Auto',
+    montantMin: 1000,
+    montantMax: 20000,
+    dureeMin: 12,
+    dureeMax: 24,
+    dureeUnite: DureeUnite.MOIS,
+    refPrefix: 'AUT',
+    famille: FamilleProduit.ACTIVITE,
+    sortOrder: 50,
+  },
+  {
+    code: 'CONSO_LIKELEMBA',
+    label: 'Crédit Consommation Likelemba',
+    montantMin: 500,
+    montantMax: 10000,
+    dureeMin: 1,
+    dureeMax: 1,
+    dureeUnite: DureeUnite.MOIS,
+    refPrefix: 'CLK',
+    famille: FamilleProduit.ACTIVITE,
+    sortOrder: 60,
+  },
+  {
+    code: 'AGR_LIKELEMBA',
+    label: 'Crédit AGR Likelemba',
+    montantMin: 100,
+    montantMax: 50000,
+    dureeMin: 1,
+    dureeMax: 12,
+    dureeUnite: DureeUnite.MOIS,
+    refPrefix: 'ALK',
+    famille: FamilleProduit.ACTIVITE,
+    sortOrder: 70,
+  },
+  {
+    code: 'PROJET',
+    label: 'Crédit projet',
+    montantMin: 100,
+    montantMax: 80000,
+    dureeMin: 2,
+    dureeMax: 36,
+    dureeUnite: DureeUnite.MOIS,
+    refPrefix: 'PRJ',
+    famille: FamilleProduit.ACTIVITE,
+    sortOrder: 80,
+  },
+  {
+    code: 'LONG_TERME',
+    label: 'Crédit à Long terme',
+    montantMin: 50000,
+    montantMax: 300000,
+    dureeMin: 37,
+    dureeMax: 60,
+    dureeUnite: DureeUnite.MOIS,
+    refPrefix: 'LTM',
+    famille: FamilleProduit.ACTIVITE,
+    sortOrder: 90,
+  },
+];
 
 type SeedUser = {
   email: string;
@@ -110,6 +237,25 @@ const SEED_USERS: SeedUser[] = [
 ];
 
 async function main() {
+  for (const p of SEED_PRODUITS) {
+    await prisma.produitCredit.upsert({
+      where: { code: p.code },
+      update: {
+        label: p.label,
+        montantMin: p.montantMin,
+        montantMax: p.montantMax,
+        dureeMin: p.dureeMin,
+        dureeMax: p.dureeMax,
+        dureeUnite: p.dureeUnite,
+        refPrefix: p.refPrefix,
+        famille: p.famille,
+        sortOrder: p.sortOrder,
+        actif: true,
+      },
+      create: p,
+    });
+  }
+
   for (const z of KINSHASA_ZONES) {
     await prisma.zone.upsert({
       where: { code: z.code },

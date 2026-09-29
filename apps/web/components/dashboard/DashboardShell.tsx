@@ -9,6 +9,7 @@ export type SidebarDossier = {
   id: string;
   reference: string;
   type: string;
+  produitLabel?: string | null;
   etat: string;
   etatLabel: string;
   bucket?: 'nouveaux' | 'en_cours' | 'retournes' | 'termines';
@@ -39,6 +40,7 @@ export type NavKey =
   | 'termines'
   | 'utilisateurs'
   | 'zones'
+  | 'produits'
   | 'journal'
   | 'profile'
   | 'logout';
@@ -117,6 +119,7 @@ const ADMIN_NAV: NavItem[] = [
   { key: 'dashboard', label: 'Tableau de bord', href: '/admin' },
   { key: 'utilisateurs', label: 'Utilisateurs', href: '/admin/utilisateurs' },
   { key: 'zones', label: 'Zones', href: '/admin/zones' },
+  { key: 'produits', label: 'Produits', href: '/admin/produits' },
   { key: 'journal', label: 'Journal d’activité', href: '/admin/journal' },
 ];
 
@@ -128,6 +131,7 @@ function activeKey(
   if (base === 'admin') {
     if (pathname.startsWith('/admin/utilisateurs')) return 'utilisateurs';
     if (pathname.startsWith('/admin/zones')) return 'zones';
+    if (pathname.startsWith('/admin/produits')) return 'produits';
     if (pathname.startsWith('/admin/journal')) return 'journal';
     return 'dashboard';
   }
@@ -359,6 +363,15 @@ function NavIcon({ name }: { name: NavKey }) {
         <svg {...props}>
           <path d="M12 21s7-4.5 7-11a7 7 0 10-14 0c0 6.5 7 11 7 11z" />
           <circle cx="12" cy="10" r="2.5" />
+        </svg>
+      );
+    case 'produits':
+      return (
+        <svg {...props}>
+          <rect x="4" y="4" width="7" height="7" rx="1.5" />
+          <rect x="13" y="4" width="7" height="7" rx="1.5" />
+          <rect x="4" y="13" width="7" height="7" rx="1.5" />
+          <rect x="13" y="13" width="7" height="7" rx="1.5" />
         </svg>
       );
     case 'journal':

@@ -138,7 +138,10 @@ export default function AgentDossierPanel({
         });
       }
       const checklistIssues = validateAgentChecklist(
-        data.type as 'SALAIRE' | 'INDIVIDUEL' | 'DARE_DARE',
+        (data.produit?.famille ??
+          (data.type === 'SALAIRE' ? 'SALAIRE' : 'ACTIVITE')) as
+          | 'SALAIRE'
+          | 'ACTIVITE',
         (data.payload ?? {}) as Record<string, any>,
         answers,
         uploadedKinds,

@@ -12,7 +12,7 @@ export function matchesDossierQuery(d: SidebarDossier, q: string) {
   if (!s) return true;
   const hay = [
     d.reference,
-    d.type,
+    d.produitLabel || d.type,
     d.etat,
     d.etatLabel,
     formatMontantDossier(d),
@@ -150,7 +150,7 @@ export function DossierListView({
                     <strong>{d.reference}</strong>
                   </td>
                   <td>{d.client.fullName}</td>
-                  <td>{d.type}</td>
+                    <td>{d.produitLabel || d.type}</td>
                   <td>
                     <strong>{formatMontantDossier(d)}</strong>
                   </td>

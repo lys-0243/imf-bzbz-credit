@@ -16,6 +16,7 @@ export type AdminSection =
   | 'dashboard'
   | 'utilisateurs'
   | 'zones'
+  | 'produits'
   | 'journal'
   | 'profile';
 
@@ -970,6 +971,367 @@ function AdminZones() {
   );
 }
 
+function AdminProduits() {
+  type ProduitRow = {
+    id: string;
+    code: string;
+    label: string;
+    montantMin: number;
+    montantMax: number;
+    dureeMin: number;
+    dureeMax: number;
+    dureeUnite: 'MOIS' | 'SEMAINES';
+    refPrefix: string;
+    famille: 'SALAIRE' | 'ACTIVITE';
+    actif: boolean;
+    sortOrder: number;
+    _count?: { dossiers: number };
+  };
+
+  const emptyForm = () => ({
+    code: '',
+    label: '',
+    montantMin: '100',
+    montantMax: '10000',
+    dureeMin: '2',
+    dureeMax: '36',
+    dureeUnite: 'MOIS' as 'MOIS' | 'SEMAINES',
+    refPrefix: '',
+    famille: 'ACTIVITE' as 'SALAIRE' | 'ACTIVITE',
+    sortOrder: '100',
+  });
+
+  const [produits, setProduits] = useState<ProduitRow[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [form, setForm] = useState(emptyForm);
+  const [editId, setEditId] = useState<string | null>(null);
+
+  async function reload() {
+    setProduits(await apiFetch<ProduitRow[]>('/admin/produits'));
+  }
+
+  useEffect(() => {
+    reload().catch((e) =>
+      setError(e instanceof ApiError ? e.message : 'Erreur'),
+    );
+  }, []);
+
+  function startEdit(p: ProduitRow) {
+    setEditId(p.id);
+    setForm({
+      code: p.code,
+      label: p.label,
+      montantMin: String(p.montantMin),
+      montantMax: String(p.montantMax),
+      dureeMin: String(p.dureeMin),
+      dureeMax: String(p.dureeMax),
+      dureeUnite: p.dureeUnite,
+      refPrefix: p.refPrefix,
+      famille: p.famille,
+      sortOrder: String(p.sortOrder),
+    });
+  }
+
+  function cancelEdit() {
+    setEditId(null);
+    setForm(emptyForm());
+  }
+
+  async function onSubmit(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    const body = {
+      code: form.code,
+      label: form.label,
+      montantMin: Number(form.montantMin),
+      montantMax: Number(form.montantMax),
+      dureeMin: Number(form.dureeMin),
+      dureeMax: Number(form.dureeMax),
+      dureeUnite: form.dureeUnite,
+      refPrefix: form.refPrefix,
+      famille: form.famille,
+      sortOrder: Number(form.sortOrder) || 100,
+    };
+    try {
+      if (editId) {
+        await apiFetch(`/admin/produits/${editId}`, {
+          method: 'PATCH',
+          body: JSON.stringify(body),
+        });
+      } else {
+        await apiFetch('/admin/produits', {
+          method: 'POST',
+          body: JSON.stringify(body),
+        });
+      }
+      cancelEdit();
+      await reload();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Enregistrement impossible');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function setActif(id: string, actif: boolean) {
+    setBusy(true);
+    setError(null);
+    try {
+      await apiFetch(`/admin/produits/${id}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ actif }),
+      });
+      await reload();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Statut impossible');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onDelete(id: string) {
+    if (!window.confirm('Supprimer définitivement ce produit ?')) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await apiFetch(`/admin/produits/${id}`, { method: 'DELETE' });
+      if (editId === id) cancelEdit();
+      await reload();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Suppression impossible');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div>
+      <h1 className={styles.pageTitle}>Produits crédit</h1>
+      <p className={styles.adminMuted}>
+        Catalogue administrable — désactivez un produit pour le retirer de la
+        réception (les dossiers existants restent liés).
+      </p>
+      {error ? <p className={styles.listError}>{error}</p> : null}
+
+      <form className={styles.adminForm} onSubmit={onSubmit}>
+        <p className={styles.adminFormTitle}>
+          {editId ? 'Modifier le produit' : 'Créer un produit'}
+        </p>
+        <div className={styles.adminFormGrid}>
+          <div className={styles.adminField}>
+            <label>Code</label>
+            <input
+              value={form.code}
+              onChange={(e) => setForm({ ...form, code: e.target.value })}
+              placeholder="AGR"
+              required
+              disabled={!!editId}
+            />
+          </div>
+          <div className={styles.adminField}>
+            <label>Libellé</label>
+            <input
+              value={form.label}
+              onChange={(e) => setForm({ ...form, label: e.target.value })}
+              required
+            />
+          </div>
+          <div className={styles.adminField}>
+            <label>Préfixe réf.</label>
+            <input
+              value={form.refPrefix}
+              onChange={(e) => setForm({ ...form, refPrefix: e.target.value })}
+              placeholder="AGR"
+              required
+            />
+          </div>
+          <div className={styles.adminField}>
+            <label>Famille</label>
+            <select
+              value={form.famille}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  famille: e.target.value as 'SALAIRE' | 'ACTIVITE',
+                })
+              }
+            >
+              <option value="ACTIVITE">Activité</option>
+              <option value="SALAIRE">Salaire</option>
+            </select>
+          </div>
+          <div className={styles.adminField}>
+            <label>Montant min (USD)</label>
+            <input
+              type="number"
+              min={0.01}
+              step="any"
+              value={form.montantMin}
+              onChange={(e) => setForm({ ...form, montantMin: e.target.value })}
+              required
+            />
+          </div>
+          <div className={styles.adminField}>
+            <label>Montant max (USD)</label>
+            <input
+              type="number"
+              min={0.01}
+              step="any"
+              value={form.montantMax}
+              onChange={(e) => setForm({ ...form, montantMax: e.target.value })}
+              required
+            />
+          </div>
+          <div className={styles.adminField}>
+            <label>Durée min</label>
+            <input
+              type="number"
+              min={1}
+              value={form.dureeMin}
+              onChange={(e) => setForm({ ...form, dureeMin: e.target.value })}
+              required
+            />
+          </div>
+          <div className={styles.adminField}>
+            <label>Durée max</label>
+            <input
+              type="number"
+              min={1}
+              value={form.dureeMax}
+              onChange={(e) => setForm({ ...form, dureeMax: e.target.value })}
+              required
+            />
+          </div>
+          <div className={styles.adminField}>
+            <label>Unité durée</label>
+            <select
+              value={form.dureeUnite}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  dureeUnite: e.target.value as 'MOIS' | 'SEMAINES',
+                })
+              }
+            >
+              <option value="MOIS">Mois</option>
+              <option value="SEMAINES">Semaines</option>
+            </select>
+          </div>
+          <div className={styles.adminField}>
+            <label>Ordre</label>
+            <input
+              type="number"
+              value={form.sortOrder}
+              onChange={(e) => setForm({ ...form, sortOrder: e.target.value })}
+            />
+          </div>
+        </div>
+        <div className={styles.adminActions}>
+          <button
+            type="submit"
+            className={`${styles.btn} ${styles.btnPrimary}`}
+            disabled={busy}
+          >
+            {editId ? 'Enregistrer' : 'Créer'}
+          </button>
+          {editId ? (
+            <button
+              type="button"
+              className={`${styles.btn} ${styles.btnSecondary}`}
+              onClick={cancelEdit}
+            >
+              Annuler
+            </button>
+          ) : null}
+        </div>
+      </form>
+
+      <div className={styles.tableWrap}>
+        <table className={styles.table}>
+          <thead>
+            <tr>
+              <th>Produit</th>
+              <th>Montant</th>
+              <th>Durée</th>
+              <th>Famille</th>
+              <th>Statut</th>
+              <th>Dossiers</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {produits.map((p) => {
+              const u = p.dureeUnite === 'SEMAINES' ? 'sem.' : 'mois';
+              const duree =
+                p.dureeMin === p.dureeMax
+                  ? `${p.dureeMin} ${u}`
+                  : `${p.dureeMin}–${p.dureeMax} ${u}`;
+              return (
+                <tr key={p.id}>
+                  <td>
+                    <strong>{p.label}</strong>
+                    <div className={styles.adminMuted}>
+                      {p.code} · préfixe {p.refPrefix}
+                    </div>
+                  </td>
+                  <td>
+                    {p.montantMin.toLocaleString('fr-FR')} –{' '}
+                    {p.montantMax.toLocaleString('fr-FR')} US$
+                  </td>
+                  <td>{duree}</td>
+                  <td>{p.famille === 'SALAIRE' ? 'Salaire' : 'Activité'}</td>
+                  <td>{p.actif ? 'Actif' : 'Inactif'}</td>
+                  <td>{p._count?.dossiers ?? 0}</td>
+                  <td>
+                    <div className={styles.adminActions}>
+                      <button
+                        type="button"
+                        className={`${styles.btn} ${styles.btnSecondary}`}
+                        disabled={busy}
+                        onClick={() => startEdit(p)}
+                      >
+                        Éditer
+                      </button>
+                      <button
+                        type="button"
+                        className={`${styles.btn} ${styles.btnSecondary}`}
+                        disabled={busy}
+                        onClick={() => setActif(p.id, !p.actif)}
+                      >
+                        {p.actif ? 'Désactiver' : 'Réactiver'}
+                      </button>
+                      <button
+                        type="button"
+                        className={`${styles.btn} ${styles.btnSecondary}`}
+                        disabled={busy || (p._count?.dossiers ?? 0) > 0}
+                        onClick={() => onDelete(p.id)}
+                        title={
+                          (p._count?.dossiers ?? 0) > 0
+                            ? 'Impossible : dossiers liés'
+                            : 'Supprimer'
+                        }
+                      >
+                        Suppr.
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+            {!produits.length ? (
+              <tr>
+                <td colSpan={7}>Aucun produit</td>
+              </tr>
+            ) : null}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 function AdminJournal() {
   const [items, setItems] = useState<AuditRow[]>([]);
   const [total, setTotal] = useState(0);
@@ -1030,6 +1392,7 @@ function AdminJournal() {
             <option value="USER">USER</option>
             <option value="ZONE">ZONE</option>
             <option value="COMMUNE">COMMUNE</option>
+            <option value="PRODUIT">PRODUIT</option>
             <option value="DOSSIER">DOSSIER</option>
           </select>
         </div>
@@ -1092,6 +1455,7 @@ function AdminWorkspace({ section }: { section: AdminSection }) {
       {section === 'dashboard' ? <AdminOverview /> : null}
       {section === 'utilisateurs' ? <AdminUsers /> : null}
       {section === 'zones' ? <AdminZones /> : null}
+      {section === 'produits' ? <AdminProduits /> : null}
       {section === 'journal' ? <AdminJournal /> : null}
       {section === 'profile' ? <ProfileView /> : null}
     </DashboardShell>

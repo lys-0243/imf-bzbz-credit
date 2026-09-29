@@ -61,18 +61,20 @@ export class TerrainService {
       orderBy: { updatedAt: 'desc' },
       include: {
         client: { include: { zone: true, commune: true } },
+        produit: true,
         visite: true,
       },
     });
     return rows.map((d) => {
       const montant = montantSouhaiteFromPayload(
-        d.type,
         d.payload as Record<string, any>,
       );
       return {
         id: d.id,
         reference: d.reference,
-        type: d.type,
+        produit: d.produit,
+        produitLabel: d.produit.label,
+        type: d.produit.code,
         etat: d.etat,
         etatLabel: DOSSIER_ETAT_LABELS[d.etat],
         client: d.client,
@@ -106,6 +108,7 @@ export class TerrainService {
       include: {
         client: { include: { zone: true, commune: true } },
         agent: { select: { id: true, displayName: true, email: true } },
+        produit: true,
         pieces: { orderBy: { createdAt: 'asc' } },
         visite: true,
         transitions: { orderBy: { createdAt: 'asc' } },
@@ -121,7 +124,7 @@ export class TerrainService {
     const flags = answers.flags ?? { hasGarant: true };
     const payload = (d.payload ?? {}) as Record<string, any>;
     const checklist = getApplicableChecklistItems(
-      d.type,
+      d.produit.famille,
       payload,
       flags,
       'AGENT',
@@ -129,6 +132,7 @@ export class TerrainService {
 
     return {
       ...d,
+      type: d.produit.code,
       etatLabel: DOSSIER_ETAT_LABELS[d.etat],
       editable: d.agentValideAt == null,
       checklist,
@@ -247,6 +251,7 @@ export class TerrainService {
       include: {
         client: { include: { commune: true, zone: true } },
         agent: { select: { displayName: true } },
+        produit: true,
         pieces: true,
         visite: true,
         transitions: { orderBy: { createdAt: 'asc' } },
@@ -259,13 +264,12 @@ export class TerrainService {
     }
 
     const payload = (d.payload ?? {}) as Record<string, any>;
-    const { montantSouhaite, devise } = montantSouhaiteFromPayload(
-      d.type,
-      payload,
-    );
+    const { montantSouhaite, devise } = montantSouhaiteFromPayload(payload);
     const context = {
       reference: d.reference,
-      type: d.type,
+      type: d.produit.code,
+      produitLabel: d.produit.label,
+      famille: d.produit.famille,
       etat: d.etat,
       etatLabel: DOSSIER_ETAT_LABELS[d.etat],
       client: {
@@ -338,7 +342,8 @@ export class TerrainService {
     const payload = (context.payload ?? {}) as Record<string, any>;
     const montant = context.montantSouhaite;
     const devise = context.devise || '';
-    const type = String(context.type || '');
+    const type = String(context.produitLabel || context.type || '');
+    const famille = String(context.famille || '');
     const pieces = Array.isArray(context.pieces)
       ? (context.pieces as string[])
       : [];
@@ -352,17 +357,21 @@ export class TerrainService {
       `Montant sollicité : ${montant != null ? `${devise} ${Number(montant).toLocaleString('fr-FR')}` : 'non précisé'}.`,
     ];
 
-    if (type === 'SALAIRE') {
+    if (famille === 'SALAIRE' || payload.societe != null) {
       lines.push(
         `Emploi : ${payload.societe || '—'}, fonction ${payload.fonctionService || '—'}, salaire net déclaré ${payload.salaireNet || '—'}, capacité mensuelle ${payload.capaciteMensuelle || '—'}. Motif : ${payload.motifCredit || '—'}.`,
       );
-    } else {
+    } else if (payload.demandeur) {
       const dem = payload.demandeur ?? {};
       const biz = payload.business ?? {};
       const pret = payload.pret ?? {};
       lines.push(
         `Demandeur : ${[dem.prenom, dem.nom, dem.postNom].filter(Boolean).join(' ') || client.fullName || '—'}. Activité : ${biz.nomBusiness || '—'} (${biz.typeBusiness || '—'}, secteur ${biz.secteurBusiness || '—'}).`,
         `Prêt souhaité : ${pret.montantDesire != null ? `${pret.devise || ''} ${pret.montantDesire}` : '—'} sur ${pret.dureeMois || '—'} mois. But : ${pret.butInvestissement || '—'}.`,
+      );
+    } else {
+      lines.push(
+        `Client : ${[payload.prenom, payload.nom, payload.postNom].filter(Boolean).join(' ') || client.fullName || '—'}. Motif : ${payload.motifCredit || '—'}. Durée : ${payload.duree ?? '—'}.`,
       );
     }
 
@@ -468,7 +477,7 @@ export class TerrainService {
   async soumettre(user: AuthUser, id: string) {
     const d = await this.prisma.dossier.findUnique({
       where: { id },
-      include: { visite: true, pieces: true },
+      include: { visite: true, pieces: true, produit: true },
     });
     if (!d) throw new NotFoundException('Dossier introuvable');
     this.assertAgentOwns(d, user);
@@ -491,7 +500,7 @@ export class TerrainService {
     const uploadedKinds = new Set(d.pieces.map((p) => p.kind));
     const payload = (d.payload ?? {}) as Record<string, any>;
     const issues = validateAgentChecklist(
-      d.type,
+      d.produit.famille,
       payload,
       answers,
       uploadedKinds,
@@ -604,18 +613,20 @@ export class TerrainService {
       include: {
         client: { include: { zone: true, commune: true } },
         agent: { select: { id: true, displayName: true, email: true } },
+        produit: true,
         visite: true,
       },
     });
     return rows.map((d) => {
       const montant = montantSouhaiteFromPayload(
-        d.type,
         d.payload as Record<string, any>,
       );
       return {
         id: d.id,
         reference: d.reference,
-        type: d.type,
+        produit: d.produit,
+        produitLabel: d.produit.label,
+        type: d.produit.code,
         etat: d.etat,
         etatLabel: DOSSIER_ETAT_LABELS[d.etat],
         client: d.client,

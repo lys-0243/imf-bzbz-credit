@@ -7,6 +7,7 @@ export type AuditEntityType =
   | 'USER'
   | 'ZONE'
   | 'COMMUNE'
+  | 'PRODUIT'
   | 'AUTH'
   | 'SYSTEM';
 

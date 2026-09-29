@@ -9,7 +9,11 @@ export default function ReceptionPage() {
   return (
     <div>
       <h1>Réception</h1>
-      <p>Enregistrement des 3 types de crédit — à implémenter.</p>
+      <p>
+        L’enregistrement des dossiers se fait via l’application mobile
+        (produits actifs du catalogue). Le back-office web réception arrive
+        prochainement.
+      </p>
     </div>
   );
 }

@@ -14,8 +14,8 @@ import {
   DOSSIER_ETAT_LABELS,
   formatMontantSouhaite,
   montantSouhaiteFromPayload,
-  type CreditType,
   type DossierEtat,
+  type ProduitCreditDto,
 } from '@imf/shared';
 import { api } from '../api';
 import { TAB_BAR_BASE_HEIGHT } from '../components/BottomTabBar';
@@ -23,7 +23,8 @@ import { TAB_BAR_BASE_HEIGHT } from '../components/BottomTabBar';
 type DossierRow = {
   id: string;
   reference: string;
-  type: CreditType;
+  type?: string;
+  produit?: ProduitCreditDto | null;
   etat: DossierEtat;
   editable: boolean;
   updatedAt: string;
@@ -38,10 +39,11 @@ type Props = {
   bottomInset?: number;
 };
 
-const TYPE_LABELS: Record<CreditType, string> = {
+const TYPE_LABELS: Record<string, string> = {
   DARE_DARE: 'Crédit Dare-Dare',
   INDIVIDUEL: 'Crédit Individuel',
   SALAIRE: 'Crédit Salaire',
+  AGR: 'Crédit AGR',
 };
 
 function etatTone(etat: DossierEtat): { bg: string; fg: string } {
@@ -118,10 +120,14 @@ export function SearchScreen({
           renderItem={({ item }) => {
             const tone = etatTone(item.etat);
             const { montantSouhaite, devise } = montantSouhaiteFromPayload(
-              item.type,
               item.payload as Record<string, any> | null | undefined,
             );
             const montantLabel = formatMontantSouhaite(montantSouhaite, devise);
+            const produitLabel =
+              item.produit?.label ||
+              TYPE_LABELS[item.type || ''] ||
+              item.type ||
+              '—';
             return (
               <Pressable style={styles.card} onPress={() => onOpen(item.id)}>
                 <View style={styles.cardTop}>
@@ -150,7 +156,7 @@ export function SearchScreen({
                 <View style={styles.footerRow}>
                   <View style={styles.dot} />
                   <Text style={styles.typeLabel} numberOfLines={1}>
-                    {TYPE_LABELS[item.type] || item.type}
+                    {produitLabel}
                   </Text>
                 </View>
               </Pressable>

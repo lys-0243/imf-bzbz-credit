@@ -4,7 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { BlurTargetView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '@imf/assets';
-import type { CreditType } from '@imf/shared';
+import type { ProduitCreditDto } from '@imf/shared';
 import { useAuth } from '../auth';
 import {
   BottomTabBar,
@@ -30,21 +30,22 @@ export function HomeScreen() {
   const insets = useSafeAreaInsets();
   const blurTargetRef = useRef<View | null>(null);
   const [detailId, setDetailId] = useState<string | null>(null);
-  const [registerType, setRegisterType] = useState<CreditType | null>(null);
+  const [registerProduit, setRegisterProduit] =
+    useState<ProduitCreditDto | null>(null);
   const [typeModal, setTypeModal] = useState(false);
   const [activeTab, setActiveTab] = useState<HomeTab>('home');
   const [q, setQ] = useState('');
   const [searchKey, setSearchKey] = useState(0);
 
-  if (registerType) {
+  if (registerProduit) {
     return (
       <View style={styles.root}>
         <StatusBar style="light" />
         <RegisterScreen
-          type={registerType}
-          onCancel={() => setRegisterType(null)}
+          produit={registerProduit}
+          onCancel={() => setRegisterProduit(null)}
           onCreated={(id) => {
-            setRegisterType(null);
+            setRegisterProduit(null);
             setDetailId(id);
           }}
         />
@@ -122,9 +123,9 @@ export function HomeScreen() {
         visible={typeModal}
         blurTarget={blurTargetRef}
         onClose={() => setTypeModal(false)}
-        onConfirm={(type) => {
+        onConfirm={(produit) => {
           setTypeModal(false);
-          setRegisterType(type);
+          setRegisterProduit(produit);
         }}
       />
     </View>

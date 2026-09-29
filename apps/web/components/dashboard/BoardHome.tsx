@@ -207,7 +207,7 @@ export function BoardHome({
                       <strong>{d.reference}</strong>
                     </td>
                     <td>{d.client.fullName}</td>
-                    <td>{d.type}</td>
+                    <td>{d.produitLabel || d.type}</td>
                     <td>
                       <strong>{formatMontantDossier(d)}</strong>
                     </td>
