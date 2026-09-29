@@ -181,7 +181,7 @@ export default function AnalysteDashboard({
   selectedId?: string;
 }) {
   return (
-    <AuthGate roles={['ANALYSTE', 'ADMIN']} hideSession>
+    <AuthGate roles={['ANALYSTE']} hideSession>
       <AnalysteWorkspace section={section} selectedId={selectedId} />
     </AuthGate>
   );

@@ -13,6 +13,7 @@ import {
   validateAgentChecklist,
 } from '@imf/shared';
 import { PrismaService } from '../../prisma/prisma.service';
+import { AuditService } from '../audit/audit.service';
 import { DocumentsService } from '../documents/documents.service';
 import { WorkflowService } from '../workflow/workflow.service';
 
@@ -34,13 +35,13 @@ export class TerrainService {
     private readonly prisma: PrismaService,
     private readonly documents: DocumentsService,
     private readonly workflow: WorkflowService,
+    private readonly audit: AuditService,
   ) {}
 
   private assertAgentOwns(
     dossier: { agentId: string | null },
     user: AuthUser,
   ) {
-    if (user.role === Role.ADMIN) return;
     if (user.role !== Role.AGENT) {
       throw new ForbiddenException('Rôle agent requis');
     }
@@ -50,13 +51,10 @@ export class TerrainService {
   }
 
   async listMine(user: AuthUser) {
-    if (user.role !== Role.AGENT && user.role !== Role.ADMIN) {
+    if (user.role !== Role.AGENT) {
       throw new ForbiddenException('Rôle agent requis');
     }
-    const where: Prisma.DossierWhereInput =
-      user.role === Role.ADMIN
-        ? {}
-        : { agentId: user.id };
+    const where: Prisma.DossierWhereInput = { agentId: user.id };
 
     const rows = await this.prisma.dossier.findMany({
       where,
@@ -201,14 +199,17 @@ export class TerrainService {
           agentId: user.id,
         },
       });
-      await tx.auditLog.create({
-        data: {
+      await this.audit.log(
+        {
           dossierId: id,
           actorId: user.id,
           action: 'VISITE_STARTED',
+          entityType: 'DOSSIER',
+          entityId: id,
           payload: { reference: d.reference, visiteDate: visiteDateRaw },
         },
-      });
+        tx,
+      );
     });
 
     return this.getOne(user, id);
@@ -452,13 +453,13 @@ export class TerrainService {
       mimeType: file.mimetype,
     });
 
-    await this.prisma.auditLog.create({
-      data: {
-        dossierId: id,
-        actorId: user.id,
-        action: 'PIECE_UPLOADED',
-        payload: { kind: piece.kind, pieceId: piece.id },
-      },
+    await this.audit.log({
+      dossierId: id,
+      actorId: user.id,
+      action: 'PIECE_UPLOADED',
+      entityType: 'DOSSIER',
+      entityId: id,
+      payload: { kind: piece.kind, pieceId: piece.id },
     });
 
     return piece;
@@ -555,14 +556,17 @@ export class TerrainService {
           },
         });
       }
-      await tx.auditLog.create({
-        data: {
+      await this.audit.log(
+        {
           dossierId: id,
           actorId: user.id,
           action: 'AGENT_SOUMIS',
+          entityType: 'DOSSIER',
+          entityId: id,
           payload: { reference: d.reference, toEtat: DossierEtat.ANALYSTE },
         },
-      });
+        tx,
+      );
     });
 
     return this.prisma.dossier.findUnique({
@@ -578,10 +582,7 @@ export class TerrainService {
   }
 
   async listForAnalyste(user: AuthUser) {
-    if (
-      user.role !== Role.ANALYSTE &&
-      user.role !== Role.ADMIN
-    ) {
+    if (user.role !== Role.ANALYSTE) {
       throw new ForbiddenException('Rôle analyste requis');
     }
     const rows = await this.prisma.dossier.findMany({
@@ -639,10 +640,7 @@ export class TerrainService {
   }
 
   async getForAnalyste(user: AuthUser, id: string) {
-    if (
-      user.role !== Role.ANALYSTE &&
-      user.role !== Role.ADMIN
-    ) {
+    if (user.role !== Role.ANALYSTE) {
       throw new ForbiddenException('Rôle analyste requis');
     }
     const d = await this.prisma.dossier.findUnique({

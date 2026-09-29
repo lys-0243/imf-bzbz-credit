@@ -37,6 +37,9 @@ export type NavKey =
   | 'dossiers'
   | 'retournes'
   | 'termines'
+  | 'utilisateurs'
+  | 'zones'
+  | 'journal'
   | 'profile'
   | 'logout';
 
@@ -110,8 +113,24 @@ const ANALYSTE_NAV: NavItem[] = [
   },
 ];
 
-function activeKey(pathname: string, base: 'agent' | 'analyste'): NavKey {
+const ADMIN_NAV: NavItem[] = [
+  { key: 'dashboard', label: 'Tableau de bord', href: '/admin' },
+  { key: 'utilisateurs', label: 'Utilisateurs', href: '/admin/utilisateurs' },
+  { key: 'zones', label: 'Zones', href: '/admin/zones' },
+  { key: 'journal', label: 'Journal d’activité', href: '/admin/journal' },
+];
+
+function activeKey(
+  pathname: string,
+  base: 'agent' | 'analyste' | 'admin',
+): NavKey {
   if (pathname.startsWith(`/${base}/profile`)) return 'profile';
+  if (base === 'admin') {
+    if (pathname.startsWith('/admin/utilisateurs')) return 'utilisateurs';
+    if (pathname.startsWith('/admin/zones')) return 'zones';
+    if (pathname.startsWith('/admin/journal')) return 'journal';
+    return 'dashboard';
+  }
   if (pathname.startsWith(`/${base}/nouveaux`)) return 'nouveaux';
   if (pathname.startsWith(`/${base}/dossiers-en-cours`)) return 'dossiers';
   if (pathname.startsWith(`/${base}/mes-dossiers`)) return 'dossiers';
@@ -128,14 +147,19 @@ export function DashboardShell({
   counts,
   children,
 }: {
-  base: 'agent' | 'analyste';
+  base: 'agent' | 'analyste' | 'admin';
   counts?: NavCounts;
   children: ReactNode;
 }) {
   const { user, logout } = useAuth();
   const router = useRouter();
   const pathname = usePathname() || `/${base}`;
-  const nav = base === 'agent' ? AGENT_NAV : ANALYSTE_NAV;
+  const nav =
+    base === 'agent'
+      ? AGENT_NAV
+      : base === 'analyste'
+        ? ANALYSTE_NAV
+        : ADMIN_NAV;
   const current = activeKey(pathname, base);
   const profileHref = `/${base}/profile`;
   const photoUrl =
@@ -319,6 +343,29 @@ function NavIcon({ name }: { name: NavKey }) {
       return (
         <svg {...props}>
           <path d="M20 6L9 17l-5-5" />
+        </svg>
+      );
+    case 'utilisateurs':
+      return (
+        <svg {...props}>
+          <circle cx="9" cy="8" r="3.2" />
+          <path d="M3 19a6 6 0 0112 0" />
+          <circle cx="17" cy="9" r="2.5" />
+          <path d="M15 19a4.5 4.5 0 016 0" />
+        </svg>
+      );
+    case 'zones':
+      return (
+        <svg {...props}>
+          <path d="M12 21s7-4.5 7-11a7 7 0 10-14 0c0 6.5 7 11 7 11z" />
+          <circle cx="12" cy="10" r="2.5" />
+        </svg>
+      );
+    case 'journal':
+      return (
+        <svg {...props}>
+          <path d="M8 4h11a2 2 0 012 2v14H8a2 2 0 01-2-2V6a2 2 0 012-2z" />
+          <path d="M10 9h7M10 13h7M10 17h4" />
         </svg>
       );
     case 'profile':

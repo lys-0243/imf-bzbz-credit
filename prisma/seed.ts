@@ -101,6 +101,12 @@ const SEED_USERS: SeedUser[] = [
     displayName: 'Dieudonné Kabila',
     role: Role.DG,
   },
+  {
+    email: 'v.mbombo@imf.local',
+    password: 'Mbombo1!',
+    displayName: 'Véronique Mbombo',
+    role: Role.ADMIN,
+  },
 ];
 
 async function main() {

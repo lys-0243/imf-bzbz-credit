@@ -13,7 +13,6 @@ import {
   Role.RECEPTION,
   Role.AGENT,
   Role.ANALYSTE,
-  Role.ADMIN,
 )
 export class WorkflowController {
   constructor(private readonly workflow: WorkflowService) {}

@@ -44,13 +44,13 @@ export class TerrainController {
   constructor(private readonly terrain: TerrainService) {}
 
   @Get('terrain')
-  @Roles(Role.AGENT, Role.ADMIN, Role.ANALYSTE)
+  @Roles(Role.AGENT, Role.ANALYSTE)
   scaffold() {
     return { module: 'terrain', implemented: true };
   }
 
   @Get('agent/dossiers')
-  @Roles(Role.AGENT, Role.ADMIN)
+  @Roles(Role.AGENT)
   listMine(
     @CurrentUser() user: { id: string; role: Role; zoneId?: string | null },
   ) {
@@ -58,7 +58,7 @@ export class TerrainController {
   }
 
   @Get('agent/dossiers/:id')
-  @Roles(Role.AGENT, Role.ADMIN)
+  @Roles(Role.AGENT)
   one(
     @CurrentUser() user: { id: string; role: Role },
     @Param('id') id: string,
@@ -67,7 +67,7 @@ export class TerrainController {
   }
 
   @Post('agent/dossiers/:id/visite/start')
-  @Roles(Role.AGENT, Role.ADMIN)
+  @Roles(Role.AGENT)
   start(
     @CurrentUser() user: { id: string; role: Role },
     @Param('id') id: string,
@@ -77,7 +77,7 @@ export class TerrainController {
   }
 
   @Put('agent/dossiers/:id/checklist')
-  @Roles(Role.AGENT, Role.ADMIN)
+  @Roles(Role.AGENT)
   checklist(
     @CurrentUser() user: { id: string; role: Role },
     @Param('id') id: string,
@@ -87,7 +87,7 @@ export class TerrainController {
   }
 
   @Post('agent/dossiers/:id/rapport')
-  @Roles(Role.AGENT, Role.ADMIN)
+  @Roles(Role.AGENT)
   rapport(
     @CurrentUser() user: { id: string; role: Role },
     @Param('id') id: string,
@@ -97,7 +97,7 @@ export class TerrainController {
   }
 
   @Post('agent/dossiers/:id/rapport/generate')
-  @Roles(Role.AGENT, Role.ADMIN)
+  @Roles(Role.AGENT)
   generateRapport(
     @CurrentUser() user: { id: string; role: Role },
     @Param('id') id: string,
@@ -106,7 +106,7 @@ export class TerrainController {
   }
 
   @Post('agent/dossiers/:id/pieces')
-  @Roles(Role.AGENT, Role.ADMIN)
+  @Roles(Role.AGENT)
   @UseInterceptors(FileInterceptor('file'))
   upload(
     @CurrentUser() user: { id: string; role: Role },
@@ -119,7 +119,7 @@ export class TerrainController {
   }
 
   @Post('agent/dossiers/:id/soumettre')
-  @Roles(Role.AGENT, Role.ADMIN)
+  @Roles(Role.AGENT)
   soumettre(
     @CurrentUser() user: { id: string; role: Role },
     @Param('id') id: string,
@@ -128,13 +128,13 @@ export class TerrainController {
   }
 
   @Get('analyste/dossiers')
-  @Roles(Role.ANALYSTE, Role.ADMIN)
+  @Roles(Role.ANALYSTE)
   analysteList(@CurrentUser() user: { id: string; role: Role }) {
     return this.terrain.listForAnalyste(user);
   }
 
   @Get('analyste/dossiers/:id')
-  @Roles(Role.ANALYSTE, Role.ADMIN)
+  @Roles(Role.ANALYSTE)
   analysteOne(
     @CurrentUser() user: { id: string; role: Role },
     @Param('id') id: string,
