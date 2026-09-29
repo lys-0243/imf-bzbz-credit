@@ -10,6 +10,7 @@ datasource db {
 enum Role {
   RECEPTION
   AGENT
+  RESPONSABLE_CREDIT
   ANALYSTE
   CONFORMITE
   DG
@@ -29,6 +30,7 @@ enum FamilleProduit {
 
 enum DossierEtat {
   ENREGISTRE
+  EN_ATTENTE_ATTRIBUTION_AGENT
   AFFECTE
   DESCENTE
   RAPPORT_AGENT
@@ -55,6 +57,7 @@ model User {
   disabledAt    DateTime?
   createdAt     DateTime  @default(now())
   dossiersAgent Dossier[] @relation("AgentDossiers")
+  dossiersCrees Dossier[] @relation("CreatedByDossiers")
 }
 
 model Zone {
@@ -123,6 +126,8 @@ model Dossier {
   payload       Json
   clientId      String
   client        Client         @relation(fields: [clientId], references: [id])
+  createdById   String?
+  createdBy     User?          @relation("CreatedByDossiers", fields: [createdById], references: [id])
   agentId       String?
   agent         User?          @relation("AgentDossiers", fields: [agentId], references: [id])
   agentValideAt DateTime?
@@ -139,6 +144,7 @@ model Dossier {
   @@index([etat])
   @@index([agentId])
   @@index([produitId])
+  @@index([createdById])
 }
 
 model VisiteTerrain {

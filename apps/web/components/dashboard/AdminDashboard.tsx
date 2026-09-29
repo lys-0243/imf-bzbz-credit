@@ -5,15 +5,23 @@ import { useRouter } from 'next/navigation';
 import AuthGate from '../AuthGate';
 import { ApiError, apiFetch } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
+import { formatMontantSouhaite } from '@imf/shared';
 import {
   DashboardShell,
   dashStyles as styles,
   etatBadgeClass,
 } from './DashboardShell';
+import {
+  DossierDetailView,
+  type DossierDetailData,
+} from './DossierDetailView';
 import { ProfileView } from './ProfileView';
+import { AdminSheet } from './AdminSheet';
 
 export type AdminSection =
   | 'dashboard'
+  | 'dossiers'
+  | 'dossier-detail'
   | 'utilisateurs'
   | 'zones'
   | 'produits'
@@ -23,6 +31,7 @@ export type AdminSection =
 const ROLES = [
   'RECEPTION',
   'AGENT',
+  'RESPONSABLE_CREDIT',
   'ANALYSTE',
   'CONFORMITE',
   'DG',
@@ -157,6 +166,18 @@ function AdminOverview() {
       </div>
 
       <div className={styles.boardCards}>
+        <button
+          type="button"
+          className={`${styles.boardCard} ${styles.boardCardBlue}`}
+          onClick={() => router.push('/admin/dossiers')}
+        >
+          <div className={styles.boardCardTop}>
+            <span className={styles.boardCardIcon}>D</span>
+            <span className={styles.boardCardLabel}>Dossiers</span>
+          </div>
+          <p className={styles.boardCardValue}>{data.totalDossiers}</p>
+          <span className={styles.boardCardLink}>Consulter →</span>
+        </button>
         <button
           type="button"
           className={`${styles.boardCard} ${styles.boardCardBlue}`}
@@ -321,6 +342,7 @@ function AdminUsers() {
   const [q, setQ] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
   const [form, setForm] = useState(emptyUserForm);
+  const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<UserRow | null>(null);
   const [editForm, setEditForm] = useState({
     email: '',
@@ -364,6 +386,29 @@ function AdminUsers() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  function openCreate() {
+    setForm(emptyUserForm());
+    setError(null);
+    setCreateOpen(true);
+  }
+
+  function closeCreate() {
+    setCreateOpen(false);
+    setForm(emptyUserForm());
+  }
+
+  function openEdit(u: UserRow) {
+    setEditing(u);
+    setEditForm({
+      email: u.email,
+      displayName: u.displayName,
+      password: '',
+      role: u.role,
+      zoneId: u.zoneId || '',
+    });
+    setError(null);
+  }
+
   async function onCreate(e: FormEvent) {
     e.preventDefault();
     setBusy(true);
@@ -376,7 +421,7 @@ function AdminUsers() {
           zoneId: form.role === 'AGENT' ? form.zoneId || undefined : undefined,
         }),
       });
-      setForm(emptyUserForm());
+      closeCreate();
       await reload();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Création impossible');
@@ -441,98 +486,15 @@ function AdminUsers() {
 
   return (
     <div>
-      <h1 className={styles.pageTitle}>Utilisateurs</h1>
-      {error ? <p className={styles.listError}>{error}</p> : null}
-
-      <form className={styles.adminForm} onSubmit={onCreate}>
-        <p className={styles.adminFormTitle}>Créer un compte</p>
-        <div className={styles.adminFormGrid}>
-          <div className={styles.adminField}>
-            <label htmlFor="cu-name">Nom</label>
-            <input
-              id="cu-name"
-              value={form.displayName}
-              onChange={(e) =>
-                setForm((f) => ({ ...f, displayName: e.target.value }))
-              }
-              required
-            />
-          </div>
-          <div className={styles.adminField}>
-            <label htmlFor="cu-email">Email</label>
-            <input
-              id="cu-email"
-              type="email"
-              value={form.email}
-              onChange={(e) =>
-                setForm((f) => ({ ...f, email: e.target.value }))
-              }
-              required
-            />
-          </div>
-          <div className={styles.adminField}>
-            <label htmlFor="cu-pass">Mot de passe</label>
-            <input
-              id="cu-pass"
-              type="password"
-              value={form.password}
-              onChange={(e) =>
-                setForm((f) => ({ ...f, password: e.target.value }))
-              }
-              required
-              minLength={4}
-            />
-          </div>
-          <div className={styles.adminField}>
-            <label htmlFor="cu-role">Rôle</label>
-            <select
-              id="cu-role"
-              value={form.role}
-              onChange={(e) =>
-                setForm((f) => ({
-                  ...f,
-                  role: e.target.value as (typeof ROLES)[number],
-                }))
-              }
-            >
-              {ROLES.map((r) => (
-                <option key={r} value={r}>
-                  {r}
-                </option>
-              ))}
-            </select>
-          </div>
-          {form.role === 'AGENT' ? (
-            <div className={styles.adminField}>
-              <label htmlFor="cu-zone">Zone</label>
-              <select
-                id="cu-zone"
-                value={form.zoneId}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, zoneId: e.target.value }))
-                }
-                required
-              >
-                <option value="">Choisir…</option>
-                {zones.map((z) => (
-                  <option key={z.id} value={z.id}>
-                    {z.code} — {z.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          ) : null}
-        </div>
-        <div className={styles.adminActions}>
-          <button
-            type="submit"
-            className={`${styles.btn} ${styles.btnPrimary}`}
-            disabled={busy}
-          >
-            Créer
-          </button>
-        </div>
-      </form>
+      <div className={styles.pageHeaderRow}>
+        <h1 className={styles.pageTitle}>Utilisateurs</h1>
+        <button type="button" className={styles.btnNouveau} onClick={openCreate}>
+          Nouveau
+        </button>
+      </div>
+      {error && !createOpen && !editing ? (
+        <p className={styles.listError}>{error}</p>
+      ) : null}
 
       <div className={styles.adminToolbar}>
         <div className={`${styles.searchWrap} ${styles.adminToolbarGrow}`}>
@@ -602,14 +564,7 @@ function AdminUsers() {
                       className={`${styles.btn} ${styles.btnSecondary}`}
                       onClick={(e) => {
                         e.stopPropagation();
-                        setEditing(u);
-                        setEditForm({
-                          email: u.email,
-                          displayName: u.displayName,
-                          password: '',
-                          role: u.role,
-                          zoneId: u.zoneId || '',
-                        });
+                        openEdit(u);
                       }}
                     >
                       Éditer
@@ -629,52 +584,212 @@ function AdminUsers() {
                 </td>
               </tr>
             ))}
+            {!users.length ? (
+              <tr>
+                <td colSpan={6}>Aucun utilisateur</td>
+              </tr>
+            ) : null}
           </tbody>
         </table>
       </div>
 
-      {editing ? (
-        <form className={styles.adminForm} onSubmit={onSaveEdit}>
-          <p className={styles.adminFormTitle}>
-            Modifier — {editing.displayName}
-          </p>
+      <AdminSheet
+        open={createOpen}
+        title="Nouvel utilisateur"
+        subtitle="Créer un compte plateforme"
+        onClose={closeCreate}
+        footer={
+          <>
+            <button
+              type="button"
+              className={`${styles.btnPill} ${styles.btnPillSecondary}`}
+              onClick={closeCreate}
+            >
+              Annuler
+            </button>
+            <button
+              type="submit"
+              form="admin-user-create"
+              className={`${styles.btnPill} ${styles.btnPillPrimary}`}
+              disabled={busy}
+            >
+              {busy ? 'Création…' : 'Créer'}
+            </button>
+          </>
+        }
+      >
+        <form
+          id="admin-user-create"
+          className={styles.adminSheetForm}
+          onSubmit={onCreate}
+        >
+          {error ? <p className={styles.listError}>{error}</p> : null}
           <div className={styles.adminFormGrid}>
             <div className={styles.adminField}>
-              <label>Nom</label>
+              <label htmlFor="cu-name">Nom</label>
               <input
-                value={editForm.displayName}
+                id="cu-name"
+                value={form.displayName}
                 onChange={(e) =>
-                  setEditForm((f) => ({ ...f, displayName: e.target.value }))
+                  setForm((f) => ({ ...f, displayName: e.target.value }))
                 }
+                placeholder="Nom *"
                 required
               />
             </div>
             <div className={styles.adminField}>
-              <label>Email</label>
+              <label htmlFor="cu-email">Email</label>
               <input
+                id="cu-email"
+                type="email"
+                value={form.email}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, email: e.target.value }))
+                }
+                placeholder="Email *"
+                required
+              />
+            </div>
+            <div className={styles.adminField}>
+              <label htmlFor="cu-pass">Mot de passe</label>
+              <input
+                id="cu-pass"
+                type="password"
+                value={form.password}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, password: e.target.value }))
+                }
+                placeholder="Mot de passe *"
+                required
+                minLength={4}
+              />
+            </div>
+            <div className={styles.adminField}>
+              <label className={styles.adminFieldVisibleLabel} htmlFor="cu-role">
+                Rôle
+              </label>
+              <select
+                id="cu-role"
+                value={form.role}
+                onChange={(e) =>
+                  setForm((f) => ({
+                    ...f,
+                    role: e.target.value as (typeof ROLES)[number],
+                  }))
+                }
+              >
+                {ROLES.map((r) => (
+                  <option key={r} value={r}>
+                    {r}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {form.role === 'AGENT' ? (
+              <div className={styles.adminField}>
+                <label
+                  className={styles.adminFieldVisibleLabel}
+                  htmlFor="cu-zone"
+                >
+                  Zone
+                </label>
+                <select
+                  id="cu-zone"
+                  value={form.zoneId}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, zoneId: e.target.value }))
+                  }
+                  required
+                >
+                  <option value="">Choisir une zone…</option>
+                  {zones.map((z) => (
+                    <option key={z.id} value={z.id}>
+                      {z.code} — {z.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
+          </div>
+        </form>
+      </AdminSheet>
+
+      <AdminSheet
+        open={!!editing}
+        title="Modifier l’utilisateur"
+        subtitle={editing?.displayName}
+        onClose={() => setEditing(null)}
+        footer={
+          <>
+            <button
+              type="button"
+              className={`${styles.btnPill} ${styles.btnPillSecondary}`}
+              onClick={() => setEditing(null)}
+            >
+              Annuler
+            </button>
+            <button
+              type="submit"
+              form="admin-user-edit"
+              className={`${styles.btnPill} ${styles.btnPillPrimary}`}
+              disabled={busy}
+            >
+              {busy ? 'Enregistrement…' : 'Enregistrer'}
+            </button>
+          </>
+        }
+      >
+        <form
+          id="admin-user-edit"
+          className={styles.adminSheetForm}
+          onSubmit={onSaveEdit}
+        >
+          {error ? <p className={styles.listError}>{error}</p> : null}
+          <div className={styles.adminFormGrid}>
+            <div className={styles.adminField}>
+              <label htmlFor="eu-name">Nom</label>
+              <input
+                id="eu-name"
+                value={editForm.displayName}
+                onChange={(e) =>
+                  setEditForm((f) => ({ ...f, displayName: e.target.value }))
+                }
+                placeholder="Nom *"
+                required
+              />
+            </div>
+            <div className={styles.adminField}>
+              <label htmlFor="eu-email">Email</label>
+              <input
+                id="eu-email"
                 type="email"
                 value={editForm.email}
                 onChange={(e) =>
                   setEditForm((f) => ({ ...f, email: e.target.value }))
                 }
+                placeholder="Email *"
                 required
               />
             </div>
             <div className={styles.adminField}>
-              <label>Nouveau mot de passe</label>
+              <label htmlFor="eu-pass">Nouveau mot de passe</label>
               <input
+                id="eu-pass"
                 type="password"
                 value={editForm.password}
                 onChange={(e) =>
                   setEditForm((f) => ({ ...f, password: e.target.value }))
                 }
-                placeholder="Laisser vide pour ne pas changer"
+                placeholder="Nouveau mot de passe (optionnel)"
                 minLength={4}
               />
             </div>
             <div className={styles.adminField}>
-              <label>Rôle</label>
+              <label className={styles.adminFieldVisibleLabel} htmlFor="eu-role">
+                Rôle
+              </label>
               <select
+                id="eu-role"
                 value={editForm.role}
                 onChange={(e) =>
                   setEditForm((f) => ({ ...f, role: e.target.value }))
@@ -689,15 +804,21 @@ function AdminUsers() {
             </div>
             {editForm.role === 'AGENT' ? (
               <div className={styles.adminField}>
-                <label>Zone</label>
+                <label
+                  className={styles.adminFieldVisibleLabel}
+                  htmlFor="eu-zone"
+                >
+                  Zone
+                </label>
                 <select
+                  id="eu-zone"
                   value={editForm.zoneId}
                   onChange={(e) =>
                     setEditForm((f) => ({ ...f, zoneId: e.target.value }))
                   }
                   required
                 >
-                  <option value="">Choisir…</option>
+                  <option value="">Choisir une zone…</option>
                   {zones.map((z) => (
                     <option key={z.id} value={z.id}>
                       {z.code} — {z.name}
@@ -707,24 +828,8 @@ function AdminUsers() {
               </div>
             ) : null}
           </div>
-          <div className={styles.adminActions}>
-            <button
-              type="submit"
-              className={`${styles.btn} ${styles.btnPrimary}`}
-              disabled={busy}
-            >
-              Enregistrer
-            </button>
-            <button
-              type="button"
-              className={`${styles.btn} ${styles.btnSecondary}`}
-              onClick={() => setEditing(null)}
-            >
-              Annuler
-            </button>
-          </div>
         </form>
-      ) : null}
+      </AdminSheet>
 
       {selected ? (
         <div className={styles.adminPanel}>
@@ -766,6 +871,7 @@ function AdminZones() {
   const [busy, setBusy] = useState(false);
   const [code, setCode] = useState('');
   const [name, setName] = useState('');
+  const [createOpen, setCreateOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
 
@@ -779,6 +885,19 @@ function AdminZones() {
     );
   }, []);
 
+  function openCreate() {
+    setCode('');
+    setName('');
+    setError(null);
+    setCreateOpen(true);
+  }
+
+  function closeCreate() {
+    setCreateOpen(false);
+    setCode('');
+    setName('');
+  }
+
   async function onCreate(e: FormEvent) {
     e.preventDefault();
     setBusy(true);
@@ -788,8 +907,7 @@ function AdminZones() {
         method: 'POST',
         body: JSON.stringify({ code, name }),
       });
-      setCode('');
-      setName('');
+      closeCreate();
       await reload();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Création impossible');
@@ -835,95 +953,73 @@ function AdminZones() {
     }
   }
 
+  const editingZone = zones.find((z) => z.id === editId) || null;
+
   return (
     <div>
-      <h1 className={styles.pageTitle}>Zones</h1>
-      {error ? <p className={styles.listError}>{error}</p> : null}
-
-      <form className={styles.adminForm} onSubmit={onCreate}>
-        <p className={styles.adminFormTitle}>Créer une zone</p>
-        <div className={styles.adminFormGrid}>
-          <div className={styles.adminField}>
-            <label>Code</label>
-            <input
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-              placeholder="ZONE_F"
-              required
-            />
-          </div>
-          <div className={styles.adminField}>
-            <label>Nom</label>
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-            />
-          </div>
-        </div>
-        <button
-          type="submit"
-          className={`${styles.btn} ${styles.btnPrimary}`}
-          disabled={busy}
-        >
-          Créer
+      <div className={styles.pageHeaderRow}>
+        <h1 className={styles.pageTitle}>Zones</h1>
+        <button type="button" className={styles.btnNouveau} onClick={openCreate}>
+          Nouveau
         </button>
-      </form>
+      </div>
+      {error && !createOpen && !editId ? (
+        <p className={styles.listError}>{error}</p>
+      ) : null}
+
+      <div className={styles.tableWrap}>
+        <table className={styles.table}>
+          <thead>
+            <tr>
+              <th>Zone</th>
+              <th>Communes</th>
+              <th>Utilisateurs</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {zones.map((z) => (
+              <tr key={z.id} style={{ cursor: 'default' }}>
+                <td>
+                  <strong>
+                    {z.code} — {z.name}
+                  </strong>
+                </td>
+                <td>{z._count?.communes ?? z.communesCount ?? 0}</td>
+                <td>{z._count?.users ?? z.agentsCount ?? 0}</td>
+                <td>
+                  <button
+                    type="button"
+                    className={`${styles.btn} ${styles.btnSecondary}`}
+                    onClick={() => {
+                      setEditId(z.id);
+                      setEditName(z.name);
+                      setError(null);
+                    }}
+                  >
+                    Renommer
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {!zones.length ? (
+              <tr>
+                <td colSpan={4}>Aucune zone</td>
+              </tr>
+            ) : null}
+          </tbody>
+        </table>
+      </div>
 
       {zones.map((z) => (
         <div key={z.id} className={styles.adminPanel}>
           <h3>
             {z.code} — {z.name}{' '}
             <span className={styles.adminMuted}>
-              ({z._count?.communes ?? z.communesCount ?? 0} communes,{' '}
-              {z._count?.users ?? z.agentsCount ?? 0} users)
+              ({z._count?.communes ?? z.communesCount ?? 0} communes)
             </span>
           </h3>
-          <div className={styles.adminActions}>
-            <button
-              type="button"
-              className={`${styles.btn} ${styles.btnSecondary}`}
-              onClick={() => {
-                setEditId(z.id);
-                setEditName(z.name);
-              }}
-            >
-              Renommer
-            </button>
-          </div>
-          {editId === z.id ? (
-            <form
-              className={styles.adminForm}
-              style={{ marginTop: 12 }}
-              onSubmit={onRename}
-            >
-              <div className={styles.adminField}>
-                <label>Nouveau nom</label>
-                <input
-                  value={editName}
-                  onChange={(e) => setEditName(e.target.value)}
-                  required
-                />
-              </div>
-              <div className={styles.adminActions}>
-                <button
-                  type="submit"
-                  className={`${styles.btn} ${styles.btnPrimary}`}
-                  disabled={busy}
-                >
-                  Enregistrer
-                </button>
-                <button
-                  type="button"
-                  className={`${styles.btn} ${styles.btnSecondary}`}
-                  onClick={() => setEditId(null)}
-                >
-                  Annuler
-                </button>
-              </div>
-            </form>
-          ) : null}
-          <div className={styles.tableWrap} style={{ marginTop: 12 }}>
+          <div className={styles.tableWrap}>
             <table className={styles.table}>
               <thead>
                 <tr>
@@ -934,7 +1030,7 @@ function AdminZones() {
               </thead>
               <tbody>
                 {(z.communes || []).map((c) => (
-                  <tr key={c.id}>
+                  <tr key={c.id} style={{ cursor: 'default' }}>
                     <td>{c.name}</td>
                     <td>{c.code}</td>
                     <td>
@@ -967,6 +1063,108 @@ function AdminZones() {
           </div>
         </div>
       ))}
+
+      <AdminSheet
+        open={createOpen}
+        title="Nouvelle zone"
+        subtitle="Ajouter une zone géographique"
+        onClose={closeCreate}
+        footer={
+          <>
+            <button
+              type="button"
+              className={`${styles.btnPill} ${styles.btnPillSecondary}`}
+              onClick={closeCreate}
+            >
+              Annuler
+            </button>
+            <button
+              type="submit"
+              form="admin-zone-create"
+              className={`${styles.btnPill} ${styles.btnPillPrimary}`}
+              disabled={busy}
+            >
+              {busy ? 'Création…' : 'Créer'}
+            </button>
+          </>
+        }
+      >
+        <form
+          id="admin-zone-create"
+          className={styles.adminSheetForm}
+          onSubmit={onCreate}
+        >
+          {error ? <p className={styles.listError}>{error}</p> : null}
+          <div className={styles.adminFormGrid}>
+            <div className={styles.adminField}>
+              <label htmlFor="cz-code">Code</label>
+              <input
+                id="cz-code"
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+                placeholder="Code * (ex. ZONE_F)"
+                required
+              />
+            </div>
+            <div className={styles.adminField}>
+              <label htmlFor="cz-name">Nom</label>
+              <input
+                id="cz-name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Nom *"
+                required
+              />
+            </div>
+          </div>
+        </form>
+      </AdminSheet>
+
+      <AdminSheet
+        open={!!editId}
+        title="Renommer la zone"
+        subtitle={
+          editingZone ? `${editingZone.code} — ${editingZone.name}` : undefined
+        }
+        onClose={() => setEditId(null)}
+        footer={
+          <>
+            <button
+              type="button"
+              className={`${styles.btnPill} ${styles.btnPillSecondary}`}
+              onClick={() => setEditId(null)}
+            >
+              Annuler
+            </button>
+            <button
+              type="submit"
+              form="admin-zone-rename"
+              className={`${styles.btnPill} ${styles.btnPillPrimary}`}
+              disabled={busy}
+            >
+              {busy ? 'Enregistrement…' : 'Enregistrer'}
+            </button>
+          </>
+        }
+      >
+        <form
+          id="admin-zone-rename"
+          className={styles.adminSheetForm}
+          onSubmit={onRename}
+        >
+          {error ? <p className={styles.listError}>{error}</p> : null}
+          <div className={styles.adminField}>
+            <label htmlFor="ez-name">Nouveau nom</label>
+            <input
+              id="ez-name"
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              placeholder="Nouveau nom *"
+              required
+            />
+          </div>
+        </form>
+      </AdminSheet>
     </div>
   );
 }
@@ -1005,6 +1203,7 @@ function AdminProduits() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [form, setForm] = useState(emptyForm);
+  const [sheetOpen, setSheetOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
 
   async function reload() {
@@ -1016,6 +1215,13 @@ function AdminProduits() {
       setError(e instanceof ApiError ? e.message : 'Erreur'),
     );
   }, []);
+
+  function openCreate() {
+    setEditId(null);
+    setForm(emptyForm());
+    setError(null);
+    setSheetOpen(true);
+  }
 
   function startEdit(p: ProduitRow) {
     setEditId(p.id);
@@ -1031,9 +1237,12 @@ function AdminProduits() {
       famille: p.famille,
       sortOrder: String(p.sortOrder),
     });
+    setError(null);
+    setSheetOpen(true);
   }
 
-  function cancelEdit() {
+  function closeSheet() {
+    setSheetOpen(false);
     setEditId(null);
     setForm(emptyForm());
   }
@@ -1066,7 +1275,7 @@ function AdminProduits() {
           body: JSON.stringify(body),
         });
       }
-      cancelEdit();
+      closeSheet();
       await reload();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Enregistrement impossible');
@@ -1097,7 +1306,7 @@ function AdminProduits() {
     setError(null);
     try {
       await apiFetch(`/admin/produits/${id}`, { method: 'DELETE' });
-      if (editId === id) cancelEdit();
+      if (editId === id) closeSheet();
       await reload();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Suppression impossible');
@@ -1108,145 +1317,21 @@ function AdminProduits() {
 
   return (
     <div>
-      <h1 className={styles.pageTitle}>Produits crédit</h1>
-      <p className={styles.adminMuted}>
-        Catalogue administrable — désactivez un produit pour le retirer de la
-        réception (les dossiers existants restent liés).
-      </p>
-      {error ? <p className={styles.listError}>{error}</p> : null}
-
-      <form className={styles.adminForm} onSubmit={onSubmit}>
-        <p className={styles.adminFormTitle}>
-          {editId ? 'Modifier le produit' : 'Créer un produit'}
-        </p>
-        <div className={styles.adminFormGrid}>
-          <div className={styles.adminField}>
-            <label>Code</label>
-            <input
-              value={form.code}
-              onChange={(e) => setForm({ ...form, code: e.target.value })}
-              placeholder="AGR"
-              required
-              disabled={!!editId}
-            />
-          </div>
-          <div className={styles.adminField}>
-            <label>Libellé</label>
-            <input
-              value={form.label}
-              onChange={(e) => setForm({ ...form, label: e.target.value })}
-              required
-            />
-          </div>
-          <div className={styles.adminField}>
-            <label>Préfixe réf.</label>
-            <input
-              value={form.refPrefix}
-              onChange={(e) => setForm({ ...form, refPrefix: e.target.value })}
-              placeholder="AGR"
-              required
-            />
-          </div>
-          <div className={styles.adminField}>
-            <label>Famille</label>
-            <select
-              value={form.famille}
-              onChange={(e) =>
-                setForm({
-                  ...form,
-                  famille: e.target.value as 'SALAIRE' | 'ACTIVITE',
-                })
-              }
-            >
-              <option value="ACTIVITE">Activité</option>
-              <option value="SALAIRE">Salaire</option>
-            </select>
-          </div>
-          <div className={styles.adminField}>
-            <label>Montant min (USD)</label>
-            <input
-              type="number"
-              min={0.01}
-              step="any"
-              value={form.montantMin}
-              onChange={(e) => setForm({ ...form, montantMin: e.target.value })}
-              required
-            />
-          </div>
-          <div className={styles.adminField}>
-            <label>Montant max (USD)</label>
-            <input
-              type="number"
-              min={0.01}
-              step="any"
-              value={form.montantMax}
-              onChange={(e) => setForm({ ...form, montantMax: e.target.value })}
-              required
-            />
-          </div>
-          <div className={styles.adminField}>
-            <label>Durée min</label>
-            <input
-              type="number"
-              min={1}
-              value={form.dureeMin}
-              onChange={(e) => setForm({ ...form, dureeMin: e.target.value })}
-              required
-            />
-          </div>
-          <div className={styles.adminField}>
-            <label>Durée max</label>
-            <input
-              type="number"
-              min={1}
-              value={form.dureeMax}
-              onChange={(e) => setForm({ ...form, dureeMax: e.target.value })}
-              required
-            />
-          </div>
-          <div className={styles.adminField}>
-            <label>Unité durée</label>
-            <select
-              value={form.dureeUnite}
-              onChange={(e) =>
-                setForm({
-                  ...form,
-                  dureeUnite: e.target.value as 'MOIS' | 'SEMAINES',
-                })
-              }
-            >
-              <option value="MOIS">Mois</option>
-              <option value="SEMAINES">Semaines</option>
-            </select>
-          </div>
-          <div className={styles.adminField}>
-            <label>Ordre</label>
-            <input
-              type="number"
-              value={form.sortOrder}
-              onChange={(e) => setForm({ ...form, sortOrder: e.target.value })}
-            />
-          </div>
+      <div className={styles.pageHeaderRow}>
+        <div>
+          <h1 className={styles.pageTitle}>Produits crédit</h1>
+          <p className={styles.adminMuted} style={{ marginTop: 6 }}>
+            Catalogue administrable — désactivez un produit pour le retirer de
+            la réception (les dossiers existants restent liés).
+          </p>
         </div>
-        <div className={styles.adminActions}>
-          <button
-            type="submit"
-            className={`${styles.btn} ${styles.btnPrimary}`}
-            disabled={busy}
-          >
-            {editId ? 'Enregistrer' : 'Créer'}
-          </button>
-          {editId ? (
-            <button
-              type="button"
-              className={`${styles.btn} ${styles.btnSecondary}`}
-              onClick={cancelEdit}
-            >
-              Annuler
-            </button>
-          ) : null}
-        </div>
-      </form>
+        <button type="button" className={styles.btnNouveau} onClick={openCreate}>
+          Nouveau
+        </button>
+      </div>
+      {error && !sheetOpen ? (
+        <p className={styles.listError}>{error}</p>
+      ) : null}
 
       <div className={styles.tableWrap}>
         <table className={styles.table}>
@@ -1258,7 +1343,7 @@ function AdminProduits() {
               <th>Famille</th>
               <th>Statut</th>
               <th>Dossiers</th>
-              <th />
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -1269,7 +1354,7 @@ function AdminProduits() {
                   ? `${p.dureeMin} ${u}`
                   : `${p.dureeMin}–${p.dureeMax} ${u}`;
               return (
-                <tr key={p.id}>
+                <tr key={p.id} style={{ cursor: 'default' }}>
                   <td>
                     <strong>{p.label}</strong>
                     <div className={styles.adminMuted}>
@@ -1278,11 +1363,19 @@ function AdminProduits() {
                   </td>
                   <td>
                     {p.montantMin.toLocaleString('fr-FR')} –{' '}
-                    {p.montantMax.toLocaleString('fr-FR')} US$
+                    {p.montantMax.toLocaleString('fr-FR')} USD
                   </td>
                   <td>{duree}</td>
                   <td>{p.famille === 'SALAIRE' ? 'Salaire' : 'Activité'}</td>
-                  <td>{p.actif ? 'Actif' : 'Inactif'}</td>
+                  <td>
+                    {p.actif ? (
+                      <span className={styles.badgeOk}>Actif</span>
+                    ) : (
+                      <span className={`${styles.badge} ${styles.badgeWarn}`}>
+                        Inactif
+                      </span>
+                    )}
+                  </td>
                   <td>{p._count?.dossiers ?? 0}</td>
                   <td>
                     <div className={styles.adminActions}>
@@ -1328,7 +1421,381 @@ function AdminProduits() {
           </tbody>
         </table>
       </div>
+
+      <AdminSheet
+        open={sheetOpen}
+        title={editId ? 'Modifier le produit' : 'Nouveau produit'}
+        subtitle={
+          editId
+            ? 'Mettre à jour les bornes et le libellé'
+            : 'Ajouter un produit au catalogue crédit'
+        }
+        onClose={closeSheet}
+        footer={
+          <>
+            <button
+              type="button"
+              className={`${styles.btnPill} ${styles.btnPillSecondary}`}
+              onClick={closeSheet}
+            >
+              Annuler
+            </button>
+            <button
+              type="submit"
+              form="admin-produit-form"
+              className={`${styles.btnPill} ${styles.btnPillPrimary}`}
+              disabled={busy}
+            >
+              {busy ? 'Enregistrement…' : editId ? 'Enregistrer' : 'Créer'}
+            </button>
+          </>
+        }
+      >
+        <form
+          id="admin-produit-form"
+          className={styles.adminSheetForm}
+          onSubmit={onSubmit}
+        >
+          {error ? <p className={styles.listError}>{error}</p> : null}
+          <div className={styles.adminFormGrid}>
+            <div className={styles.adminField}>
+              <label htmlFor="cp-code">Code</label>
+              <input
+                id="cp-code"
+                value={form.code}
+                onChange={(e) => setForm({ ...form, code: e.target.value })}
+                placeholder="Code * (ex. AGR)"
+                required
+                disabled={!!editId}
+              />
+            </div>
+            <div className={styles.adminField}>
+              <label htmlFor="cp-label">Libellé</label>
+              <input
+                id="cp-label"
+                value={form.label}
+                onChange={(e) => setForm({ ...form, label: e.target.value })}
+                placeholder="Libellé *"
+                required
+              />
+            </div>
+            <div className={styles.adminField}>
+              <label htmlFor="cp-prefix">Préfixe réf.</label>
+              <input
+                id="cp-prefix"
+                value={form.refPrefix}
+                onChange={(e) =>
+                  setForm({ ...form, refPrefix: e.target.value })
+                }
+                placeholder="Préfixe réf. *"
+                required
+              />
+            </div>
+            <div className={styles.adminField}>
+              <label
+                className={styles.adminFieldVisibleLabel}
+                htmlFor="cp-famille"
+              >
+                Famille
+              </label>
+              <select
+                id="cp-famille"
+                value={form.famille}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    famille: e.target.value as 'SALAIRE' | 'ACTIVITE',
+                  })
+                }
+              >
+                <option value="ACTIVITE">Activité</option>
+                <option value="SALAIRE">Salaire</option>
+              </select>
+            </div>
+            <div className={styles.adminField}>
+              <label htmlFor="cp-min">Montant min (USD)</label>
+              <input
+                id="cp-min"
+                type="number"
+                min={0.01}
+                step="any"
+                value={form.montantMin}
+                onChange={(e) =>
+                  setForm({ ...form, montantMin: e.target.value })
+                }
+                placeholder="Montant min (USD) *"
+                required
+              />
+            </div>
+            <div className={styles.adminField}>
+              <label htmlFor="cp-max">Montant max (USD)</label>
+              <input
+                id="cp-max"
+                type="number"
+                min={0.01}
+                step="any"
+                value={form.montantMax}
+                onChange={(e) =>
+                  setForm({ ...form, montantMax: e.target.value })
+                }
+                placeholder="Montant max (USD) *"
+                required
+              />
+            </div>
+            <div className={styles.adminField}>
+              <label htmlFor="cp-dmin">Durée min</label>
+              <input
+                id="cp-dmin"
+                type="number"
+                min={1}
+                value={form.dureeMin}
+                onChange={(e) =>
+                  setForm({ ...form, dureeMin: e.target.value })
+                }
+                placeholder="Durée min *"
+                required
+              />
+            </div>
+            <div className={styles.adminField}>
+              <label htmlFor="cp-dmax">Durée max</label>
+              <input
+                id="cp-dmax"
+                type="number"
+                min={1}
+                value={form.dureeMax}
+                onChange={(e) =>
+                  setForm({ ...form, dureeMax: e.target.value })
+                }
+                placeholder="Durée max *"
+                required
+              />
+            </div>
+            <div className={styles.adminField}>
+              <label
+                className={styles.adminFieldVisibleLabel}
+                htmlFor="cp-unite"
+              >
+                Unité durée
+              </label>
+              <select
+                id="cp-unite"
+                value={form.dureeUnite}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    dureeUnite: e.target.value as 'MOIS' | 'SEMAINES',
+                  })
+                }
+              >
+                <option value="MOIS">Mois</option>
+                <option value="SEMAINES">Semaines</option>
+              </select>
+            </div>
+            <div className={styles.adminField}>
+              <label htmlFor="cp-ordre">Ordre</label>
+              <input
+                id="cp-ordre"
+                type="number"
+                value={form.sortOrder}
+                onChange={(e) =>
+                  setForm({ ...form, sortOrder: e.target.value })
+                }
+                placeholder="Ordre d’affichage"
+              />
+            </div>
+          </div>
+        </form>
+      </AdminSheet>
     </div>
+  );
+}
+
+type AdminDossierRow = {
+  id: string;
+  reference: string;
+  type: string;
+  produitLabel?: string | null;
+  etat: string;
+  etatLabel: string;
+  montantSouhaite?: number | null;
+  devise?: string | null;
+  updatedAt?: string;
+  createdAt?: string;
+  client: {
+    fullName: string;
+    phone?: string;
+    activityAddress?: string;
+    commune?: { name: string } | null;
+    zone?: { name: string } | null;
+  };
+  agent?: { displayName: string } | null;
+  createdBy?: { displayName: string } | null;
+};
+
+function AdminDossiers() {
+  const router = useRouter();
+  const [rows, setRows] = useState<AdminDossierRow[]>([]);
+  const [q, setQ] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  async function reload(term?: string) {
+    setLoading(true);
+    try {
+      const qs = term?.trim()
+        ? `?q=${encodeURIComponent(term.trim())}`
+        : '';
+      const data = await apiFetch<AdminDossierRow[]>(`/admin/dossiers${qs}`);
+      setRows(data);
+      setError(null);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'Erreur');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    reload();
+  }, []);
+
+  return (
+    <div>
+      <h1 className={styles.pageTitle}>Dossiers</h1>
+      <p className={styles.adminMuted}>
+        Consultation en lecture seule de tous les dossiers de la plateforme.
+      </p>
+      {error ? <p className={styles.listError}>{error}</p> : null}
+
+      <div className={styles.adminToolbar}>
+        <div className={styles.adminField} style={{ flex: 1 }}>
+          <label htmlFor="admin-dossier-q">Recherche</label>
+          <input
+            id="admin-dossier-q"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Référence, client, produit…"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') reload(q);
+            }}
+          />
+        </div>
+        <button
+          type="button"
+          className={`${styles.btn} ${styles.btnPrimary}`}
+          onClick={() => reload(q)}
+        >
+          Rechercher
+        </button>
+      </div>
+
+      {loading ? (
+        <p className={styles.adminMuted}>Chargement…</p>
+      ) : (
+        <div className={styles.tableWrap}>
+          <table className={styles.table}>
+            <thead>
+              <tr>
+                <th>Référence</th>
+                <th>Client</th>
+                <th>Produit</th>
+                <th>Montant</th>
+                <th>État</th>
+                <th>Agent</th>
+                <th>Créé par</th>
+                <th>Mise à jour</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((d) => (
+                <tr
+                  key={d.id}
+                  onClick={() => router.push(`/admin/dossiers/${d.id}`)}
+                  style={{ cursor: 'pointer' }}
+                >
+                  <td>
+                    <strong>{d.reference}</strong>
+                  </td>
+                  <td>{d.client.fullName}</td>
+                  <td>{d.produitLabel || d.type}</td>
+                  <td>
+                    <strong>
+                      {formatMontantSouhaite(d.montantSouhaite, d.devise)}
+                    </strong>
+                  </td>
+                  <td>
+                    <span className={etatBadgeClass(d.etat)}>
+                      {d.etatLabel}
+                    </span>
+                  </td>
+                  <td>{d.agent?.displayName || '—'}</td>
+                  <td>{d.createdBy?.displayName || '—'}</td>
+                  <td className={styles.itemMeta}>
+                    {d.updatedAt
+                      ? new Date(d.updatedAt).toLocaleString('fr-FR', {
+                          dateStyle: 'short',
+                          timeStyle: 'short',
+                        })
+                      : '—'}
+                  </td>
+                </tr>
+              ))}
+              {!rows.length ? (
+                <tr>
+                  <td colSpan={8}>Aucun dossier</td>
+                </tr>
+              ) : null}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AdminDossierDetail({ id }: { id: string }) {
+  const [data, setData] = useState<DossierDetailData | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setData(null);
+    (async () => {
+      try {
+        const d = await apiFetch<DossierDetailData>(`/admin/dossiers/${id}`);
+        if (!cancelled) {
+          setData(d);
+          setError(null);
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setError(e instanceof ApiError ? e.message : 'Erreur');
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
+
+  if (error && !data) {
+    return (
+      <div>
+        <p className={styles.listError}>{error}</p>
+      </div>
+    );
+  }
+  if (!data) {
+    return <p className={styles.adminMuted}>Chargement du dossier…</p>;
+  }
+
+  return (
+    <DossierDetailView
+      data={data}
+      backHref="/admin/dossiers"
+      canManageDocs={false}
+      pendingActions={[]}
+    />
   );
 }
 
@@ -1449,10 +1916,20 @@ function AdminJournal() {
   );
 }
 
-function AdminWorkspace({ section }: { section: AdminSection }) {
+function AdminWorkspace({
+  section,
+  dossierId,
+}: {
+  section: AdminSection;
+  dossierId?: string;
+}) {
   return (
     <DashboardShell base="admin">
       {section === 'dashboard' ? <AdminOverview /> : null}
+      {section === 'dossiers' ? <AdminDossiers /> : null}
+      {section === 'dossier-detail' && dossierId ? (
+        <AdminDossierDetail id={dossierId} />
+      ) : null}
       {section === 'utilisateurs' ? <AdminUsers /> : null}
       {section === 'zones' ? <AdminZones /> : null}
       {section === 'produits' ? <AdminProduits /> : null}
@@ -1464,12 +1941,14 @@ function AdminWorkspace({ section }: { section: AdminSection }) {
 
 export default function AdminDashboard({
   section = 'dashboard',
+  dossierId,
 }: {
   section?: AdminSection;
+  dossierId?: string;
 }) {
   return (
     <AuthGate roles={['ADMIN']} hideSession>
-      <AdminWorkspace section={section} />
+      <AdminWorkspace section={section} dossierId={dossierId} />
     </AuthGate>
   );
 }

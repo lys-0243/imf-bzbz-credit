@@ -5,7 +5,8 @@ import { DossierEtat, Role } from '@prisma/client';
 export const ALLOWED_TRANSITIONS: Partial<
   Record<DossierEtat, DossierEtat[]>
 > = {
-  [DossierEtat.ENREGISTRE]: [DossierEtat.AFFECTE],
+  [DossierEtat.ENREGISTRE]: [DossierEtat.EN_ATTENTE_ATTRIBUTION_AGENT],
+  [DossierEtat.EN_ATTENTE_ATTRIBUTION_AGENT]: [DossierEtat.AFFECTE],
   [DossierEtat.AFFECTE]: [DossierEtat.DESCENTE],
   [DossierEtat.DESCENTE]: [DossierEtat.RAPPORT_AGENT],
   [DossierEtat.RAPPORT_AGENT]: [DossierEtat.SCORING],
@@ -31,6 +32,7 @@ export const ALLOWED_TRANSITIONS: Partial<
 export const ROLE_CAN_TRANSITION: Partial<
   Record<DossierEtat, Role[]>
 > = {
+  [DossierEtat.AFFECTE]: [Role.RESPONSABLE_CREDIT],
   [DossierEtat.DESCENTE]: [Role.AGENT],
   [DossierEtat.RAPPORT_AGENT]: [Role.AGENT],
   [DossierEtat.SCORING]: [Role.AGENT, Role.ANALYSTE],

@@ -210,6 +210,16 @@ export class AdminController {
     return this.admin.overview();
   }
 
+  @Get('dossiers')
+  listDossiers(@Query('q') q?: string) {
+    return this.admin.listDossiers(q);
+  }
+
+  @Get('dossiers/:id')
+  getDossier(@Param('id') id: string) {
+    return this.admin.getDossier(id);
+  }
+
   @Get('users')
   listUsers(@Query('q') q?: string, @Query('role') role?: Role) {
     return this.admin.listUsers(q, role);

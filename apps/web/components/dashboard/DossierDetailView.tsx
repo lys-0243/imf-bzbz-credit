@@ -5,10 +5,13 @@ import { useRouter } from 'next/navigation';
 import {
   DOSSIER_ETAT_LABELS,
   dureeFromPayload,
+  dureeUniteFromPayload,
+  ETAT_CIVIL_LABELS,
   formatDureeLabel,
   formatMontantSouhaite,
   getApplicableChecklistItems,
   montantSouhaiteFromPayload,
+  TYPE_PIECE_LABELS,
   type DossierEtat,
   type FamilleProduit,
   type ProduitCreditDto,
@@ -188,7 +191,12 @@ export function DossierDetailView({
     data.produit?.famille ??
     (data.type === 'SALAIRE' ? 'SALAIRE' : 'ACTIVITE');
   const isReception = Boolean(
-    p.prenom && p.montantSollicite != null && !p.demandeur,
+    p.prenom &&
+      p.montantSollicite != null &&
+      !p.demandeur &&
+      (p.dateNaissance != null ||
+        p.dureeSemaines != null ||
+        p.numeroCompte),
   );
   const pieces = data.pieces ?? [];
   const transitions = data.transitions ?? [];
@@ -267,7 +275,7 @@ export function DossierDetailView({
   const montantLabel = formatMontantSouhaite(montantSouhaite, devise);
   const dureeLabel = formatDureeLabel(
     dureeFromPayload(p),
-    data.produit?.dureeUnite,
+    dureeUniteFromPayload(p, data.produit?.dureeUnite),
   );
   const produitLabel = data.produit?.label || data.type || '—';
   const etatLabel =
@@ -377,16 +385,46 @@ export function DossierDetailView({
         <FieldsTable
           rows={[
             { label: 'Commune', value: data.client.commune?.name || '—' },
+            { label: 'N° de compte', value: displayVal(p.numeroCompte) },
             { label: 'Prénom', value: displayVal(p.prenom) },
             { label: 'Nom', value: displayVal(p.nom) },
-            { label: 'Post-Nom', value: displayVal(p.postNom) },
+            { label: 'Postnom', value: displayVal(p.postNom) },
+            {
+              label: 'Date de naissance',
+              value: displayVal(p.dateNaissance),
+            },
+            {
+              label: 'Type de pièce',
+              value:
+                p.typePiece &&
+                TYPE_PIECE_LABELS[
+                  p.typePiece as keyof typeof TYPE_PIECE_LABELS
+                ]
+                  ? TYPE_PIECE_LABELS[
+                      p.typePiece as keyof typeof TYPE_PIECE_LABELS
+                    ]
+                  : displayVal(p.typePiece),
+            },
+            { label: 'N° de pièce', value: displayVal(p.numeroPiece) },
+            { label: 'Genre', value: displayVal(p.sexe) },
             { label: 'Téléphone', value: displayVal(p.telephone) },
-            { label: 'Email', value: displayVal(p.email) },
+            { label: 'E-mail', value: displayVal(p.email) },
+            {
+              label: 'État civil',
+              value:
+                p.etatCivil &&
+                ETAT_CIVIL_LABELS[
+                  p.etatCivil as keyof typeof ETAT_CIVIL_LABELS
+                ]
+                  ? ETAT_CIVIL_LABELS[
+                      p.etatCivil as keyof typeof ETAT_CIVIL_LABELS
+                    ]
+                  : displayVal(p.etatCivil),
+            },
             {
               label: 'Adresse domicile',
               value: displayVal(p.adresseDomicile),
             },
-            { label: 'N° de compte', value: displayVal(p.numeroCompte) },
           ]}
         />
       );
@@ -437,12 +475,33 @@ export function DossierDetailView({
                 typeof p.montantSollicite === 'number'
                   ? p.montantSollicite
                   : null,
-                p.devise,
+                p.devise || 'USD',
               ),
             },
-            { label: 'Devise', value: displayVal(p.devise) },
             { label: 'Durée', value: dureeLabel },
-            { label: 'Motif crédit', value: displayVal(p.motifCredit) },
+            { label: 'Motif du crédit', value: displayVal(p.motifCredit) },
+            {
+              label: 'Capacité de remboursement mensuel',
+              value:
+                typeof p.capaciteMensuelle === 'number'
+                  ? formatMontantSouhaite(
+                      p.capaciteMensuelle,
+                      p.devise || 'USD',
+                    )
+                  : displayVal(p.capaciteMensuelle),
+            },
+            {
+              label: 'Prêt autre institution',
+              value: displayVal(p.pretAutreInstitution),
+            },
+            ...(p.pretAutreInstitution && p.pretAutreInstitution !== 'Non'
+              ? [
+                  {
+                    label: "Nom de l'institution",
+                    value: displayVal(p.autreInstitutionNom),
+                  },
+                ]
+              : []),
           ]}
         />
       );

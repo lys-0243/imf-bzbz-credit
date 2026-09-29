@@ -1,26 +1,23 @@
-import {
-  DureeUnite,
-  FamilleProduit,
-  PrismaClient,
-  Role,
-} from '@prisma/client';
+import { PrismaClient, Role } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import { KINSHASA_COMMUNES, KINSHASA_ZONES } from '@imf/shared';
 
 const prisma = new PrismaClient();
 
-const SEED_PRODUITS: Array<{
+type SeedProduit = {
   code: string;
   label: string;
   montantMin: number;
   montantMax: number;
   dureeMin: number;
   dureeMax: number;
-  dureeUnite: DureeUnite;
+  dureeUnite: 'MOIS' | 'SEMAINES';
   refPrefix: string;
-  famille: FamilleProduit;
+  famille: 'SALAIRE' | 'ACTIVITE';
   sortOrder: number;
-}> = [
+};
+
+const SEED_PRODUITS: SeedProduit[] = [
   {
     code: 'AGR',
     label: 'Crédit AGR',
@@ -28,9 +25,9 @@ const SEED_PRODUITS: Array<{
     montantMax: 300000,
     dureeMin: 2,
     dureeMax: 36,
-    dureeUnite: DureeUnite.MOIS,
+    dureeUnite: 'MOIS',
     refPrefix: 'AGR',
-    famille: FamilleProduit.ACTIVITE,
+    famille: 'ACTIVITE',
     sortOrder: 10,
   },
   {
@@ -40,9 +37,9 @@ const SEED_PRODUITS: Array<{
     montantMax: 80000,
     dureeMin: 2,
     dureeMax: 36,
-    dureeUnite: DureeUnite.MOIS,
+    dureeUnite: 'MOIS',
     refPrefix: 'SAL',
-    famille: FamilleProduit.SALAIRE,
+    famille: 'SALAIRE',
     sortOrder: 20,
   },
   {
@@ -52,9 +49,9 @@ const SEED_PRODUITS: Array<{
     montantMax: 15000,
     dureeMin: 2,
     dureeMax: 24,
-    dureeUnite: DureeUnite.MOIS,
+    dureeUnite: 'MOIS',
     refPrefix: 'PER',
-    famille: FamilleProduit.SALAIRE,
+    famille: 'SALAIRE',
     sortOrder: 30,
   },
   {
@@ -64,9 +61,9 @@ const SEED_PRODUITS: Array<{
     montantMax: 10000,
     dureeMin: 1,
     dureeMax: 4,
-    dureeUnite: DureeUnite.SEMAINES,
+    dureeUnite: 'SEMAINES',
     refPrefix: 'DDR',
-    famille: FamilleProduit.ACTIVITE,
+    famille: 'ACTIVITE',
     sortOrder: 40,
   },
   {
@@ -76,9 +73,9 @@ const SEED_PRODUITS: Array<{
     montantMax: 20000,
     dureeMin: 12,
     dureeMax: 24,
-    dureeUnite: DureeUnite.MOIS,
+    dureeUnite: 'MOIS',
     refPrefix: 'AUT',
-    famille: FamilleProduit.ACTIVITE,
+    famille: 'ACTIVITE',
     sortOrder: 50,
   },
   {
@@ -88,9 +85,9 @@ const SEED_PRODUITS: Array<{
     montantMax: 10000,
     dureeMin: 1,
     dureeMax: 1,
-    dureeUnite: DureeUnite.MOIS,
+    dureeUnite: 'MOIS',
     refPrefix: 'CLK',
-    famille: FamilleProduit.ACTIVITE,
+    famille: 'ACTIVITE',
     sortOrder: 60,
   },
   {
@@ -100,9 +97,9 @@ const SEED_PRODUITS: Array<{
     montantMax: 50000,
     dureeMin: 1,
     dureeMax: 12,
-    dureeUnite: DureeUnite.MOIS,
+    dureeUnite: 'MOIS',
     refPrefix: 'ALK',
-    famille: FamilleProduit.ACTIVITE,
+    famille: 'ACTIVITE',
     sortOrder: 70,
   },
   {
@@ -112,9 +109,9 @@ const SEED_PRODUITS: Array<{
     montantMax: 80000,
     dureeMin: 2,
     dureeMax: 36,
-    dureeUnite: DureeUnite.MOIS,
+    dureeUnite: 'MOIS',
     refPrefix: 'PRJ',
-    famille: FamilleProduit.ACTIVITE,
+    famille: 'ACTIVITE',
     sortOrder: 80,
   },
   {
@@ -124,9 +121,9 @@ const SEED_PRODUITS: Array<{
     montantMax: 300000,
     dureeMin: 37,
     dureeMax: 60,
-    dureeUnite: DureeUnite.MOIS,
+    dureeUnite: 'MOIS',
     refPrefix: 'LTM',
-    famille: FamilleProduit.ACTIVITE,
+    famille: 'ACTIVITE',
     sortOrder: 90,
   },
 ];
@@ -185,6 +182,12 @@ const SEED_USERS: SeedUser[] = [
     password: 'Ngalula1!',
     displayName: 'Thérèse Ngalula',
     role: Role.RECEPTION,
+  },
+  {
+    email: 'r.mukeba@imf.local',
+    password: 'Mukeba1!',
+    displayName: 'Ruth Mukeba',
+    role: Role.RESPONSABLE_CREDIT,
   },
   {
     email: 'c.mwamba@imf.local',
@@ -283,18 +286,23 @@ async function main() {
   }
 
   for (const u of SEED_USERS) {
+    const email = u.email.trim().toLowerCase();
     const passwordHash = await bcrypt.hash(u.password, 10);
-    const zoneId = u.zoneCode ? zoneByCode[u.zoneCode].id : null;
+    const zoneId = u.zoneCode ? zoneByCode[u.zoneCode]?.id ?? null : null;
+    if (u.zoneCode && !zoneId) {
+      throw new Error(`Zone introuvable pour ${u.email}: ${u.zoneCode}`);
+    }
     await prisma.user.upsert({
-      where: { email: u.email },
+      where: { email },
       update: {
         passwordHash,
         displayName: u.displayName,
         role: u.role,
         zoneId,
+        disabledAt: null,
       },
       create: {
-        email: u.email,
+        email,
         passwordHash,
         displayName: u.displayName,
         role: u.role,
@@ -302,6 +310,10 @@ async function main() {
       },
     });
   }
+
+  console.log(
+    `Seed OK — ${SEED_PRODUITS.length} produits, ${SEED_USERS.length} utilisateurs`,
+  );
 }
 
 main()

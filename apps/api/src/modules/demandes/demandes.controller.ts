@@ -67,13 +67,19 @@ export class DemandesController {
   }
 
   @Get('dossiers')
-  search(@Query('q') q?: string) {
-    return this.demandes.search(q);
+  search(
+    @CurrentUser() user: { id: string; role: Role },
+    @Query('q') q?: string,
+  ) {
+    return this.demandes.search(user, q);
   }
 
   @Get('dossiers/:id')
-  one(@Param('id') id: string) {
-    return this.demandes.findOne(id);
+  one(
+    @CurrentUser() user: { id: string; role: Role },
+    @Param('id') id: string,
+  ) {
+    return this.demandes.findOne(user, id);
   }
 
   @Patch('dossiers/:id')
@@ -86,7 +92,10 @@ export class DemandesController {
   }
 
   @Get('dossiers/:id/timeline')
-  timeline(@Param('id') id: string) {
-    return this.demandes.timeline(id);
+  timeline(
+    @CurrentUser() user: { id: string; role: Role },
+    @Param('id') id: string,
+  ) {
+    return this.demandes.timeline(user, id);
   }
 }

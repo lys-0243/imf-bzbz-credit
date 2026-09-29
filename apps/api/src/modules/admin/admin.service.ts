@@ -12,6 +12,7 @@ import {
   Role,
 } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
+import { DOSSIER_ETAT_LABELS, montantSouhaiteFromPayload } from '@imf/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 
@@ -86,6 +87,7 @@ export class AdminService {
     const actorMap = Object.fromEntries(actors.map((a) => [a.id, a]));
 
     const activeEtats: DossierEtat[] = [
+      DossierEtat.EN_ATTENTE_ATTRIBUTION_AGENT,
       DossierEtat.AFFECTE,
       DossierEtat.DESCENTE,
       DossierEtat.RETOUR_AGENT,
@@ -125,6 +127,75 @@ export class AdminService {
         actor: a.actorId ? actorMap[a.actorId] ?? null : null,
       })),
       activeDossiersHint: activeEtats,
+    };
+  }
+
+  async listDossiers(q?: string) {
+    const term = (q || '').trim();
+    const where: Prisma.DossierWhereInput = term
+      ? {
+          OR: [
+            { reference: { contains: term, mode: 'insensitive' } },
+            { client: { fullName: { contains: term, mode: 'insensitive' } } },
+            { client: { phone: { contains: term, mode: 'insensitive' } } },
+            { produit: { label: { contains: term, mode: 'insensitive' } } },
+            { produit: { code: { contains: term, mode: 'insensitive' } } },
+          ],
+        }
+      : {};
+    const rows = await this.prisma.dossier.findMany({
+      where,
+      orderBy: { updatedAt: 'desc' },
+      take: 200,
+      include: {
+        client: { include: { zone: true, commune: true } },
+        agent: { select: { id: true, displayName: true, email: true } },
+        createdBy: { select: { id: true, displayName: true, email: true } },
+        produit: true,
+      },
+    });
+    return rows.map((d) => {
+      const montant = montantSouhaiteFromPayload(
+        d.payload as Record<string, any>,
+      );
+      return {
+        id: d.id,
+        reference: d.reference,
+        type: d.produit.code,
+        produit: d.produit,
+        produitLabel: d.produit.label,
+        etat: d.etat,
+        etatLabel: DOSSIER_ETAT_LABELS[d.etat],
+        client: d.client,
+        agent: d.agent,
+        createdBy: d.createdBy,
+        montantSouhaite: montant.montantSouhaite,
+        devise: montant.devise,
+        createdAt: d.createdAt,
+        updatedAt: d.updatedAt,
+      };
+    });
+  }
+
+  async getDossier(id: string) {
+    const d = await this.prisma.dossier.findUnique({
+      where: { id },
+      include: {
+        client: { include: { zone: true, commune: true } },
+        agent: { select: { id: true, displayName: true, email: true } },
+        createdBy: { select: { id: true, displayName: true, email: true } },
+        produit: true,
+        pieces: { orderBy: { createdAt: 'asc' } },
+        visite: true,
+        transitions: { orderBy: { createdAt: 'asc' } },
+      },
+    });
+    if (!d) throw new NotFoundException('Dossier introuvable');
+    return {
+      ...d,
+      type: d.produit.code,
+      etatLabel: DOSSIER_ETAT_LABELS[d.etat],
+      editable: false,
     };
   }
 

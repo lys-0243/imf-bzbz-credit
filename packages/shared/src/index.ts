@@ -25,6 +25,7 @@ export type ProduitCreditDto = {
 export const ROLES = [
   'RECEPTION',
   'AGENT',
+  'RESPONSABLE_CREDIT',
   'ANALYSTE',
   'CONFORMITE',
   'DG',
@@ -38,6 +39,7 @@ export type MobileRole = (typeof MOBILE_ROLES)[number];
 
 export const DOSSIER_ETATS = [
   'ENREGISTRE',
+  'EN_ATTENTE_ATTRIBUTION_AGENT',
   'AFFECTE',
   'DESCENTE',
   'RAPPORT_AGENT',
@@ -108,30 +110,66 @@ export const ETATS_CIVILS = [
   'Divorce',
   'Veuf',
 ] as const;
+export const ETAT_CIVIL_LABELS: Record<(typeof ETATS_CIVILS)[number], string> = {
+  Celibataire: 'Célibataire',
+  Marie: 'Marié',
+  Divorce: 'Divorcé',
+  Veuf: 'Veuf/Veuve',
+};
+export const TYPE_PIECE_LABELS: Record<(typeof TYPES_PIECE)[number], string> = {
+  'Carte Electeur': "Carte d'électeur",
+  Passeport: 'Passeport',
+  'Permis de conduire': 'Permis de conduire',
+};
 export const PRET_AUTRE_INSTITUTION = [
   'Non',
   "Oui j'avais",
   "Oui j'ai",
 ] as const;
-export const CLIENT_STATUTS = ['NOUVEAU', 'ANCIEN'] as const;
 export const DEVISES = ['USD', 'CDF'] as const;
 export type Devise = (typeof DEVISES)[number];
 
-/** Payload minimal réception — commun à tous les produits. */
-export const receptionPayloadSchema = z.object({
-  communeId: z.string().min(1),
-  prenom: z.string().min(1),
-  nom: z.string().min(1),
-  postNom: z.string().min(1),
-  sexe: z.enum(SEXES),
-  telephone: z.string().min(1),
-  email: z.union([z.string().email(), z.literal('')]).optional(),
-  adresseDomicile: z.string().min(1),
-  devise: z.enum(DEVISES),
-  montantSollicite: z.number().positive(),
-  duree: z.number().int().positive(),
-  motifCredit: z.string().optional(),
-});
+const dateIso = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date invalide (AAAA-MM-JJ)');
+
+/** Payload réception — identité + prêt (2 étapes). */
+export const receptionPayloadSchema = z
+  .object({
+    communeId: z.string().min(1),
+    numeroCompte: z.string().min(1),
+    prenom: z.string().min(1),
+    nom: z.string().min(1),
+    postNom: z.string().min(1),
+    dateNaissance: dateIso,
+    typePiece: z.enum(TYPES_PIECE),
+    numeroPiece: z.string().min(1),
+    sexe: z.enum(SEXES),
+    telephone: z.string().min(1),
+    email: z.union([z.string().email(), z.literal('')]).optional(),
+    etatCivil: z.enum(ETATS_CIVILS),
+    adresseDomicile: z.string().min(1),
+    devise: z.enum(DEVISES).default('USD'),
+    montantSollicite: z.number().positive(),
+    /** Durée saisie en semaines (tous produits). */
+    dureeSemaines: z.number().int().positive(),
+    motifCredit: z.string().min(1),
+    capaciteMensuelle: z.number().positive(),
+    pretAutreInstitution: z.enum(PRET_AUTRE_INSTITUTION),
+    autreInstitutionNom: z.string().optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (
+      data.pretAutreInstitution !== 'Non' &&
+      !data.autreInstitutionNom?.trim()
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Précisez le nom de l'institution",
+        path: ['autreInstitutionNom'],
+      });
+    }
+  });
 
 export type ReceptionPayload = z.infer<typeof receptionPayloadSchema>;
 
@@ -142,6 +180,17 @@ export type ProduitBornes = {
   dureeMax: number;
   dureeUnite: DureeUnite;
 };
+
+/** Convertit les bornes produit en semaines pour la saisie réception. */
+export function produitDureeBornesEnSemaines(produit: ProduitBornes): {
+  min: number;
+  max: number;
+} {
+  if (produit.dureeUnite === 'SEMAINES') {
+    return { min: produit.dureeMin, max: produit.dureeMax };
+  }
+  return { min: produit.dureeMin * 4, max: produit.dureeMax * 4 };
+}
 
 export function parseReceptionPayload(payload: unknown): ReceptionPayload {
   return receptionPayloadSchema.parse(payload);
@@ -165,13 +214,13 @@ export function parseReceptionPayloadAgainstProduit(
       },
     ]);
   }
-  if (data.duree < produit.dureeMin || data.duree > produit.dureeMax) {
-    const u = produit.dureeUnite === 'SEMAINES' ? 'semaines' : 'mois';
+  const bornes = produitDureeBornesEnSemaines(produit);
+  if (data.dureeSemaines < bornes.min || data.dureeSemaines > bornes.max) {
     throw new z.ZodError([
       {
         code: z.ZodIssueCode.custom,
-        message: `Durée hors bornes (${produit.dureeMin} – ${produit.dureeMax} ${u})`,
-        path: ['duree'],
+        message: `Durée hors bornes (${bornes.min} – ${bornes.max} semaines)`,
+        path: ['dureeSemaines'],
       },
     ]);
   }
@@ -236,7 +285,7 @@ export function montantSouhaiteFromPayload(
   if (typeof p.montantSollicite === 'number') {
     return {
       montantSouhaite: p.montantSollicite,
-      devise: asDevise(p.devise),
+      devise: asDevise(p.devise) ?? 'USD',
     };
   }
   const pret = p.pret ?? {};
@@ -251,10 +300,21 @@ export function dureeFromPayload(
   payload: Record<string, any> | null | undefined,
 ): number | null {
   const p = payload ?? {};
+  if (typeof p.dureeSemaines === 'number') return p.dureeSemaines;
   if (typeof p.duree === 'number') return p.duree;
   if (typeof p.dureeMois === 'number') return p.dureeMois;
   if (typeof p.pret?.dureeMois === 'number') return p.pret.dureeMois;
   return null;
+}
+
+export function dureeUniteFromPayload(
+  payload: Record<string, any> | null | undefined,
+  produitUnite?: DureeUnite | string | null,
+): DureeUnite {
+  const p = payload ?? {};
+  if (typeof p.dureeSemaines === 'number') return 'SEMAINES';
+  if (produitUnite === 'SEMAINES' || produitUnite === 'MOIS') return produitUnite;
+  return 'MOIS';
 }
 
 export function formatMontantSouhaite(
@@ -271,22 +331,28 @@ export function formatDureeLabel(
   unite: DureeUnite | string | null | undefined,
 ): string {
   if (duree == null || Number.isNaN(duree)) return '—';
-  const u = unite === 'SEMAINES' ? (duree > 1 ? 'semaines' : 'semaine') : duree > 1 ? 'mois' : 'mois';
+  const u =
+    unite === 'SEMAINES'
+      ? duree > 1
+        ? 'semaines'
+        : 'semaine'
+      : 'mois';
   return `${duree} ${u}`;
 }
 
 export function formatProduitBornesHint(p: ProduitBornes): string {
-  const montant = `${p.montantMin.toLocaleString('fr-FR')} – ${p.montantMax.toLocaleString('fr-FR')} US$`;
-  const u = p.dureeUnite === 'SEMAINES' ? 'sem.' : 'mois';
+  const montant = `${p.montantMin.toLocaleString('fr-FR')} – ${p.montantMax.toLocaleString('fr-FR')} USD`;
+  const weeks = produitDureeBornesEnSemaines(p);
   const d =
-    p.dureeMin === p.dureeMax
-      ? `${p.dureeMin} ${u}`
-      : `${p.dureeMin}–${p.dureeMax} ${u}`;
+    weeks.min === weeks.max
+      ? `${weeks.min} sem.`
+      : `${weeks.min}–${weeks.max} sem.`;
   return `${montant} · ${d}`;
 }
 
 export const DOSSIER_ETAT_LABELS: Record<DossierEtat, string> = {
   ENREGISTRE: 'Enregistré',
+  EN_ATTENTE_ATTRIBUTION_AGENT: "En attente d'attribution agent",
   AFFECTE: 'Affecté à un agent',
   DESCENTE: 'Descente terrain',
   RAPPORT_AGENT: 'Rapport agent',

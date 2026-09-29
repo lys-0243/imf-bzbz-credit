@@ -35,6 +35,7 @@ export function formatMontantDossier(d: SidebarDossier): string {
 export type NavKey =
   | 'dashboard'
   | 'nouveaux'
+  | 'file'
   | 'dossiers'
   | 'retournes'
   | 'termines'
@@ -47,6 +48,7 @@ export type NavKey =
 
 export type NavCounts = {
   nouveaux?: number;
+  file?: number;
   enCours?: number;
   retournes?: number;
   termines?: number;
@@ -117,22 +119,46 @@ const ANALYSTE_NAV: NavItem[] = [
 
 const ADMIN_NAV: NavItem[] = [
   { key: 'dashboard', label: 'Tableau de bord', href: '/admin' },
+  { key: 'dossiers', label: 'Dossiers', href: '/admin/dossiers' },
   { key: 'utilisateurs', label: 'Utilisateurs', href: '/admin/utilisateurs' },
   { key: 'zones', label: 'Zones', href: '/admin/zones' },
   { key: 'produits', label: 'Produits', href: '/admin/produits' },
   { key: 'journal', label: 'Journal d’activité', href: '/admin/journal' },
 ];
 
-function activeKey(
-  pathname: string,
-  base: 'agent' | 'analyste' | 'admin',
-): NavKey {
+const RESPONSABLE_CREDIT_NAV: NavItem[] = [
+  {
+    key: 'dashboard',
+    label: 'Tableau de bord',
+    href: '/responsable-credit',
+  },
+  {
+    key: 'file',
+    label: 'File d’attente',
+    href: '/responsable-credit/file',
+    countKey: 'file',
+  },
+];
+
+type ShellBase = 'agent' | 'analyste' | 'admin' | 'responsable-credit';
+
+function activeKey(pathname: string, base: ShellBase): NavKey {
   if (pathname.startsWith(`/${base}/profile`)) return 'profile';
   if (base === 'admin') {
+    if (pathname.startsWith('/admin/dossiers')) return 'dossiers';
     if (pathname.startsWith('/admin/utilisateurs')) return 'utilisateurs';
     if (pathname.startsWith('/admin/zones')) return 'zones';
     if (pathname.startsWith('/admin/produits')) return 'produits';
     if (pathname.startsWith('/admin/journal')) return 'journal';
+    return 'dashboard';
+  }
+  if (base === 'responsable-credit') {
+    if (pathname.startsWith('/responsable-credit/file')) return 'file';
+    if (pathname === '/responsable-credit' || pathname === '/responsable-credit/') {
+      return 'dashboard';
+    }
+    const rest = pathname.slice('/responsable-credit/'.length);
+    if (rest && !rest.includes('/')) return 'file';
     return 'dashboard';
   }
   if (pathname.startsWith(`/${base}/nouveaux`)) return 'nouveaux';
@@ -151,7 +177,7 @@ export function DashboardShell({
   counts,
   children,
 }: {
-  base: 'agent' | 'analyste' | 'admin';
+  base: ShellBase;
   counts?: NavCounts;
   children: ReactNode;
 }) {
@@ -163,7 +189,9 @@ export function DashboardShell({
       ? AGENT_NAV
       : base === 'analyste'
         ? ANALYSTE_NAV
-        : ADMIN_NAV;
+        : base === 'responsable-credit'
+          ? RESPONSABLE_CREDIT_NAV
+          : ADMIN_NAV;
   const current = activeKey(pathname, base);
   const profileHref = `/${base}/profile`;
   const photoUrl =
@@ -328,6 +356,13 @@ function NavIcon({ name }: { name: NavKey }) {
       return (
         <svg {...props}>
           <path d="M12 5v14M5 12h14" />
+        </svg>
+      );
+    case 'file':
+      return (
+        <svg {...props}>
+          <path d="M8 6h13M8 12h13M8 18h13" />
+          <path d="M3 6h.01M3 12h.01M3 18h.01" />
         </svg>
       );
     case 'dossiers':

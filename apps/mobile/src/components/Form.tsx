@@ -19,6 +19,8 @@ export function Field({
   keyboardType,
   secureTextEntry,
   required,
+  autoCapitalize,
+  autoCorrect,
 }: {
   label: string;
   value: string;
@@ -27,6 +29,8 @@ export function Field({
   keyboardType?: 'default' | 'numeric' | 'email-address' | 'phone-pad';
   secureTextEntry?: boolean;
   required?: boolean;
+  autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
+  autoCorrect?: boolean;
 }) {
   const [focused, setFocused] = useState(false);
   const ph = placeholder ?? (required ? `${label} *` : label);
@@ -40,6 +44,8 @@ export function Field({
         placeholderTextColor={colors.neutral.placeholder}
         keyboardType={keyboardType}
         secureTextEntry={secureTextEntry}
+        autoCapitalize={autoCapitalize}
+        autoCorrect={autoCorrect}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
         accessibilityLabel={label}

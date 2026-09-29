@@ -12,10 +12,13 @@ import { colors, fonts } from '@imf/assets';
 import {
   DOSSIER_ETAT_LABELS,
   dureeFromPayload,
+  dureeUniteFromPayload,
+  ETAT_CIVIL_LABELS,
   formatDureeLabel,
   formatMontantSouhaite,
   getApplicableChecklistItems,
   montantSouhaiteFromPayload,
+  TYPE_PIECE_LABELS,
   type DossierEtat,
   type FamilleProduit,
   type ProduitCreditDto,
@@ -145,7 +148,11 @@ export function DetailScreen({ id, onBack, bottomInset = 24 }: Props) {
   const tabs: TabDef[] = useMemo(() => {
     if (!d) return [{ key: 'recap', label: 'Récapitulatif' }];
     const p = d.payload ?? {};
-    const isReception = p.prenom && p.montantSollicite != null && !p.demandeur;
+    const isReception =
+      p.prenom &&
+      p.montantSollicite != null &&
+      !p.demandeur &&
+      (p.dateNaissance != null || p.dureeSemaines != null || p.numeroCompte);
     if (isReception) {
       return [
         { key: 'recap', label: 'Récapitulatif' },
@@ -265,7 +272,7 @@ export function DetailScreen({ id, onBack, bottomInset = 24 }: Props) {
   const produitLabel = d.produit?.label || d.type || '—';
   const dureeLabel = formatDureeLabel(
     dureeFromPayload(p),
-    d.produit?.dureeUnite,
+    dureeUniteFromPayload(p, d.produit?.dureeUnite),
   );
   const salaireNet =
     (d.produit?.famille === 'SALAIRE' || d.type === 'SALAIRE') &&
@@ -322,13 +329,32 @@ export function DetailScreen({ id, onBack, bottomInset = 24 }: Props) {
   const renderSalaireIdentite = () => (
     <InfoCard>
       <InfoRow label="Commune" value={d.client.commune?.name || '—'} />
+      <InfoRow label="N° de compte" value={displayVal(p.numeroCompte)} />
       <InfoRow label="Prénom" value={displayVal(p.prenom)} />
       <InfoRow label="Nom" value={displayVal(p.nom)} />
-      <InfoRow label="Post-Nom" value={displayVal(p.postNom)} />
+      <InfoRow label="Postnom" value={displayVal(p.postNom)} />
+      <InfoRow label="Date de naissance" value={displayVal(p.dateNaissance)} />
+      <InfoRow
+        label="Type de pièce"
+        value={
+          p.typePiece && TYPE_PIECE_LABELS[p.typePiece as keyof typeof TYPE_PIECE_LABELS]
+            ? TYPE_PIECE_LABELS[p.typePiece as keyof typeof TYPE_PIECE_LABELS]
+            : displayVal(p.typePiece)
+        }
+      />
+      <InfoRow label="N° de pièce" value={displayVal(p.numeroPiece)} />
+      <InfoRow label="Genre" value={displayVal(p.sexe)} />
       <InfoRow label="Téléphone" value={displayVal(p.telephone)} />
-      <InfoRow label="Email" value={displayVal(p.email)} />
+      <InfoRow label="E-mail" value={displayVal(p.email)} />
+      <InfoRow
+        label="État civil"
+        value={
+          p.etatCivil && ETAT_CIVIL_LABELS[p.etatCivil as keyof typeof ETAT_CIVIL_LABELS]
+            ? ETAT_CIVIL_LABELS[p.etatCivil as keyof typeof ETAT_CIVIL_LABELS]
+            : displayVal(p.etatCivil)
+        }
+      />
       <InfoRow label="Adresse domicile" value={displayVal(p.adresseDomicile)} />
-      <InfoRow label="N° de compte" value={displayVal(p.numeroCompte)} />
     </InfoCard>
   );
 
@@ -369,12 +395,29 @@ export function DetailScreen({ id, onBack, bottomInset = 24 }: Props) {
         label="Montant sollicité"
         value={formatMontantSouhaite(
           typeof p.montantSollicite === 'number' ? p.montantSollicite : null,
-          p.devise,
+          p.devise || 'USD',
         )}
       />
-      <InfoRow label="Devise" value={displayVal(p.devise)} />
       <InfoRow label="Durée" value={dureeLabel} />
-      <InfoRow label="Motif crédit" value={displayVal(p.motifCredit)} />
+      <InfoRow label="Motif du crédit" value={displayVal(p.motifCredit)} />
+      <InfoRow
+        label="Capacité de remboursement mensuel"
+        value={
+          typeof p.capaciteMensuelle === 'number'
+            ? formatMontantSouhaite(p.capaciteMensuelle, p.devise || 'USD')
+            : displayVal(p.capaciteMensuelle)
+        }
+      />
+      <InfoRow
+        label="Prêt autre institution"
+        value={displayVal(p.pretAutreInstitution)}
+      />
+      {p.pretAutreInstitution && p.pretAutreInstitution !== 'Non' ? (
+        <InfoRow
+          label="Nom de l'institution"
+          value={displayVal(p.autreInstitutionNom)}
+        />
+      ) : null}
     </InfoCard>
   );
 
