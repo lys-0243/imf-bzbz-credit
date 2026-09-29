@@ -7,7 +7,7 @@ export function ProfileView() {
   const { user } = useAuth();
   return (
     <div>
-      <h1 className={styles.pageTitle}>Profile</h1>
+      <h1 className={styles.pageTitle}>Profil</h1>
       <div className={styles.profileCard}>
         <p>
           <strong>Nom</strong> {user?.displayName || '—'}

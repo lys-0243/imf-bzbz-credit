@@ -21,6 +21,7 @@ import { api } from '../api';
 import { useAuth } from '../auth';
 import { DateField } from '../components/DateField';
 import {
+  DurationField,
   Field,
   ListSelectField,
   MoneyField,
@@ -430,17 +431,14 @@ export function RegisterScreen({ produit, onCreated, onCancel }: Props) {
               value={form.montantSollicite}
               onChange={(v) => setForm({ ...form, montantSollicite: v ?? 0 })}
             />
-            <Field
-              label="Durée de prêt (en semaines)"
+            <DurationField
+              label="Durée de prêt"
               required
-              value={form.dureeSemaines ? String(form.dureeSemaines) : ''}
-              onChangeText={(v) =>
-                setForm({
-                  ...form,
-                  dureeSemaines: Number(v.replace(/[^\d]/g, '')) || 0,
-                })
+              unit="semaines"
+              value={form.dureeSemaines}
+              onChange={(v) =>
+                setForm({ ...form, dureeSemaines: v ?? 0 })
               }
-              keyboardType="numeric"
             />
             <Text style={styles.fieldHint}>
               Bornes : {dureeBornes.min} – {dureeBornes.max} semaines

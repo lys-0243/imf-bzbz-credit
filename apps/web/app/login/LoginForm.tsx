@@ -29,7 +29,7 @@ export default function LoginForm() {
     setBusy(true);
     setError(null);
     try {
-      const u = await login(email, password);
+      const u = await login(email, password, remember);
       const next = params.get('next') || ROLE_HOME[u.role] || '/';
       router.replace(next);
     } catch (err) {

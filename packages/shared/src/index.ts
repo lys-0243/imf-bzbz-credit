@@ -228,6 +228,246 @@ export function parseReceptionPayloadAgainstProduit(
   return data;
 }
 
+const boolOuiNon = z.boolean();
+
+/** Enrichissement agent — crédit salaire (emploi / caution). */
+export const agentSalaireEnrichmentSchema = z.object({
+  societe: z.string().min(1),
+  adresseSociete: z.string().min(1),
+  fonctionService: z.string().min(1),
+  salaireNet: z.coerce.number().positive(),
+  cautionGarantie: z.string().min(1),
+  depotBc: z.string().optional().default(''),
+  conjointNom: z.string().optional(),
+  conjointDateNaissance: z
+    .union([dateIso, z.literal('')])
+    .optional()
+    .default(''),
+});
+
+/** Enrichissement agent — crédit activité. */
+export const agentActiviteEnrichmentSchema = z.object({
+  eligibilite: z.object({
+    age18OuPlus: boolOuiNon,
+    proprietaireActivite: boolOuiNon,
+    exerceActiviteActuellement: boolOuiNon,
+    activiteListeExclusion: boolOuiNon,
+    congolaisOuDomiciile: boolOuiNon,
+    activiteZoneOperationnelle: boolOuiNon,
+    activite6MoisConsecutifs: boolOuiNon,
+    activiteEnregistreeLegalement: boolOuiNon,
+  }),
+  business: z.object({
+    nomBusiness: z.string().min(1),
+    adresseBusiness: z.string().min(1),
+    dureeAdresse: z.string().min(1),
+    typeBusiness: z.string().min(1),
+    dureeTypeBusiness: z.string().min(1),
+    secteurBusiness: z.string().min(1),
+    formeJuridique: z.string().min(1),
+  }),
+  pret: z.object({
+    butInvestissement: z.string().min(1),
+    commentaireBut: z.string().optional().default(''),
+    montantPretPrecedent: z.union([z.coerce.number(), z.literal('')]).optional(),
+    dureePretPrecedent: z.string().optional().default(''),
+  }),
+  conjointNom: z.string().optional(),
+  conjointDateNaissance: z
+    .union([dateIso, z.literal('')])
+    .optional()
+    .default(''),
+});
+
+export type AgentSalaireEnrichment = z.infer<typeof agentSalaireEnrichmentSchema>;
+export type AgentActiviteEnrichment = z.infer<
+  typeof agentActiviteEnrichmentSchema
+>;
+
+export function parseAgentEnrichment(
+  famille: FamilleProduit,
+  enrichment: unknown,
+  opts?: { etatCivil?: string },
+) {
+  if (famille === 'SALAIRE') {
+    const data = agentSalaireEnrichmentSchema.parse(enrichment);
+    if (opts?.etatCivil === 'Marie' && !data.conjointNom?.trim()) {
+      throw new z.ZodError([
+        {
+          code: z.ZodIssueCode.custom,
+          message: 'Conjoint obligatoire si marié(e)',
+          path: ['conjointNom'],
+        },
+      ]);
+    }
+    return { famille: 'SALAIRE' as const, data };
+  }
+  const data = agentActiviteEnrichmentSchema.parse(enrichment);
+  if (opts?.etatCivil === 'Marie' && !data.conjointNom?.trim()) {
+    throw new z.ZodError([
+      {
+        code: z.ZodIssueCode.custom,
+        message: 'Conjoint obligatoire si marié(e)',
+        path: ['conjointNom'],
+      },
+    ]);
+  }
+  return { famille: 'ACTIVITE' as const, data };
+}
+
+/** Fusionne l’enrichissement agent dans le payload réception existant. */
+export function mergeAgentEnrichmentIntoPayload(
+  existing: Record<string, any>,
+  famille: FamilleProduit,
+  enrichment: AgentSalaireEnrichment | AgentActiviteEnrichment,
+): Record<string, any> {
+  const base = { ...existing };
+  if (famille === 'SALAIRE') {
+    const e = enrichment as AgentSalaireEnrichment;
+    Object.assign(base, {
+      societe: e.societe,
+      adresseSociete: e.adresseSociete,
+      fonctionService: e.fonctionService,
+      salaireNet: e.salaireNet,
+      cautionGarantie: e.cautionGarantie,
+      depotBc: e.depotBc || '',
+      conjointNom: e.conjointNom || '',
+      conjointDateNaissance: e.conjointDateNaissance || '',
+    });
+    return base;
+  }
+  const e = enrichment as AgentActiviteEnrichment;
+  base.eligibilite = { ...e.eligibilite };
+  base.business = { ...e.business };
+  base.pret = {
+    ...(typeof base.pret === 'object' && base.pret ? base.pret : {}),
+    butInvestissement: e.pret.butInvestissement,
+    commentaireBut: e.pret.commentaireBut || '',
+    montantPretPrecedent:
+      e.pret.montantPretPrecedent === '' || e.pret.montantPretPrecedent == null
+        ? undefined
+        : e.pret.montantPretPrecedent,
+    dureePretPrecedent: e.pret.dureePretPrecedent || '',
+    // miroir des champs réception pour affichage legacy pret.*
+    montantDesire: base.montantSollicite,
+    devise: base.devise,
+    dureeMois:
+      typeof base.dureeSemaines === 'number'
+        ? Math.round(base.dureeSemaines / 4)
+        : base.dureeMois,
+    capaciteMensuelle: base.capaciteMensuelle,
+    pretAutreInstitution: base.pretAutreInstitution,
+    autreInstitutionNom: base.autreInstitutionNom,
+  };
+  base.conjointNom = e.conjointNom || '';
+  base.conjointDateNaissance = e.conjointDateNaissance || '';
+  if (base.etatCivil === 'Marie' || e.conjointNom) {
+    base.demandeur = {
+      ...(typeof base.demandeur === 'object' && base.demandeur
+        ? base.demandeur
+        : {}),
+      prenom: base.prenom,
+      nom: base.nom,
+      postNom: base.postNom,
+      sexe: base.sexe,
+      dateNaissance: base.dateNaissance,
+      etatCivil: base.etatCivil,
+      typePiece: base.typePiece,
+      numeroPiece: base.numeroPiece,
+      adresseDomicile: base.adresseDomicile,
+      telephone: base.telephone,
+      email: base.email,
+      conjointNom: e.conjointNom || '',
+      conjointDateNaissance: e.conjointDateNaissance || '',
+    };
+  }
+  return base;
+}
+
+export function enrichmentFromPayload(
+  famille: FamilleProduit,
+  payload: Record<string, any> | null | undefined,
+): AgentSalaireEnrichment | AgentActiviteEnrichment {
+  const p = payload ?? {};
+  if (famille === 'SALAIRE') {
+    return {
+      societe: String(p.societe ?? ''),
+      adresseSociete: String(p.adresseSociete ?? ''),
+      fonctionService: String(p.fonctionService ?? ''),
+      salaireNet:
+        typeof p.salaireNet === 'number'
+          ? p.salaireNet
+          : Number(p.salaireNet) || 0,
+      cautionGarantie: String(p.cautionGarantie ?? ''),
+      depotBc: String(p.depotBc ?? ''),
+      conjointNom: String(p.conjointNom ?? p.demandeur?.conjointNom ?? ''),
+      conjointDateNaissance: String(
+        p.conjointDateNaissance ?? p.demandeur?.conjointDateNaissance ?? '',
+      ),
+    };
+  }
+  const e = p.eligibilite ?? {};
+  const b = p.business ?? {};
+  const pret = p.pret ?? {};
+  return {
+    eligibilite: {
+      age18OuPlus: Boolean(e.age18OuPlus),
+      proprietaireActivite: Boolean(e.proprietaireActivite),
+      exerceActiviteActuellement: Boolean(e.exerceActiviteActuellement),
+      activiteListeExclusion: Boolean(e.activiteListeExclusion),
+      congolaisOuDomiciile: Boolean(e.congolaisOuDomiciile),
+      activiteZoneOperationnelle: Boolean(e.activiteZoneOperationnelle),
+      activite6MoisConsecutifs: Boolean(e.activite6MoisConsecutifs),
+      activiteEnregistreeLegalement: Boolean(e.activiteEnregistreeLegalement),
+    },
+    business: {
+      nomBusiness: String(b.nomBusiness ?? ''),
+      adresseBusiness: String(b.adresseBusiness ?? ''),
+      dureeAdresse: String(b.dureeAdresse ?? ''),
+      typeBusiness: String(b.typeBusiness ?? ''),
+      dureeTypeBusiness: String(b.dureeTypeBusiness ?? ''),
+      secteurBusiness: String(b.secteurBusiness ?? ''),
+      formeJuridique: String(b.formeJuridique ?? ''),
+    },
+    pret: {
+      butInvestissement: String(pret.butInvestissement ?? ''),
+      commentaireBut: String(pret.commentaireBut ?? ''),
+      montantPretPrecedent:
+        pret.montantPretPrecedent == null || pret.montantPretPrecedent === ''
+          ? ''
+          : Number(pret.montantPretPrecedent),
+      dureePretPrecedent: String(pret.dureePretPrecedent ?? ''),
+    },
+    conjointNom: String(p.conjointNom ?? p.demandeur?.conjointNom ?? ''),
+    conjointDateNaissance: String(
+      p.conjointDateNaissance ?? p.demandeur?.conjointDateNaissance ?? '',
+    ),
+  };
+}
+
+export function validateAgentEnrichmentComplete(
+  famille: FamilleProduit,
+  payload: Record<string, any>,
+): { ok: true } | { ok: false; message: string } {
+  try {
+    parseAgentEnrichment(
+      famille,
+      enrichmentFromPayload(famille, payload),
+      { etatCivil: payload.etatCivil },
+    );
+    return { ok: true };
+  } catch (e) {
+    if (e instanceof z.ZodError) {
+      const first = e.issues[0];
+      return {
+        ok: false,
+        message: first?.message || 'Complétez les champs du dossier',
+      };
+    }
+    return { ok: false, message: 'Complétez les champs du dossier' };
+  }
+}
+
 export function clientFieldsFromPayload(payload: Record<string, any>): {
   fullName: string;
   phone: string;

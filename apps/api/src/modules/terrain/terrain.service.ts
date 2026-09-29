@@ -8,10 +8,18 @@ import { DossierEtat, Prisma, Role } from '@prisma/client';
 import {
   ChecklistAnswers,
   DOSSIER_ETAT_LABELS,
+  clientFieldsFromPayload,
   getApplicableChecklistItems,
+  mergeAgentEnrichmentIntoPayload,
   montantSouhaiteFromPayload,
+  parseAgentEnrichment,
   validateAgentChecklist,
+  validateAgentEnrichmentComplete,
+  type AgentActiviteEnrichment,
+  type AgentSalaireEnrichment,
+  type FamilleProduit,
 } from '@imf/shared';
+import { ZodError } from 'zod';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { DocumentsService } from '../documents/documents.service';
@@ -435,6 +443,88 @@ export class TerrainService {
     return this.getOne(user, id);
   }
 
+  async savePayload(user: AuthUser, id: string, enrichmentRaw: unknown) {
+    const d = await this.prisma.dossier.findUnique({
+      where: { id },
+      include: { produit: true },
+    });
+    if (!d) throw new NotFoundException('Dossier introuvable');
+    this.assertAgentOwns(d, user);
+    if (d.agentValideAt) {
+      throw new ForbiddenException(
+        'Dossier déjà soumis — modification interdite',
+      );
+    }
+    if (
+      d.etat !== DossierEtat.AFFECTE &&
+      d.etat !== DossierEtat.DESCENTE &&
+      d.etat !== DossierEtat.RETOUR_AGENT
+    ) {
+      throw new BadRequestException(
+        `Impossible de modifier le dossier depuis l'état ${d.etat}`,
+      );
+    }
+
+    const existing = (d.payload ?? {}) as Record<string, any>;
+    const famille = d.produit.famille as FamilleProduit;
+    let enrichment: AgentSalaireEnrichment | AgentActiviteEnrichment;
+    try {
+      enrichment = parseAgentEnrichment(famille, enrichmentRaw, {
+        etatCivil: existing.etatCivil,
+      }).data;
+    } catch (e) {
+      if (e instanceof ZodError) {
+        throw new BadRequestException({
+          message: 'Enrichissement invalide',
+          issues: e.issues,
+        });
+      }
+      throw e;
+    }
+
+    const merged = mergeAgentEnrichmentIntoPayload(
+      existing,
+      famille,
+      enrichment,
+    );
+    const fields = clientFieldsFromPayload(merged);
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.dossier.update({
+        where: { id },
+        data: { payload: merged as Prisma.InputJsonValue },
+      });
+      await tx.client.update({
+        where: { id: d.clientId },
+        data: {
+          ...(fields.fullName ? { fullName: fields.fullName } : {}),
+          ...(fields.phone ? { phone: fields.phone } : {}),
+          activityAddress:
+            famille === 'SALAIRE'
+              ? String(merged.adresseSociete || fields.activityAddress || '')
+              : String(
+                  merged.business?.adresseBusiness ||
+                    fields.activityAddress ||
+                    '',
+                ),
+        },
+      });
+      await this.audit.log(
+        {
+          dossierId: id,
+          actorId: user.id,
+          action: 'AGENT_PAYLOAD_UPDATED',
+          entityType: 'DOSSIER',
+          entityId: id,
+          payload: { famille },
+        },
+        tx,
+      );
+    });
+
+    return this.getOne(user, id);
+  }
+
   async uploadPiece(
     user: AuthUser,
     id: string,
@@ -497,8 +587,15 @@ export class TerrainService {
       flags: {},
       values: {},
     };
-    const uploadedKinds = new Set(d.pieces.map((p) => p.kind));
     const payload = (d.payload ?? {}) as Record<string, any>;
+    const enrichCheck = validateAgentEnrichmentComplete(
+      d.produit.famille as FamilleProduit,
+      payload,
+    );
+    if (!enrichCheck.ok) {
+      throw new BadRequestException(enrichCheck.message);
+    }
+    const uploadedKinds = new Set(d.pieces.map((p) => p.kind));
     const issues = validateAgentChecklist(
       d.produit.famille,
       payload,

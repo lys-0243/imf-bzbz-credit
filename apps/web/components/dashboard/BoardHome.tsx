@@ -31,7 +31,7 @@ function statusMessage(
   if (counts.retournes > 0) {
     return {
       title: `Bonjour${name ? `, ${name}` : ''}`,
-      text: `Attention : ${counts.retournes} dossier${counts.retournes > 1 ? 's' : ''} renvoyé${counts.retournes > 1 ? 's' : ''} nécessitent votre action.`,
+      text: `Attention : ${counts.retournes} dossier${counts.retournes > 1 ? 's' : ''} nécessitent votre action.`,
       tone: 'warn' as const,
     };
   }
@@ -63,6 +63,7 @@ function cardClass(key: string) {
     case 'en_cours':
       return styles.boardCardBlue;
     case 'retournes':
+    case 'a_valider':
       return styles.boardCardRed;
     case 'termines':
       return styles.boardCardYellow;
@@ -95,6 +96,7 @@ function CardIcon({ kind }: { kind: string }) {
         </svg>
       );
     case 'retournes':
+    case 'a_valider':
       return (
         <svg {...props}>
           <path d="M9 14l-4-4 4-4" />
@@ -130,7 +132,9 @@ export function BoardHome({
   const counts = {
     nouveaux: stats.find((s) => s.key === 'nouveaux')?.value ?? 0,
     enCours: stats.find((s) => s.key === 'en_cours')?.value ?? 0,
-    retournes: stats.find((s) => s.key === 'retournes')?.value ?? 0,
+    retournes:
+      (stats.find((s) => s.key === 'a_valider')?.value ?? 0) ||
+      (stats.find((s) => s.key === 'retournes')?.value ?? 0),
     termines: stats.find((s) => s.key === 'termines')?.value ?? 0,
   };
   const msg = statusMessage(user?.displayName?.split(/\s+/)[0] || '', counts);

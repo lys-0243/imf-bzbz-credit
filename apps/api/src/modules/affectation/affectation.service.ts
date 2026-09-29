@@ -16,14 +16,12 @@ type AuthUser = {
   zoneId?: string | null;
 };
 
-export type RcBucket =
+type RcBucket =
   | 'file'
   | 'en_cours'
   | 'a_valider'
   | 'renvoyes'
   | 'soumis';
-
-const CLOSED: DossierEtat[] = [DossierEtat.A_DECAISSER, DossierEtat.REJETE];
 
 const EN_COURS_ETATS: DossierEtat[] = [
   DossierEtat.AFFECTE,

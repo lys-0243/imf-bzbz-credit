@@ -19,12 +19,13 @@ export function getApiUrl() {
 
 export function getToken(): string | null {
   if (typeof window === 'undefined') return null;
-  return localStorage.getItem(TOKEN_KEY);
+  return localStorage.getItem(TOKEN_KEY) ?? sessionStorage.getItem(TOKEN_KEY);
 }
 
 export function getStoredUser(): WebUser | null {
   if (typeof window === 'undefined') return null;
-  const raw = localStorage.getItem(USER_KEY);
+  const raw =
+    localStorage.getItem(USER_KEY) ?? sessionStorage.getItem(USER_KEY);
   if (!raw) return null;
   try {
     return JSON.parse(raw) as WebUser;
@@ -33,14 +34,18 @@ export function getStoredUser(): WebUser | null {
   }
 }
 
-export function setSession(token: string, user: WebUser) {
-  localStorage.setItem(TOKEN_KEY, token);
-  localStorage.setItem(USER_KEY, JSON.stringify(user));
+function setSession(token: string, user: WebUser, persist = true) {
+  clearSession();
+  const store = persist ? localStorage : sessionStorage;
+  store.setItem(TOKEN_KEY, token);
+  store.setItem(USER_KEY, JSON.stringify(user));
 }
 
 export function clearSession() {
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(USER_KEY);
+  sessionStorage.removeItem(TOKEN_KEY);
+  sessionStorage.removeItem(USER_KEY);
 }
 
 export class ApiError extends Error {
@@ -91,7 +96,11 @@ export async function apiFetch<T = unknown>(
   return body as T;
 }
 
-export async function login(email: string, password: string) {
+export async function login(
+  email: string,
+  password: string,
+  remember = true,
+) {
   const data = await apiFetch<{ accessToken: string; user: WebUser }>(
     '/auth/login',
     {
@@ -99,6 +108,6 @@ export async function login(email: string, password: string) {
       body: JSON.stringify({ email, password }),
     },
   );
-  setSession(data.accessToken, data.user);
+  setSession(data.accessToken, data.user, remember);
   return data.user;
 }

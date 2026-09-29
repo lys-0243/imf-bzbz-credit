@@ -51,8 +51,9 @@ export default function App() {
   const [fontsLoaded] = useFonts(fontSources);
 
   useEffect(() => {
+    if (!fontsLoaded) return;
     SplashScreen.hideAsync().catch(() => undefined);
-  }, []);
+  }, [fontsLoaded]);
 
   if (!fontsLoaded) {
     return (

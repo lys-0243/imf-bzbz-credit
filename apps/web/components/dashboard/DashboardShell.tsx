@@ -12,7 +12,7 @@ export type SidebarDossier = {
   produitLabel?: string | null;
   etat: string;
   etatLabel: string;
-  bucket?: 'nouveaux' | 'en_cours' | 'retournes' | 'termines';
+  bucket?: string;
   updatedAt?: string;
   montantSouhaite?: number | null;
   devise?: string | null;
@@ -326,23 +326,6 @@ export function DashboardShell({
       </aside>
 
       <div className={styles.main}>{children}</div>
-    </div>
-  );
-}
-
-export function DashboardEmpty({
-  title = 'Sélectionnez un dossier',
-  hint = 'Choisissez un dossier dans la liste pour afficher ses détails.',
-}: {
-  title?: string;
-  hint?: string;
-}) {
-  return (
-    <div className={styles.emptyState}>
-      <div>
-        <h2>{title}</h2>
-        <p>{hint}</p>
-      </div>
     </div>
   );
 }

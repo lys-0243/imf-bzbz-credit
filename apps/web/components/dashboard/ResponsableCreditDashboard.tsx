@@ -204,14 +204,14 @@ function ResponsableCreditWorkspace({
               href: '/responsable-credit/en-cours',
             },
             {
-              key: 'retournes',
+              key: 'a_valider',
               label: 'À valider',
               value: counts.aValider,
               href: '/responsable-credit/a-valider',
               tone: counts.aValider > 0 ? 'warn' : 'muted',
             },
             {
-              key: 'termines',
+              key: 'retournes',
               label: 'Renvoyés',
               value: counts.retournes,
               href: '/responsable-credit/renvoyes',
@@ -231,6 +231,7 @@ function ResponsableCreditWorkspace({
           onSelect={(id) => router.push(`/responsable-credit/${id}`)}
           loading={loading}
           error={error}
+          lastColumn={section === 'en_cours' ? 'agent' : 'address'}
         />
       ) : null}
 

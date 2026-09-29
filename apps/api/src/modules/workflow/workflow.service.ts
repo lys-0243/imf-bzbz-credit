@@ -33,9 +33,7 @@ export const ALLOWED_TRANSITIONS: Partial<
   [DossierEtat.CONSEIL]: [DossierEtat.A_DECAISSER, DossierEtat.REJETE],
 };
 
-export const ROLE_CAN_TRANSITION: Partial<
-  Record<DossierEtat, Role[]>
-> = {
+const ROLE_CAN_TRANSITION: Partial<Record<DossierEtat, Role[]>> = {
   [DossierEtat.AFFECTE]: [Role.RESPONSABLE_CREDIT],
   [DossierEtat.DESCENTE]: [Role.AGENT],
   [DossierEtat.RAPPORT_AGENT]: [Role.AGENT],
@@ -66,9 +64,5 @@ export class WorkflowService {
         );
       }
     }
-  }
-
-  allowedFrom(from: DossierEtat): DossierEtat[] {
-    return ALLOWED_TRANSITIONS[from] ?? [];
   }
 }

@@ -51,7 +51,7 @@ export function DateField({
           maximumDate={new Date()}
           onValueChange={(_, date) => {
             if (Platform.OS === 'android') setOpen(false);
-            onChange(toIso(date));
+            if (date) onChange(toIso(date));
           }}
           onDismiss={() => setOpen(false)}
         />

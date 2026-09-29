@@ -43,7 +43,6 @@ export function defaultReceptionPayload(communeId: string) {
 export type ReceptionForm = ReturnType<typeof defaultReceptionPayload>;
 
 export {
-  DEVISES,
   ETATS_CIVILS,
   PRET_AUTRE_INSTITUTION,
   SEXES,

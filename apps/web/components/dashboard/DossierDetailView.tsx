@@ -193,7 +193,6 @@ export function DossierDetailView({
   const isReception = Boolean(
     p.prenom &&
       p.montantSollicite != null &&
-      !p.demandeur &&
       (p.dateNaissance != null ||
         p.dureeSemaines != null ||
         p.numeroCompte),
@@ -202,10 +201,22 @@ export function DossierDetailView({
   const transitions = data.transitions ?? [];
 
   const baseTabs: TabDef[] = useMemo(() => {
-    if (isReception) {
+    if (isReception || (p.prenom && p.montantSollicite != null && !p.demandeur)) {
+      if (famille === 'SALAIRE') {
+        return [
+          { key: 'recap', label: 'Récapitulatif' },
+          { key: 'identite', label: 'Identité' },
+          { key: 'emploi', label: 'Emploi & prêt' },
+          { key: 'demande', label: 'Demande' },
+          { key: 'docs', label: 'Documents' },
+        ];
+      }
       return [
         { key: 'recap', label: 'Récapitulatif' },
         { key: 'identite', label: 'Identité' },
+        { key: 'elig', label: 'Éligibilité' },
+        { key: 'business', label: 'Business' },
+        { key: 'pret', label: 'Prêt' },
         { key: 'demande', label: 'Demande' },
         { key: 'docs', label: 'Documents' },
       ];
@@ -227,7 +238,7 @@ export function DossierDetailView({
       { key: 'pret', label: 'Prêt' },
       { key: 'docs', label: 'Documents' },
     ];
-  }, [famille, isReception]);
+  }, [famille, isReception, p.prenom, p.montantSollicite, p.demandeur]);
 
   const tabs = useMemo(
     () => [...baseTabs, ...(extraTabs ?? [])],

@@ -82,13 +82,11 @@ export function extractChecklistContext(
   hasGarant: boolean;
 } {
   const etatCivil =
-    famille === 'SALAIRE'
-      ? undefined
-      : (payload?.demandeur?.etatCivil as string | undefined);
+    (payload?.etatCivil as string | undefined) ??
+    (payload?.demandeur?.etatCivil as string | undefined);
   const forme =
-    famille === 'SALAIRE'
-      ? undefined
-      : (payload?.business?.formeJuridique as string | undefined);
+    (payload?.business?.formeJuridique as string | undefined) ??
+    (payload?.formeJuridique as string | undefined);
 
   return {
     famille,
