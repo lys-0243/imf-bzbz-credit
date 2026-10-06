@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   CF2_SECTION_META,
   newCf2DepenseAutre,
@@ -10,18 +10,21 @@ import {
   sumDepensesFamiliales,
   totalDepensesPrivees,
   type Cf21Data,
+  type Cf22Data,
   type Cf2Analyse,
   type Cf2DepensesFamiliales,
   type Cf2SectionKey,
 } from '@imf/shared';
 import { dashStyles as styles } from './DashboardShell';
+import { Cf22Section } from './Cf22Section';
+import { useToast } from '../Toast';
 
 type Props = {
   analyse: Cf2Analyse | null | undefined;
   devise?: string;
   disabled?: boolean;
   busy?: boolean;
-  onSave?: (analyse: Cf2Analyse) => void | Promise<void>;
+  onSave?: (analyse: Partial<Cf2Analyse>) => void | Promise<void>;
 };
 
 function FormBlock({
@@ -224,15 +227,22 @@ export function Cf2Panel({
   busy,
   onSave,
 }: Props) {
+  const toast = useToast();
   const [section, setSection] = useState<Cf2SectionKey>('cf21');
   const [form, setForm] = useState<Cf2Analyse>(() =>
     normalizeCf2Analyse(analyse),
   );
-  const [msg, setMsg] = useState<string | null>(null);
+  const formRef = useRef(form);
+  const dirtySectionsRef = useRef(new Set<'cf21' | 'cf22'>());
+  formRef.current = form;
 
   useEffect(() => {
-    setForm(normalizeCf2Analyse(analyse));
-    setMsg(null);
+    const next = normalizeCf2Analyse(analyse);
+    setForm((prev) => ({
+      ...next,
+      cf21: dirtySectionsRef.current.has('cf21') ? prev.cf21 : next.cf21,
+      cf22: dirtySectionsRef.current.has('cf22') ? prev.cf22 : next.cf22,
+    }));
   }, [analyse]);
 
   const cf21 = form.cf21;
@@ -248,11 +258,11 @@ export function Cf2Panel({
   );
 
   function patchCf21(partial: Partial<Cf21Data>) {
+    dirtySectionsRef.current.add('cf21');
     setForm((prev) => ({
       ...prev,
       cf21: { ...prev.cf21, ...partial },
     }));
-    setMsg(null);
   }
 
   function patchResidence(partial: Partial<Cf21Data['residence']>) {
@@ -267,14 +277,25 @@ export function Cf2Panel({
     patchCf21({ depenses: { ...cf21.depenses, ...partial } });
   }
 
-  async function handleSave() {
+  function patchCf22(next: Cf22Data) {
+    dirtySectionsRef.current.add('cf22');
+    setForm((prev) => ({ ...prev, cf22: next }));
+  }
+
+  async function handleSaveSection(which: 'cf21' | 'cf22') {
     if (!onSave) return;
-    setMsg(null);
+    const snapshot = formRef.current;
+    const patch: Partial<Cf2Analyse> =
+      which === 'cf21' ? { cf21: snapshot.cf21 } : { cf22: snapshot.cf22 };
+    const ok = which === 'cf22' ? 'CF2.2 enregistrée.' : 'CF2.1 enregistrée.';
     try {
-      await onSave(form);
-      setMsg('Analyse CF2 enregistrée.');
-    } catch {
-      /* erreur remontée par le parent */
+      await onSave(patch);
+      dirtySectionsRef.current.delete(which);
+      toast.success(ok);
+    } catch (e) {
+      toast.error(
+        e instanceof Error ? e.message : `Échec enregistrement ${which.toUpperCase()}`,
+      );
     }
   }
 
@@ -797,15 +818,23 @@ export function Cf2Panel({
               <button
                 type="button"
                 className={`${styles.btn} ${styles.btnPrimary}`}
-                onClick={() => void handleSave()}
+                onClick={() => void handleSaveSection('cf21')}
                 disabled={busy}
               >
                 Enregistrer CF2.1
               </button>
-              {msg ? <span className={styles.assignHint}>{msg}</span> : null}
             </div>
           ) : null}
         </>
+      ) : section === 'cf22' ? (
+        <Cf22Section
+          cf22={form.cf22}
+          devise={devise}
+          disabled={disabled}
+          busy={busy}
+          onChange={patchCf22}
+          onSave={onSave ? () => handleSaveSection('cf22') : undefined}
+        />
       ) : (
         <div className={styles.cf2Shell}>
           <p className={styles.cf2ShellTitle}>Bientôt disponible</p>

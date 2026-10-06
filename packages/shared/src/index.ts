@@ -246,23 +246,29 @@ export function parseReceptionPayloadAgainstProduit(
 }
 
 const boolOuiNon = z.boolean();
+const optionalText = z.string().optional().default('');
+const optionalAmount = z
+  .union([z.coerce.number(), z.literal('')])
+  .optional()
+  .default('');
+const optionalDate = z
+  .union([dateIso, z.literal('')])
+  .optional()
+  .default('');
 
-/** Enrichissement agent — crédit salaire (emploi / caution). */
+/** Enrichissement agent — brouillon (saisie progressive, aucun champ obligatoire). */
 export const agentSalaireEnrichmentSchema = z.object({
-  societe: z.string().min(1),
-  adresseSociete: z.string().min(1),
-  fonctionService: z.string().min(1),
-  salaireNet: z.coerce.number().positive(),
-  cautionGarantie: z.string().min(1),
-  depotBc: z.string().optional().default(''),
-  conjointNom: z.string().optional(),
-  conjointDateNaissance: z
-    .union([dateIso, z.literal('')])
-    .optional()
-    .default(''),
+  societe: optionalText,
+  adresseSociete: optionalText,
+  fonctionService: optionalText,
+  salaireNet: z.coerce.number().nonnegative().optional().default(0),
+  cautionGarantie: optionalText,
+  depotBc: optionalText,
+  conjointNom: optionalText,
+  conjointDateNaissance: optionalDate,
 });
 
-/** Enrichissement agent — crédit activité. */
+/** Enrichissement agent — crédit activité (brouillon). */
 export const agentActiviteEnrichmentSchema = z.object({
   eligibilite: z.object({
     age18OuPlus: boolOuiNon,
@@ -275,50 +281,99 @@ export const agentActiviteEnrichmentSchema = z.object({
     activiteEnregistreeLegalement: boolOuiNon,
   }),
   demandeur: z.object({
-    prenom: z.string().default(''),
-    nom: z.string().default(''),
-    postNom: z.string().default(''),
-    dateNaissance: z.string().default(''),
-    typePiece: z.string().default(''),
-    numeroPiece: z.string().default(''),
-    sexe: z.string().default(''),
-    etatCivil: z.string().default(''),
-    adresseDomicile: z.string().default(''),
-    telephone: z.string().default(''),
-    email: z.string().optional().default(''),
-    conjointPrenom: z.string().optional().default(''),
-    conjointPostNom: z.string().optional().default(''),
-    conjointNom: z.string().optional().default(''),
-    conjointDateNaissance: z
-      .union([dateIso, z.literal('')])
-      .optional()
-      .default(''),
+    prenom: optionalText,
+    nom: optionalText,
+    postNom: optionalText,
+    dateNaissance: optionalText,
+    typePiece: optionalText,
+    numeroPiece: optionalText,
+    sexe: optionalText,
+    etatCivil: optionalText,
+    adresseDomicile: optionalText,
+    telephone: optionalText,
+    email: optionalText,
+    conjointPrenom: optionalText,
+    conjointPostNom: optionalText,
+    conjointNom: optionalText,
+    conjointDateNaissance: optionalDate,
   }),
   business: z.object({
-    nomBusiness: z.string().min(1),
-    adresseBusiness: z.string().min(1),
-    dureeAdresse: z.string().min(1),
-    typeBusiness: z.string().min(1),
-    dureeTypeBusiness: z.string().min(1),
-    secteurBusiness: z.string().min(1),
-    formeJuridique: z.string().min(1),
+    nomBusiness: optionalText,
+    adresseBusiness: optionalText,
+    dureeAdresse: optionalText,
+    typeBusiness: optionalText,
+    dureeTypeBusiness: optionalText,
+    secteurBusiness: optionalText,
+    formeJuridique: optionalText,
   }),
   pret: z.object({
-    butInvestissement: z.string().min(1),
-    commentaireBut: z.string().optional().default(''),
-    montantDesire: z.union([z.coerce.number(), z.literal('')]).optional(),
-    dureeMois: z.union([z.coerce.number(), z.literal('')]).optional(),
-    capaciteMensuelle: z.union([z.coerce.number(), z.literal('')]).optional(),
-    pretAutreInstitution: z.string().optional().default(''),
-    autreInstitutionNom: z.string().optional().default(''),
-    montantPretPrecedent: z.union([z.coerce.number(), z.literal('')]).optional(),
-    dureePretPrecedent: z.string().optional().default(''),
+    butInvestissement: optionalText,
+    commentaireBut: optionalText,
+    montantDesire: optionalAmount,
+    dureeMois: optionalAmount,
+    capaciteMensuelle: optionalAmount,
+    pretAutreInstitution: optionalText,
+    autreInstitutionNom: optionalText,
+    montantPretPrecedent: optionalAmount,
+    dureePretPrecedent: optionalText,
   }),
-  conjointNom: z.string().optional(),
-  conjointDateNaissance: z
-    .union([dateIso, z.literal('')])
-    .optional()
-    .default(''),
+  conjointNom: optionalText,
+  conjointDateNaissance: optionalDate,
+});
+
+/** Schémas stricts — utilisés uniquement pour vérifier la complétude avant soumission. */
+const agentSalaireEnrichmentCompleteSchema = z.object({
+  societe: z.string().min(1, 'Société requise'),
+  adresseSociete: z.string().min(1, 'Adresse société requise'),
+  fonctionService: z.string().min(1, 'Fonction / service requise'),
+  salaireNet: z.coerce.number().positive('Salaire net requis'),
+  cautionGarantie: z.string().min(1, 'Caution / garantie requise'),
+  depotBc: optionalText,
+  conjointNom: optionalText,
+  conjointDateNaissance: optionalDate,
+});
+
+const agentActiviteEnrichmentCompleteSchema = z.object({
+  eligibilite: agentActiviteEnrichmentSchema.shape.eligibilite,
+  demandeur: z.object({
+    prenom: z.string().min(1, 'Prénom requis'),
+    nom: z.string().min(1, 'Nom requis'),
+    postNom: z.string().min(1, 'Post-nom requis'),
+    dateNaissance: z.string().min(1, 'Date de naissance requise'),
+    typePiece: z.string().min(1, 'Type de pièce requis'),
+    numeroPiece: z.string().min(1, 'Numéro de pièce requis'),
+    sexe: z.string().min(1, 'Sexe requis'),
+    etatCivil: z.string().min(1, 'État civil requis'),
+    adresseDomicile: z.string().min(1, 'Adresse domicile requise'),
+    telephone: z.string().min(1, 'Téléphone requis'),
+    email: optionalText,
+    conjointPrenom: optionalText,
+    conjointPostNom: optionalText,
+    conjointNom: optionalText,
+    conjointDateNaissance: optionalDate,
+  }),
+  business: z.object({
+    nomBusiness: z.string().min(1, 'Nom du business requis'),
+    adresseBusiness: z.string().min(1, 'Adresse business requise'),
+    dureeAdresse: z.string().min(1, 'Durée à l’adresse requise'),
+    typeBusiness: z.string().min(1, 'Type de business requis'),
+    dureeTypeBusiness: z.string().min(1, 'Durée du type de business requise'),
+    secteurBusiness: z.string().min(1, 'Secteur requis'),
+    formeJuridique: z.string().min(1, 'Forme juridique requise'),
+  }),
+  pret: z.object({
+    butInvestissement: z.string().min(1, 'But d’investissement requis'),
+    commentaireBut: optionalText,
+    montantDesire: optionalAmount,
+    dureeMois: optionalAmount,
+    capaciteMensuelle: optionalAmount,
+    pretAutreInstitution: optionalText,
+    autreInstitutionNom: optionalText,
+    montantPretPrecedent: optionalAmount,
+    dureePretPrecedent: optionalText,
+  }),
+  conjointNom: optionalText,
+  conjointDateNaissance: optionalDate,
 });
 
 export type AgentSalaireEnrichment = z.infer<typeof agentSalaireEnrichmentSchema>;
@@ -326,40 +381,34 @@ export type AgentActiviteEnrichment = z.infer<
   typeof agentActiviteEnrichmentSchema
 >;
 
+/** Parse un enrichissement agent en mode brouillon (champs optionnels). */
 export function parseAgentEnrichment(
   famille: FamilleProduit,
   enrichment: unknown,
-  opts?: { etatCivil?: string },
+  _opts?: { etatCivil?: string },
 ) {
   if (famille === 'SALAIRE') {
     const data = agentSalaireEnrichmentSchema.parse(enrichment);
-    if (opts?.etatCivil === 'Marie' && !data.conjointNom?.trim()) {
-      throw new z.ZodError([
-        {
-          code: z.ZodIssueCode.custom,
-          message: 'Conjoint obligatoire si marié(e)',
-          path: ['conjointNom'],
-        },
-      ]);
-    }
     return { famille: 'SALAIRE' as const, data };
   }
   const data = agentActiviteEnrichmentSchema.parse(enrichment);
-  const conjoint =
-    data.demandeur?.conjointNom?.trim() || data.conjointNom?.trim();
-  if (
-    (opts?.etatCivil === 'Marie' || data.demandeur?.etatCivil === 'Marie') &&
-    !conjoint
-  ) {
+  return { famille: 'ACTIVITE' as const, data };
+}
+
+function assertConjointIfMarie(
+  etatCivil: string | undefined,
+  conjointNom: string | undefined,
+  path: Array<string | number>,
+) {
+  if (etatCivil === 'Marie' && !conjointNom?.trim()) {
     throw new z.ZodError([
       {
         code: z.ZodIssueCode.custom,
         message: 'Conjoint obligatoire si marié(e)',
-        path: ['demandeur', 'conjointNom'],
+        path,
       },
     ]);
   }
-  return { famille: 'ACTIVITE' as const, data };
 }
 
 /** Fusionne l’enrichissement agent dans le payload réception existant. */
@@ -559,9 +608,15 @@ export function enrichmentFromPayload(
           ? ''
           : Number(pret.montantDesire ?? p.montantSollicite),
       dureeMois:
-        pret.dureeMois == null && p.dureeMois == null
+        pret.dureeMois == null && p.dureeMois == null && p.dureeSemaines == null
           ? ''
-          : Number(pret.dureeMois ?? p.dureeMois),
+          : Number(
+              pret.dureeMois ??
+                p.dureeMois ??
+                (typeof p.dureeSemaines === 'number'
+                  ? Math.round(p.dureeSemaines / 4)
+                  : undefined),
+            ),
       capaciteMensuelle:
         pret.capaciteMensuelle == null && p.capaciteMensuelle == null
           ? ''
@@ -588,11 +643,22 @@ export function validateAgentEnrichmentComplete(
   payload: Record<string, any>,
 ): { ok: true } | { ok: false; message: string } {
   try {
-    parseAgentEnrichment(
-      famille,
-      enrichmentFromPayload(famille, payload),
-      { etatCivil: payload.etatCivil },
-    );
+    const draft = enrichmentFromPayload(famille, payload);
+    if (famille === 'SALAIRE') {
+      const data = agentSalaireEnrichmentCompleteSchema.parse(draft);
+      assertConjointIfMarie(
+        payload.etatCivil,
+        data.conjointNom,
+        ['conjointNom'],
+      );
+    } else {
+      const data = agentActiviteEnrichmentCompleteSchema.parse(draft);
+      assertConjointIfMarie(
+        payload.etatCivil || data.demandeur?.etatCivil,
+        data.demandeur?.conjointNom || data.conjointNom,
+        ['demandeur', 'conjointNom'],
+      );
+    }
     return { ok: true };
   } catch (e) {
     if (e instanceof z.ZodError) {

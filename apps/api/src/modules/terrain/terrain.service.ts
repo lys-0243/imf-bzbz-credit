@@ -159,81 +159,97 @@ export class TerrainService {
     };
   }
 
-  async startVisite(user: AuthUser, id: string, visiteDateRaw: string) {
-    const d = await this.prisma.dossier.findUnique({ where: { id } });
+  /**
+   * Plus de « démarrer la descente » manuel : crée la VisiteTerrain si besoin
+   * et passe AFFECTE / RETOUR_AGENT → DESCENTE pour débloquer le travail agent.
+   */
+  private async ensureAgentTerrain(
+    user: AuthUser,
+    id: string,
+  ): Promise<void> {
+    const d = await this.prisma.dossier.findUnique({
+      where: { id },
+      include: { visite: true },
+    });
     if (!d) throw new NotFoundException('Dossier introuvable');
     this.assertAgentOwns(d, user);
-
-    const visiteDate = this.parseVisiteDate(visiteDateRaw);
-
-    if (d.etat === DossierEtat.DESCENTE) {
-      const existing = await this.prisma.visiteTerrain.findUnique({
-        where: { dossierId: id },
-      });
-      if (existing) {
-        await this.prisma.visiteTerrain.update({
-          where: { dossierId: id },
-          data: { startedAt: visiteDate },
-        });
-        return this.getOne(user, id);
-      }
+    if (d.agentValideAt) {
+      throw new ForbiddenException('Dossier déjà soumis');
     }
-
     if (
       d.etat !== DossierEtat.AFFECTE &&
+      d.etat !== DossierEtat.DESCENTE &&
       d.etat !== DossierEtat.RETOUR_AGENT
     ) {
       throw new BadRequestException(
-        `Impossible de démarrer la visite depuis l'état ${d.etat}`,
+        `Travail agent impossible depuis l'état ${d.etat}`,
       );
     }
 
-    this.workflow.assertTransition(d.etat, DossierEtat.DESCENTE, user.role);
+    const needsVisite = !d.visite;
+    const needsDescente =
+      d.etat === DossierEtat.AFFECTE || d.etat === DossierEtat.RETOUR_AGENT;
 
+    if (!needsVisite && !needsDescente) return;
+
+    const now = new Date();
     await this.prisma.$transaction(async (tx) => {
-      await tx.dossier.update({
-        where: { id },
-        data: { etat: DossierEtat.DESCENTE },
-      });
-      await tx.transition.create({
-        data: {
-          dossierId: id,
-          fromEtat: d.etat,
-          toEtat: DossierEtat.DESCENTE,
-          comment: `Début de la descente terrain (${visiteDateRaw})`,
-          actorId: user.id,
-        },
-      });
-      await tx.visiteTerrain.upsert({
-        where: { dossierId: id },
-        create: {
-          dossierId: id,
-          agentId: user.id,
-          startedAt: visiteDate,
-          checklistJson: {
-            flags: { hasGarant: true, dat: false, hypotheque: false },
-            values: {},
-          } as Prisma.InputJsonValue,
-        },
-        update: {
-          startedAt: visiteDate,
-          completedAt: null,
-          agentId: user.id,
-        },
-      });
-      await this.audit.log(
-        {
-          dossierId: id,
-          actorId: user.id,
-          action: 'VISITE_STARTED',
-          entityType: 'DOSSIER',
-          entityId: id,
-          payload: { reference: d.reference, visiteDate: visiteDateRaw },
-        },
-        tx,
-      );
+      if (needsDescente) {
+        this.workflow.assertTransition(d.etat, DossierEtat.DESCENTE, user.role);
+        await tx.dossier.update({
+          where: { id },
+          data: { etat: DossierEtat.DESCENTE },
+        });
+        await tx.transition.create({
+          data: {
+            dossierId: id,
+            fromEtat: d.etat,
+            toEtat: DossierEtat.DESCENTE,
+            comment: 'Ouverture du travail terrain (sans démarrage manuel)',
+            actorId: user.id,
+          },
+        });
+        await this.audit.log(
+          {
+            dossierId: id,
+            actorId: user.id,
+            action: 'TERRAIN_OPENED',
+            entityType: 'DOSSIER',
+            entityId: id,
+            payload: { reference: d.reference },
+          },
+          tx,
+        );
+      }
+      if (needsVisite) {
+        await tx.visiteTerrain.create({
+          data: {
+            dossierId: id,
+            agentId: user.id,
+            startedAt: now,
+            checklistJson: {
+              flags: { hasGarant: true, dat: false, hypotheque: false },
+              values: {},
+            } as Prisma.InputJsonValue,
+          },
+        });
+      } else if (needsDescente) {
+        await tx.visiteTerrain.update({
+          where: { dossierId: id },
+          data: { agentId: user.id, completedAt: null },
+        });
+      }
     });
+  }
 
+  async startVisite(user: AuthUser, id: string, visiteDateRaw: string) {
+    // Conservé pour compat API : délègue à ensure + met à jour la date.
+    await this.ensureAgentTerrain(user, id);
+    const visiteDate = this.parseVisiteDate(visiteDateRaw);
+    await this.prisma.visiteTerrain.update({
+      where: { dossierId: id },
+      data: { startedAt: visiteDate, agentId: user.id },
+    });
     return this.getOne(user, id);
   }
 
@@ -264,6 +280,8 @@ export class TerrainService {
   }
 
   async generateRapport(user: AuthUser, id: string) {
+    await this.ensureAgentTerrain(user, id);
+
     const d = await this.prisma.dossier.findUnique({
       where: { id },
       include: {
@@ -275,11 +293,7 @@ export class TerrainService {
         transitions: { orderBy: { createdAt: 'asc' } },
       },
     });
-    if (!d) throw new NotFoundException('Dossier introuvable');
-    this.assertAgentOwns(d, user);
-    if (!d.visite) {
-      throw new BadRequestException('Démarrez la visite d’abord');
-    }
+    if (!d?.visite) throw new NotFoundException('Dossier introuvable');
 
     const payload = (d.payload ?? {}) as Record<string, any>;
     const { montantSouhaite, devise } = montantSouhaiteFromPayload(payload);
@@ -407,23 +421,13 @@ export class TerrainService {
     id: string,
     answers: ChecklistAnswers,
   ) {
+    await this.ensureAgentTerrain(user, id);
+
     const d = await this.prisma.dossier.findUnique({
       where: { id },
       include: { visite: true, pieces: true, produit: true },
     });
-    if (!d) throw new NotFoundException('Dossier introuvable');
-    this.assertAgentOwns(d, user);
-    if (d.agentValideAt) {
-      throw new ForbiddenException('Dossier déjà soumis');
-    }
-    if (d.etat !== DossierEtat.DESCENTE && d.etat !== DossierEtat.AFFECTE) {
-      throw new BadRequestException(
-        'Checklist modifiable uniquement en descente',
-      );
-    }
-    if (!d.visite) {
-      throw new BadRequestException('Démarrez la visite d’abord');
-    }
+    if (!d?.visite) throw new NotFoundException('Dossier introuvable');
 
     const existing = (d.visite.checklistJson as ChecklistAnswers | null) ?? {
       flags: { hasGarant: true },
@@ -460,27 +464,17 @@ export class TerrainService {
   }
 
   async saveCf2(user: AuthUser, id: string, patch: Partial<Cf2Analyse>) {
+    await this.ensureAgentTerrain(user, id);
+
     const d = await this.prisma.dossier.findUnique({
       where: { id },
       include: { visite: true, produit: true },
     });
-    if (!d) throw new NotFoundException('Dossier introuvable');
-    this.assertAgentOwns(d, user);
+    if (!d?.visite) throw new NotFoundException('Dossier introuvable');
     if (!usesAnalyseAgrPack(d.produit.code)) {
       throw new BadRequestException(
         'Analyse CF2 non applicable au produit DARE_DARE',
       );
-    }
-    if (d.agentValideAt) {
-      throw new ForbiddenException('Dossier déjà soumis');
-    }
-    if (d.etat !== DossierEtat.DESCENTE && d.etat !== DossierEtat.AFFECTE) {
-      throw new BadRequestException(
-        'CF2 modifiable uniquement en descente',
-      );
-    }
-    if (!d.visite) {
-      throw new BadRequestException('Démarrez la visite d’abord');
     }
 
     const existing = normalizeCf2Analyse(d.visite.analyseCf2Json, {
@@ -498,18 +492,7 @@ export class TerrainService {
   }
 
   async saveRapport(user: AuthUser, id: string, rapportTexte: string) {
-    const d = await this.prisma.dossier.findUnique({
-      where: { id },
-      include: { visite: true },
-    });
-    if (!d) throw new NotFoundException('Dossier introuvable');
-    this.assertAgentOwns(d, user);
-    if (d.agentValideAt) {
-      throw new ForbiddenException('Dossier déjà soumis');
-    }
-    if (!d.visite) {
-      throw new BadRequestException('Démarrez la visite d’abord');
-    }
+    await this.ensureAgentTerrain(user, id);
 
     await this.prisma.visiteTerrain.update({
       where: { dossierId: id },
@@ -519,6 +502,8 @@ export class TerrainService {
   }
 
   async savePayload(user: AuthUser, id: string, enrichmentRaw: unknown) {
+    await this.ensureAgentTerrain(user, id);
+
     const d = await this.prisma.dossier.findUnique({
       where: { id },
       include: { produit: true },
@@ -528,15 +513,6 @@ export class TerrainService {
     if (d.agentValideAt) {
       throw new ForbiddenException(
         'Dossier déjà soumis — modification interdite',
-      );
-    }
-    if (
-      d.etat !== DossierEtat.AFFECTE &&
-      d.etat !== DossierEtat.DESCENTE &&
-      d.etat !== DossierEtat.RETOUR_AGENT
-    ) {
-      throw new BadRequestException(
-        `Impossible de modifier le dossier depuis l'état ${d.etat}`,
       );
     }
 
@@ -606,12 +582,8 @@ export class TerrainService {
     kind: string,
     file: { originalname: string; buffer: Buffer; mimetype?: string },
   ) {
-    const d = await this.prisma.dossier.findUnique({ where: { id } });
-    if (!d) throw new NotFoundException('Dossier introuvable');
-    this.assertAgentOwns(d, user);
-    if (d.agentValideAt) {
-      throw new ForbiddenException('Dossier déjà soumis');
-    }
+    await this.ensureAgentTerrain(user, id);
+
     if (!kind?.trim()) {
       throw new BadRequestException('kind requis');
     }
@@ -640,22 +612,17 @@ export class TerrainService {
   }
 
   async soumettre(user: AuthUser, id: string) {
+    await this.ensureAgentTerrain(user, id);
+
     const d = await this.prisma.dossier.findUnique({
       where: { id },
       include: { visite: true, pieces: true, produit: true },
     });
-    if (!d) throw new NotFoundException('Dossier introuvable');
-    this.assertAgentOwns(d, user);
-    if (d.agentValideAt) {
-      throw new ForbiddenException('Dossier déjà soumis');
-    }
+    if (!d?.visite) throw new NotFoundException('Dossier introuvable');
     if (d.etat !== DossierEtat.DESCENTE) {
       throw new BadRequestException(
-        'La visite doit être en cours (DESCENTE) pour soumettre',
+        `Impossible de soumettre depuis l'état ${d.etat}`,
       );
-    }
-    if (!d.visite) {
-      throw new BadRequestException('Visite introuvable');
     }
 
     const answers = (d.visite.checklistJson as ChecklistAnswers | null) ?? {

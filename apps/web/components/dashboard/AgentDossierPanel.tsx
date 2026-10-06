@@ -12,6 +12,7 @@ import {
   type FamilleProduit,
 } from '@imf/shared';
 import { ApiError, apiFetch, getApiUrl, getToken } from '../../lib/api';
+import { useToast } from '../Toast';
 import { AgentEnrichmentForm } from './AgentEnrichmentForm';
 import { Cf2Panel } from './Cf2Panel';
 import { dashStyles as styles } from './DashboardShell';
@@ -58,7 +59,6 @@ export default function AgentDossierPanel({
     values: {},
   });
   const [rapport, setRapport] = useState('');
-  const [visiteDate, setVisiteDate] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [issues, setIssues] = useState<
     Array<{ itemId: string; label: string; reason: string }>
@@ -67,6 +67,7 @@ export default function AgentDossierPanel({
   const [generating, setGenerating] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [tabRequest, setTabRequest] = useState<string | null>(null);
+  const toast = useToast();
 
   const load = useCallback(async () => {
     const d = await apiFetch<DossierDetail>(`/agent/dossiers/${id}`);
@@ -78,10 +79,6 @@ export default function AgentDossierPanel({
       },
     );
     setRapport(d.visite?.rapportTexte ?? '');
-    if (d.visite?.startedAt) {
-      const iso = new Date(d.visite.startedAt).toISOString().slice(0, 10);
-      setVisiteDate(iso);
-    }
     setError(null);
     setIssues([]);
     setMsg(null);
@@ -134,21 +131,17 @@ export default function AgentDossierPanel({
   const pendingActions = useMemo((): PendingAction[] => {
     if (!data) return [];
     const actions: PendingAction[] = [];
-    const canEdit = data.editable && data.etat === 'DESCENTE';
-    const canEditPayload =
+    const canEdit =
       data.editable &&
       (data.etat === 'AFFECTE' ||
         data.etat === 'DESCENTE' ||
         data.etat === 'RETOUR_AGENT');
-    const canStart =
-      data.editable &&
-      (data.etat === 'AFFECTE' || data.etat === 'RETOUR_AGENT');
     const famille = (data.produit?.famille ??
       (data.type === 'SALAIRE' ? 'SALAIRE' : 'ACTIVITE')) as FamilleProduit;
     const payload = (data.payload ?? {}) as Record<string, any>;
 
     const enrichCheck = validateAgentEnrichmentComplete(famille, payload);
-    if (canEditPayload && !enrichCheck.ok) {
+    if (canEdit && !enrichCheck.ok) {
       actions.push({
         id: 'enrichissement',
         label:
@@ -160,15 +153,7 @@ export default function AgentDossierPanel({
       });
     }
 
-    if (canStart) {
-      actions.push({
-        id: 'start-visite',
-        label: 'Indiquer la date et démarrer',
-        reason: 'La date de descente doit être renseignée',
-        tab: 'operations',
-      });
-    }
-    if (data.etat === 'DESCENTE' || data.visite) {
+    if (canEdit) {
       if (!(rapport || '').trim()) {
         actions.push({
           id: 'resume_executif',
@@ -193,7 +178,7 @@ export default function AgentDossierPanel({
           tab: issue.reason === 'Pièce manquante' ? 'checklist' : 'operations',
         });
       }
-      if (canEdit && enrichCheck.ok && checklistIssues.length === 0) {
+      if (enrichCheck.ok && checklistIssues.length === 0) {
         actions.push({
           id: 'soumettre',
           label: 'Soumettre le dossier',
@@ -204,22 +189,6 @@ export default function AgentDossierPanel({
     }
     return actions;
   }, [data, answers, uploadedKinds, rapport]);
-
-  const visiteTiming = useMemo(() => {
-    if (!visiteDate) return null;
-    const parts = visiteDate.split('-').map(Number);
-    if (parts.length !== 3 || parts.some((n) => Number.isNaN(n))) return null;
-    const [y, m, d] = parts;
-    const visiteUtc = Date.UTC(y, m - 1, d);
-    const now = new Date();
-    const todayUtc = Date.UTC(
-      now.getFullYear(),
-      now.getMonth(),
-      now.getDate(),
-    );
-    if (visiteUtc > todayUtc) return 'future' as const;
-    return 'past' as const;
-  }, [visiteDate]);
 
   const docAvis = useMemo(() => {
     const map: Record<string, string> = {};
@@ -249,28 +218,6 @@ export default function AgentDossierPanel({
     return rows;
   }, [byCategory]);
 
-  async function startVisite() {
-    if (!visiteDate) {
-      setError('Indiquez la date de la descente avant de démarrer.');
-      return;
-    }
-    setBusy(true);
-    setError(null);
-    setMsg(null);
-    try {
-      await apiFetch(`/agent/dossiers/${id}/visite/start`, {
-        method: 'POST',
-        body: JSON.stringify({ visiteDate }),
-      });
-      await load();
-      setMsg('Descente démarrée.');
-    } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'Échec démarrage visite');
-    } finally {
-      setBusy(false);
-    }
-  }
-
   async function generateResume() {
     setGenerating(true);
     setError(null);
@@ -282,10 +229,12 @@ export default function AgentDossierPanel({
       );
       setRapport(res.rapportTexte || '');
       setMsg('Résumé généré — validez ou ajustez le texte ci-dessous.');
+      toast.success('Résumé généré.');
     } catch (e) {
-      setError(
-        e instanceof ApiError ? e.message : 'Échec de génération du résumé',
-      );
+      const message =
+        e instanceof ApiError ? e.message : 'Échec de génération du résumé';
+      setError(message);
+      toast.error(message);
     } finally {
       setGenerating(false);
     }
@@ -306,8 +255,12 @@ export default function AgentDossierPanel({
       });
       await load();
       setMsg('Brouillon enregistré.');
+      toast.success('Brouillon enregistré.');
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'Échec enregistrement');
+      const message =
+        e instanceof ApiError ? e.message : 'Échec enregistrement';
+      setError(message);
+      toast.error(message);
     } finally {
       setBusy(false);
     }
@@ -322,22 +275,33 @@ export default function AgentDossierPanel({
     setError(null);
     setMsg(null);
     try {
-      await apiFetch(`/agent/dossiers/${id}/payload`, {
-        method: 'PUT',
-        body: JSON.stringify({ enrichment }),
-      });
-      await load();
+      const updated = await apiFetch<DossierDetail>(
+        `/agent/dossiers/${id}/payload`,
+        {
+          method: 'PUT',
+          body: JSON.stringify({ enrichment }),
+        },
+      );
+      setData(updated);
+      setAnswers(
+        updated.checklistAnswers ?? {
+          flags: { hasGarant: true, dat: false, hypotheque: false },
+          values: {},
+        },
+      );
+      setRapport(updated.visite?.rapportTexte ?? '');
       setMsg('Champs du dossier enregistrés.');
     } catch (e) {
-      setError(
-        e instanceof ApiError ? e.message : 'Échec enregistrement des champs',
-      );
+      const message =
+        e instanceof ApiError ? e.message : 'Échec enregistrement des champs';
+      setError(message);
+      throw e instanceof Error ? e : new Error(message);
     } finally {
       setBusy(false);
     }
   }
 
-  async function saveCf2(analyse: Cf2Analyse) {
+  async function saveCf2(analyse: Partial<Cf2Analyse>) {
     setBusy(true);
     setError(null);
     setMsg(null);
@@ -347,12 +311,11 @@ export default function AgentDossierPanel({
         body: JSON.stringify({ analyse }),
       });
       await load();
-      setMsg('Analyse CF2 enregistrée.');
     } catch (e) {
-      setError(
-        e instanceof ApiError ? e.message : 'Échec enregistrement CF2',
-      );
-      throw e;
+      const message =
+        e instanceof ApiError ? e.message : 'Échec enregistrement CF2';
+      setError(message);
+      throw e instanceof Error ? e : new Error(message);
     } finally {
       setBusy(false);
     }
@@ -375,8 +338,11 @@ export default function AgentDossierPanel({
       if (!res.ok) throw new ApiError(res.status, body);
       await load();
       setMsg(`Fichier envoyé : ${kind}`);
+      toast.success('Document enregistré.');
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'Échec upload');
+      const message = e instanceof ApiError ? e.message : 'Échec upload';
+      setError(message);
+      toast.error(message);
     } finally {
       setBusy(false);
     }
@@ -398,14 +364,20 @@ export default function AgentDossierPanel({
       });
       await apiFetch(`/agent/dossiers/${id}/soumettre`, { method: 'POST' });
       setMsg('Dossier transmis à l’analyste.');
+      toast.success('Dossier soumis.');
       onSubmitted?.();
     } catch (e) {
       if (e instanceof ApiError && e.body && typeof e.body === 'object') {
         const b = e.body as { message?: string; issues?: typeof issues };
-        setError(b.message || e.message);
+        const message = b.message || e.message;
+        setError(message);
+        toast.error(message);
         if (b.issues) setIssues(b.issues);
       } else {
-        setError(e instanceof ApiError ? e.message : 'Échec soumission');
+        const message =
+          e instanceof ApiError ? e.message : 'Échec soumission';
+        setError(message);
+        toast.error(message);
       }
     } finally {
       setBusy(false);
@@ -432,8 +404,12 @@ export default function AgentDossierPanel({
         body: JSON.stringify({ answers: next }),
       });
       setMsg('Avis enregistré.');
+      toast.success('Avis enregistré.');
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'Échec enregistrement avis');
+      const message =
+        e instanceof ApiError ? e.message : 'Échec enregistrement avis';
+      setError(message);
+      toast.error(message);
       throw e;
     } finally {
       setBusy(false);
@@ -460,10 +436,14 @@ export default function AgentDossierPanel({
         method: 'PUT',
         body: JSON.stringify({ answers: next }),
       });
+      toast.success(checked ? 'AC validé.' : 'AC retiré.');
     } catch (e) {
-      setError(
-        e instanceof ApiError ? e.message : 'Échec enregistrement validation AC',
-      );
+      const message =
+        e instanceof ApiError
+          ? e.message
+          : 'Échec enregistrement validation AC';
+      setError(message);
+      toast.error(message);
       await load();
     } finally {
       setBusy(false);
@@ -498,8 +478,12 @@ export default function AgentDossierPanel({
         body: JSON.stringify({ answers }),
       });
       await load();
+      toast.success('Options enregistrées.');
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'Échec mise à jour flags');
+      const message =
+        e instanceof ApiError ? e.message : 'Échec mise à jour flags';
+      setError(message);
+      toast.error(message);
     } finally {
       setBusy(false);
     }
@@ -528,81 +512,17 @@ export default function AgentDossierPanel({
     );
   }
 
-  const canEdit = data.editable && data.etat === 'DESCENTE';
-  const canEditPayload =
+  const canEdit =
     data.editable &&
     (data.etat === 'AFFECTE' ||
       data.etat === 'DESCENTE' ||
       data.etat === 'RETOUR_AGENT');
-  const canStart =
-    data.editable &&
-    (data.etat === 'AFFECTE' || data.etat === 'RETOUR_AGENT');
   const famille = (data.produit?.famille ??
     (data.type === 'SALAIRE' ? 'SALAIRE' : 'ACTIVITE')) as FamilleProduit;
   const payload = (data.payload ?? {}) as Record<string, any>;
 
   const operationsContent = (
     <div className={styles.descentePane}>
-      <div className={styles.detailTableBlock}>
-        <h3 className={styles.detailTableTitle}>1. Date de la descente</h3>
-        <p className={styles.descenteCardHint}>
-          Avant toute opération, précisez la date réelle de la visite terrain.
-        </p>
-        <div className={styles.tableWrap}>
-          <table className={styles.detailDataTable}>
-            <thead>
-              <tr>
-                <th>Champ</th>
-                <th>Valeur</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>Date de descente *</td>
-                <td>
-                  <input
-                    type="date"
-                    className={styles.opsInlineInput}
-                    value={visiteDate}
-                    disabled={!canStart && !canEdit}
-                    onChange={(e) => setVisiteDate(e.target.value)}
-                  />
-                </td>
-              </tr>
-              <tr>
-                <td>Action</td>
-                <td>
-                  {canStart ? (
-                    <button
-                      type="button"
-                      className={`${styles.btn} ${styles.btnPrimary}`}
-                      onClick={startVisite}
-                      disabled={busy || !visiteDate}
-                    >
-                      Démarrer la descente
-                    </button>
-                  ) : data.visite?.startedAt ? (
-                    <span className={styles.itemMeta}>
-                      Descente enregistrée le{' '}
-                      {new Date(data.visite.startedAt).toLocaleDateString(
-                        'fr-FR',
-                        {
-                          day: 'numeric',
-                          month: 'long',
-                          year: 'numeric',
-                        },
-                      )}
-                    </span>
-                  ) : (
-                    '—'
-                  )}
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
       {msg ? <p className={styles.msgOk}>{msg}</p> : null}
       {error ? <p className={styles.msgErr}>{error}</p> : null}
       {issues.length ? (
@@ -615,39 +535,28 @@ export default function AgentDossierPanel({
         </ul>
       ) : null}
 
-      {data.etat === 'DESCENTE' || data.visite ? (
+      {canEdit ? (
         <>
-          {visiteTiming ? (
-            <div className={styles.detailTableBlock}>
-              <h3 className={styles.detailTableTitle}>2. Checklist / Documents</h3>
-              <div
-                className={
-                  visiteTiming === 'past'
-                    ? styles.opsDocPromptPast
-                    : styles.opsDocPromptFuture
-                }
+          <div className={styles.detailTableBlock}>
+            <h3 className={styles.detailTableTitle}>1. Checklist / Documents</h3>
+            <div className={styles.opsDocPromptPast}>
+              <p>
+                Ajoutez les documents demandés, ou renseignez un avis si une
+                pièce n’est pas disponible.
+              </p>
+              <button
+                type="button"
+                className={`${styles.btn} ${styles.btnPrimary}`}
+                onClick={() => setTabRequest('checklist')}
               >
-                <p>
-                  {visiteTiming === 'past'
-                    ? 'La date de descente est passée (ou aujourd’hui). Ajoutez les documents demandés, ou renseignez un avis si une pièce n’est pas disponible.'
-                    : 'La date de descente est ultérieure. Souhaitez-vous déjà ajouter les documents ?'}
-                </p>
-                <button
-                  type="button"
-                  className={`${styles.btn} ${styles.btnPrimary}`}
-                  onClick={() => setTabRequest('checklist')}
-                >
-                  {visiteTiming === 'past'
-                    ? 'Ajouter les documents'
-                    : 'Oui, ajouter des documents'}
-                </button>
-              </div>
+                Ajouter les documents
+              </button>
             </div>
-          ) : null}
+          </div>
 
           <div className={styles.detailTableBlock}>
             <h3 className={styles.detailTableTitle}>
-              3. Options conditionnelles
+              2. Options conditionnelles
             </h3>
             <div className={styles.tableWrap}>
               <table className={styles.detailDataTable}>
@@ -695,26 +604,24 @@ export default function AgentDossierPanel({
                       />
                     </td>
                   </tr>
-                  {canEdit ? (
-                    <tr>
-                      <td>Mise à jour</td>
-                      <td>
-                        <button
-                          type="button"
-                          className={`${styles.btn} ${styles.btnSecondary}`}
-                          onClick={applyFlags}
-                          disabled={busy}
-                          style={{
-                            height: 34,
-                            padding: '0 14px',
-                            fontSize: '0.8rem',
-                          }}
-                        >
-                          Actualiser
-                        </button>
-                      </td>
-                    </tr>
-                  ) : null}
+                  <tr>
+                    <td>Mise à jour</td>
+                    <td>
+                      <button
+                        type="button"
+                        className={`${styles.btn} ${styles.btnSecondary}`}
+                        onClick={applyFlags}
+                        disabled={busy}
+                        style={{
+                          height: 34,
+                          padding: '0 14px',
+                          fontSize: '0.8rem',
+                        }}
+                      >
+                        Actualiser
+                      </button>
+                    </td>
+                  </tr>
                 </tbody>
               </table>
             </div>
@@ -722,7 +629,7 @@ export default function AgentDossierPanel({
 
           {opsChecklistRows.length > 0 ? (
             <div className={styles.detailTableBlock}>
-              <h3 className={styles.detailTableTitle}>4. Contrôles agent</h3>
+              <h3 className={styles.detailTableTitle}>3. Contrôles agent</h3>
               <div className={styles.tableWrap}>
                 <table className={styles.detailDataTable}>
                   <thead>
@@ -820,7 +727,7 @@ export default function AgentDossierPanel({
 
           <div className={styles.detailTableBlock}>
             <h3 className={styles.detailTableTitle}>
-              {opsChecklistRows.length > 0 ? '5' : '4'}. Résumé exécutif (IA)
+              {opsChecklistRows.length > 0 ? '4' : '3'}. Résumé exécutif (IA)
             </h3>
             <p className={styles.descenteCardHint}>
               Dernière étape : l’IA analyse le dossier et propose un résumé à
@@ -879,32 +786,29 @@ export default function AgentDossierPanel({
             </div>
           </div>
 
-          {canEdit ? (
-            <div className={styles.descenteFooterActions}>
-              <button
-                type="button"
-                className={`${styles.btn} ${styles.btnSecondary}`}
-                onClick={saveDraft}
-                disabled={busy || generating}
-              >
-                Enregistrer le brouillon
-              </button>
-              <button
-                type="button"
-                className={`${styles.btn} ${styles.btnPrimary}`}
-                onClick={soumettre}
-                disabled={busy || generating}
-              >
-                Soumettre
-              </button>
-            </div>
-          ) : null}
+          <div className={styles.descenteFooterActions}>
+            <button
+              type="button"
+              className={`${styles.btn} ${styles.btnSecondary}`}
+              onClick={saveDraft}
+              disabled={busy || generating}
+            >
+              Enregistrer le brouillon
+            </button>
+            <button
+              type="button"
+              className={`${styles.btn} ${styles.btnPrimary}`}
+              onClick={soumettre}
+              disabled={busy || generating}
+            >
+              Soumettre
+            </button>
+          </div>
         </>
       ) : (
         <div className={styles.detailTableBlock}>
           <p className={styles.descenteCardHint} style={{ margin: 0 }}>
-            Renseignez la date puis démarrez la descente pour accéder aux
-            opérations agent et au résumé IA.
+            Ce dossier n’est plus modifiable par l’agent.
           </p>
         </div>
       )}
@@ -931,7 +835,7 @@ export default function AgentDossierPanel({
                   famille={famille}
                   etatCivil={payload.etatCivil}
                   payload={payload}
-                  disabled={!canEditPayload}
+                  disabled={!canEdit}
                   busy={busy}
                   onSave={saveEnrichment}
                 />
@@ -943,7 +847,7 @@ export default function AgentDossierPanel({
                   famille={famille}
                   etatCivil={payload.etatCivil}
                   payload={payload}
-                  disabled={!canEditPayload}
+                  disabled={!canEdit}
                   busy={busy}
                   onSave={saveEnrichment}
                 />

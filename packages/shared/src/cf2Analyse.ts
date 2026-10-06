@@ -16,7 +16,7 @@ export const CF2_SECTION_META: Array<{
     key: 'cf22',
     label: '2.2',
     title: 'Analyse de l’activité commerciale',
-    summary: 'Business, stock, ventes & achats — bientôt disponible.',
+    summary: 'Business, stock, ventes journalières & achats.',
   },
   {
     key: 'cf23',
@@ -98,9 +98,91 @@ export type Cf21Data = {
   references: Cf2Reference[];
 };
 
+export type Cf22JourSemaine =
+  | 'lundi'
+  | 'mardi'
+  | 'mercredi'
+  | 'jeudi'
+  | 'vendredi'
+  | 'samedi'
+  | 'dimanche';
+
+export const CF22_JOURS: Cf22JourSemaine[] = [
+  'lundi',
+  'mardi',
+  'mercredi',
+  'jeudi',
+  'vendredi',
+  'samedi',
+  'dimanche',
+];
+
+export const CF22_JOUR_LABELS: Record<Cf22JourSemaine, string> = {
+  lundi: 'Lundi',
+  mardi: 'Mardi',
+  mercredi: 'Mercredi',
+  jeudi: 'Jeudi',
+  vendredi: 'Vendredi',
+  samedi: 'Samedi',
+  dimanche: 'Dimanche',
+};
+
+export type Cf22Business = {
+  activiteDepuis: string;
+  lieuDepuis: string;
+  proprieteLocaux: '' | 'oui' | 'non';
+  nomBailleur: string;
+  pointsDeVente: string;
+  dateHeureVisite: string;
+};
+
+export type Cf22StockLine = {
+  id: string;
+  produit: string;
+  quantite: string;
+  prixAchat: string;
+  prixVente: string;
+};
+
+export type Cf22VenteJour = {
+  qualite: '' | 'B' | 'N' | 'M';
+  montant: string;
+};
+
+export type Cf22VenteRecent = {
+  id: string;
+  jour: string;
+  montant: string;
+};
+
+export type Cf22AchatLine = {
+  id: string;
+  produit: string;
+  frequenceMensuelle: string;
+  qteParAchat: string;
+  prixAchatUnitaire: string;
+  /** Ratio coût = prixAchat/prixVente ; vide = dérivé du stock si produit lié. */
+  ratioCout: string;
+};
+
+export type Cf22Data = {
+  business: Cf22Business;
+  stock: Cf22StockLine[];
+  registreVente: '' | 'non' | 'oui' | 'oui_incomplet';
+  joursOuvrablesMois: string;
+  ventesJours: Record<Cf22JourSemaine, Cf22VenteJour>;
+  ventesRecents: Cf22VenteRecent[];
+  aujourdHui: {
+    heure: string;
+    especes: string;
+    ventePrevue: string;
+  };
+  achats: Cf22AchatLine[];
+};
+
 export type Cf2Analyse = {
   cf21: Cf21Data;
-  cf22?: Record<string, unknown>;
+  cf22: Cf22Data;
   cf23?: Record<string, unknown>;
   cf24?: Record<string, unknown>;
   cf25?: Record<string, unknown>;
@@ -108,6 +190,18 @@ export type Cf2Analyse = {
 
 function rid(prefix: string): string {
   return `${prefix}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function emptyVentesJours(): Record<Cf22JourSemaine, Cf22VenteJour> {
+  return {
+    lundi: { qualite: '', montant: '' },
+    mardi: { qualite: '', montant: '' },
+    mercredi: { qualite: '', montant: '' },
+    jeudi: { qualite: '', montant: '' },
+    vendredi: { qualite: '', montant: '' },
+    samedi: { qualite: '', montant: '' },
+    dimanche: { qualite: '', montant: '' },
+  };
 }
 
 export function emptyCf21(): Cf21Data {
@@ -158,8 +252,32 @@ export function emptyCf21(): Cf21Data {
   };
 }
 
+export function emptyCf22(): Cf22Data {
+  return {
+    business: {
+      activiteDepuis: '',
+      lieuDepuis: '',
+      proprieteLocaux: '',
+      nomBailleur: '',
+      pointsDeVente: '',
+      dateHeureVisite: '',
+    },
+    stock: [newCf22StockLine()],
+    registreVente: '',
+    joursOuvrablesMois: '',
+    ventesJours: emptyVentesJours(),
+    ventesRecents: [
+      newCf22VenteRecent(),
+      newCf22VenteRecent(),
+      newCf22VenteRecent(),
+    ],
+    aujourdHui: { heure: '', especes: '', ventePrevue: '' },
+    achats: [],
+  };
+}
+
 export function emptyCf2Analyse(): Cf2Analyse {
-  return { cf21: emptyCf21() };
+  return { cf21: emptyCf21(), cf22: emptyCf22() };
 }
 
 export function normalizeCf2Analyse(
@@ -169,9 +287,9 @@ export function normalizeCf2Analyse(
   const base = emptyCf2Analyse();
   if (!raw || typeof raw !== 'object') {
     if (opts?.visiteStartedAt) {
-      base.cf21.residence.dateHeureVisite = formatVisiteLabel(
-        opts.visiteStartedAt,
-      );
+      const label = formatVisiteLabel(opts.visiteStartedAt);
+      base.cf21.residence.dateHeureVisite = label;
+      base.cf22.business.dateHeureVisite = label;
     }
     return base;
   }
@@ -227,12 +345,92 @@ export function normalizeCf2Analyse(
     cf21.residence.dateHeureVisite = formatVisiteLabel(opts.visiteStartedAt);
   }
 
+  const cf22 = normalizeCf22(src.cf22, {
+    visiteStartedAt: opts?.visiteStartedAt,
+    fallbackDateHeure: cf21.residence.dateHeureVisite,
+  });
+
   return {
     cf21,
-    cf22: src.cf22,
+    cf22,
     cf23: src.cf23,
     cf24: src.cf24,
     cf25: src.cf25,
+  };
+}
+
+export function normalizeCf22(
+  raw: unknown,
+  opts?: {
+    visiteStartedAt?: string | null;
+    fallbackDateHeure?: string;
+  },
+): Cf22Data {
+  const base = emptyCf22();
+  if (!raw || typeof raw !== 'object') {
+    if (opts?.visiteStartedAt) {
+      base.business.dateHeureVisite = formatVisiteLabel(opts.visiteStartedAt);
+    } else if (opts?.fallbackDateHeure) {
+      base.business.dateHeureVisite = opts.fallbackDateHeure;
+    }
+    return base;
+  }
+  const src = raw as Partial<Cf22Data>;
+  const business = { ...base.business, ...(src.business ?? {}) };
+  if (!business.dateHeureVisite) {
+    if (opts?.visiteStartedAt) {
+      business.dateHeureVisite = formatVisiteLabel(opts.visiteStartedAt);
+    } else if (opts?.fallbackDateHeure) {
+      business.dateHeureVisite = opts.fallbackDateHeure;
+    }
+  }
+
+  const ventesJours = emptyVentesJours();
+  for (const jour of CF22_JOURS) {
+    const v = src.ventesJours?.[jour];
+    ventesJours[jour] = {
+      qualite: v?.qualite ?? '',
+      montant: v?.montant ?? '',
+    };
+  }
+
+  return {
+    business,
+    stock:
+      Array.isArray(src.stock) && src.stock.length
+        ? src.stock.map((s) => ({
+            id: s.id || rid('st'),
+            produit: s.produit ?? '',
+            quantite: s.quantite ?? '',
+            prixAchat: s.prixAchat ?? '',
+            prixVente: s.prixVente ?? '',
+          }))
+        : base.stock,
+    registreVente: src.registreVente ?? '',
+    joursOuvrablesMois: src.joursOuvrablesMois ?? '',
+    ventesJours,
+    ventesRecents:
+      Array.isArray(src.ventesRecents) && src.ventesRecents.length
+        ? src.ventesRecents.map((v) => ({
+            id: v.id || rid('vr'),
+            jour: v.jour ?? '',
+            montant: v.montant ?? '',
+          }))
+        : base.ventesRecents,
+    aujourdHui: {
+      ...base.aujourdHui,
+      ...(src.aujourdHui ?? {}),
+    },
+    achats: Array.isArray(src.achats)
+      ? src.achats.map((a) => ({
+          id: a.id || rid('ac'),
+          produit: a.produit ?? '',
+          frequenceMensuelle: a.frequenceMensuelle ?? '',
+          qteParAchat: a.qteParAchat ?? '',
+          prixAchatUnitaire: a.prixAchatUnitaire ?? '',
+          ratioCout: a.ratioCout ?? '',
+        }))
+      : [],
   };
 }
 
@@ -314,6 +512,117 @@ export function totalDepensesPrivees(d: Cf2DepensesFamiliales): number {
   return contributionEmprunteur(d) + num(d.autresDepensesPrivees);
 }
 
+/** Excel: 1 - prixAchat/prixVente */
+export function stockMarge(line: Cf22StockLine): number | null {
+  const pv = num(line.prixVente);
+  const pa = num(line.prixAchat);
+  if (pv <= 0) return null;
+  return 1 - pa / pv;
+}
+
+/** Excel: quantité × prixAchat */
+export function stockValeur(line: Cf22StockLine): number {
+  if (num(line.prixAchat) <= 0) return 0;
+  return num(line.quantite) * num(line.prixAchat);
+}
+
+export function sumStock(lines: Cf22StockLine[]): number {
+  return (lines ?? []).reduce((acc, l) => acc + stockValeur(l), 0);
+}
+
+export function avgStockMarge(lines: Cf22StockLine[]): number | null {
+  const vals = (lines ?? [])
+    .map(stockMarge)
+    .filter((m): m is number => m != null && Number.isFinite(m));
+  if (!vals.length) return null;
+  return vals.reduce((a, b) => a + b, 0) / vals.length;
+}
+
+export function sumVentesHebdo(
+  jours: Record<Cf22JourSemaine, Cf22VenteJour>,
+): number {
+  return CF22_JOURS.reduce((acc, j) => acc + num(jours[j]?.montant ?? ''), 0);
+}
+
+/** Excel C32: ventes mensuelles = total hebdo × 4 semaines / mois. */
+export function ventesMensuellesFromHebdo(
+  jours: Record<Cf22JourSemaine, Cf22VenteJour>,
+): number {
+  return sumVentesHebdo(jours) * 4;
+}
+
+/** Excel C36: (Σ 3 derniers jours + vente prévue aujourd’hui) / 4 × jours ouvrables */
+export function ventesMensuellesFromRecents(
+  recents: Cf22VenteRecent[],
+  ventePrevueAujourdhui: string,
+  joursOuvrablesMois: string,
+): number {
+  const sum =
+    (recents ?? []).reduce((acc, r) => acc + num(r.montant), 0) +
+    num(ventePrevueAujourdhui);
+  return (sum / 4) * num(joursOuvrablesMois);
+}
+
+export function achatRatioCout(
+  line: Cf22AchatLine,
+  stock: Cf22StockLine[],
+): number | null {
+  const explicit = num(line.ratioCout);
+  if (explicit > 0) return explicit;
+  const name = (line.produit || '').trim().toLowerCase();
+  if (!name) return null;
+  const match = (stock ?? []).find(
+    (s) => (s.produit || '').trim().toLowerCase() === name,
+  );
+  if (!match) return null;
+  const pv = num(match.prixVente);
+  if (pv <= 0) return null;
+  return num(match.prixAchat) / pv;
+}
+
+export function achatsMensuels(
+  line: Cf22AchatLine,
+  stock: Cf22StockLine[],
+): number {
+  let pa = num(line.prixAchatUnitaire);
+  if (pa <= 0) {
+    const name = (line.produit || '').trim().toLowerCase();
+    const match = (stock ?? []).find(
+      (s) => (s.produit || '').trim().toLowerCase() === name,
+    );
+    if (match) pa = num(match.prixAchat);
+  }
+  return num(line.frequenceMensuelle) * num(line.qteParAchat) * pa;
+}
+
+/** Excel: achats / ratioCout (= 1 − marge) */
+export function ventesMensuellesFromAchat(
+  line: Cf22AchatLine,
+  stock: Cf22StockLine[],
+): number {
+  const achats = achatsMensuels(line, stock);
+  const ratio = achatRatioCout(line, stock);
+  if (!ratio || ratio <= 0) return 0;
+  return achats / ratio;
+}
+
+export function sumAchatsMensuels(
+  lines: Cf22AchatLine[],
+  stock: Cf22StockLine[],
+): number {
+  return (lines ?? []).reduce((acc, l) => acc + achatsMensuels(l, stock), 0);
+}
+
+export function sumVentesFromAchats(
+  lines: Cf22AchatLine[],
+  stock: Cf22StockLine[],
+): number {
+  return (lines ?? []).reduce(
+    (acc, l) => acc + ventesMensuellesFromAchat(l, stock),
+    0,
+  );
+}
+
 export function mergeCf2Analyse(
   existing: Cf2Analyse | null | undefined,
   patch: Partial<Cf2Analyse>,
@@ -325,6 +634,11 @@ export function mergeCf2Analyse(
     cf21: patch.cf21
       ? normalizeCf2Analyse({ ...base, cf21: patch.cf21 }).cf21
       : base.cf21,
+    cf22: patch.cf22
+      ? normalizeCf22(patch.cf22, {
+          fallbackDateHeure: base.cf22.business.dateHeureVisite,
+        })
+      : base.cf22,
   };
 }
 
@@ -345,4 +659,29 @@ export function newCf2DepenseAutre(): Cf2DepenseAutre {
 
 export function newCf2Reference(): Cf2Reference {
   return { id: rid('r'), nom: '', relationTelephone: '' };
+}
+
+export function newCf22StockLine(): Cf22StockLine {
+  return {
+    id: rid('st'),
+    produit: '',
+    quantite: '',
+    prixAchat: '',
+    prixVente: '',
+  };
+}
+
+export function newCf22VenteRecent(): Cf22VenteRecent {
+  return { id: rid('vr'), jour: '', montant: '' };
+}
+
+export function newCf22AchatLine(): Cf22AchatLine {
+  return {
+    id: rid('ac'),
+    produit: '',
+    frequenceMensuelle: '',
+    qteParAchat: '',
+    prixAchatUnitaire: '',
+    ratioCout: '',
+  };
 }

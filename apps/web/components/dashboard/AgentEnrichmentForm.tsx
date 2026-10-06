@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   ETAT_CIVIL_LABELS,
   ETATS_CIVILS,
@@ -13,6 +13,8 @@ import {
   type AgentSalaireEnrichment,
   type FamilleProduit,
 } from '@imf/shared';
+import { ApiError } from '../../lib/api';
+import { useToast } from '../Toast';
 import { dashStyles as styles } from './DashboardShell';
 
 type Props = {
@@ -163,10 +165,18 @@ export function AgentEnrichmentForm({
   const [form, setForm] = useState(() =>
     enrichmentFromPayload(famille, payload),
   );
+  const toast = useToast();
+
+  const payloadSyncKey = useMemo(
+    () => JSON.stringify(enrichmentFromPayload(famille, payload)),
+    [famille, payload],
+  );
 
   useEffect(() => {
     setForm(enrichmentFromPayload(famille, payload));
-  }, [famille, payload]);
+    // Sync only when server enrichment content changes (not on every parent render).
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- payloadSyncKey captures payload+famille
+  }, [payloadSyncKey]);
 
   function patchSalaire(partial: Partial<AgentSalaireEnrichment>) {
     setForm((prev) => ({ ...(prev as AgentSalaireEnrichment), ...partial }));
@@ -174,6 +184,23 @@ export function AgentEnrichmentForm({
 
   function patchActivite(partial: Partial<AgentActiviteEnrichment>) {
     setForm((prev) => ({ ...(prev as AgentActiviteEnrichment), ...partial }));
+  }
+
+  async function handleSave() {
+    try {
+      await onSave(form);
+      toast.success(
+        famille === 'ACTIVITE' ? 'CF1 enregistrée.' : 'Dossier enregistré.',
+      );
+    } catch (e) {
+      toast.error(
+        e instanceof ApiError
+          ? e.message
+          : e instanceof Error
+            ? e.message
+            : 'Échec enregistrement',
+      );
+    }
   }
 
   const activite = form as AgentActiviteEnrichment;
@@ -196,8 +223,8 @@ export function AgentEnrichmentForm({
       <p className={styles.assignHint}>
         {hint ??
           (famille === 'ACTIVITE'
-            ? 'Consultez les informations saisies à la réception, modifiez-les ou complétez ce qui manque, puis enregistrez.'
-            : 'Renseignez les informations métier complémentaires, puis enregistrez avant de poursuivre les documents et la descente.')}
+            ? 'Vous pouvez enregistrer au fur et à mesure : aucun champ n’est obligatoire à cette étape. La complétude sera vérifiée à la soumission.'
+            : 'Enregistrez progressivement les informations. La complétude sera vérifiée à la soumission.')}
       </p>
 
       {famille === 'SALAIRE' ? (
@@ -758,7 +785,7 @@ export function AgentEnrichmentForm({
             type="button"
             className={`${styles.btn} ${styles.btnPrimary}`}
             disabled={busy}
-            onClick={() => onSave(form)}
+            onClick={() => void handleSave()}
           >
             {busy ? 'Enregistrement…' : 'Enregistrer les champs'}
           </button>
