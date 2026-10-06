@@ -825,3 +825,5 @@ export type BankingNotifyResult = {
 };
 
 export * from './agentChecklist';
+export * from './analyseAgrPack';
+export * from './cf2Analyse';

@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { useRouter } from 'next/navigation';
 import {
   DOSSIER_ETAT_LABELS,
   dureeFromPayload,
@@ -13,12 +12,15 @@ import {
   getChecklistAc,
   montantSouhaiteFromPayload,
   TYPE_PIECE_LABELS,
+  usesAnalyseAgrPack,
+  type Cf2Analyse,
   type ChecklistAnswers,
   type DossierEtat,
   type FamilleProduit,
   type ProduitCreditDto,
 } from '@imf/shared';
 import { getApiUrl, getToken } from '../../lib/api';
+import { Cf2Panel } from './Cf2Panel';
 import { dashStyles as styles } from './DashboardShell';
 
 export type DetailTransition = {
@@ -61,6 +63,8 @@ export type DossierDetailData = {
   visite?: { rapportTexte?: string | null } | null;
   scoreValue?: number | null;
   checklistAnswers?: ChecklistAnswers | null;
+  analyseCf2?: Cf2Analyse | null;
+  usesAnalyseAgrPack?: boolean;
 };
 
 export type PendingAction = {
@@ -548,7 +552,6 @@ async function fetchPieceBlob(pieceId: string) {
 
 export function DossierDetailView({
   data,
-  backHref,
   extraTabs,
   extraTabContent,
   pendingActions = [],
@@ -564,7 +567,7 @@ export function DossierDetailView({
   onTabRequestHandled,
 }: {
   data: DossierDetailData;
-  backHref: string;
+  backHref?: string;
   extraTabs?: TabDef[];
   extraTabContent?: Record<string, ReactNode>;
   pendingActions?: PendingAction[];
@@ -580,8 +583,7 @@ export function DossierDetailView({
   tabRequest?: string | null;
   onTabRequestHandled?: () => void;
 }) {
-  const router = useRouter();
-  const [tab, setTab] = useState('checklist');
+  const [tab, setTab] = useState('historique');
   const [docError, setDocError] = useState<string | null>(null);
   const [avisTarget, setAvisTarget] = useState<{
     id: string;
@@ -609,14 +611,20 @@ export function DossierDetailView({
     const historique: TabDef = { key: 'historique', label: 'Historique' };
     const checklist: TabDef = { key: 'checklist', label: 'Checklist' };
     const cf1: TabDef = { key: 'cf1', label: 'CF1' };
+    const cf2: TabDef = { key: 'cf2', label: 'CF2' };
+    const agrPack =
+      data.usesAnalyseAgrPack ??
+      usesAnalyseAgrPack(data.produit?.code ?? data.type);
 
     if (famille === 'SALAIRE') {
+      const core = agrPack ? [checklist] : [];
       if (
         isReception ||
         (p.prenom && p.montantSollicite != null && !p.demandeur)
       ) {
         return [
-          checklist,
+          ...core,
+          ...(agrPack ? [cf2] : []),
           { key: 'identite', label: 'Identité' },
           { key: 'emploi', label: 'Emploi & prêt' },
           { key: 'demande', label: 'Demande' },
@@ -624,7 +632,8 @@ export function DossierDetailView({
         ];
       }
       return [
-        checklist,
+        ...core,
+        ...(agrPack ? [cf2] : []),
         { key: 'identite', label: 'Identité' },
         { key: 'emploi', label: 'Emploi & prêt' },
         historique,
@@ -632,17 +641,37 @@ export function DossierDetailView({
     }
 
     // ACTIVITÉ — CF1 remplace Identité / Éligibilité / Business / Prêt / Demande
-    return [checklist, cf1, historique];
-  }, [famille, isReception, p.prenom, p.montantSollicite, p.demandeur]);
+    if (!agrPack) {
+      return [historique];
+    }
+    return [checklist, cf1, cf2, historique];
+  }, [
+    famille,
+    isReception,
+    p.prenom,
+    p.montantSollicite,
+    p.demandeur,
+    data.usesAnalyseAgrPack,
+    data.produit?.code,
+    data.type,
+  ]);
 
   const tabs = useMemo(
     () => [...baseTabs, ...(extraTabs ?? [])],
     [baseTabs, extraTabs],
   );
 
+  const defaultTab = baseTabs[0]?.key ?? 'historique';
+
   useEffect(() => {
-    setTab('checklist');
-  }, [data.id]);
+    setTab(defaultTab);
+  }, [data.id, defaultTab]);
+
+  useEffect(() => {
+    if (!tabs.some((t) => t.key === tab)) {
+      setTab(defaultTab);
+    }
+  }, [tabs, tab, defaultTab]);
 
   useEffect(() => {
     if (!tabRequest) return;
@@ -1116,6 +1145,20 @@ export function DossierDetailView({
       );
       break;
     }
+    case 'cf2': {
+      if (extraTabContent?.cf2) {
+        tabContent = extraTabContent.cf2;
+        break;
+      }
+      tabContent = (
+        <Cf2Panel
+          analyse={data.analyseCf2}
+          devise={String(p.devise || p.pret?.devise || 'USD')}
+          disabled
+        />
+      );
+      break;
+    }
     default:
       tabContent = extraTabContent?.[tab] ?? null;
   }
@@ -1123,41 +1166,18 @@ export function DossierDetailView({
   return (
     <div className={styles.detailPage}>
       <div className={styles.detailFixed}>
-        <div className={styles.detailTopBar}>
-          <button
-            type="button"
-            className={styles.detailBack}
-            onClick={() => router.push(backHref)}
-            aria-label="Retour"
-          >
-            <svg
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.2"
-            >
-              <path d="M15 6l-6 6 6 6" />
-            </svg>
-          </button>
-          <h1 className={styles.detailTopTitle}>
-            Dossier n° {data.reference}
-          </h1>
-          <span className={styles.detailTopSpacer} aria-hidden />
-        </div>
-
         <div className={styles.detailHero}>
           <p className={styles.detailHeroName}>{data.client.fullName}</p>
           <p className={styles.detailHeroAmount}>{montantLabel}</p>
           {salaireNet ? (
             <p className={styles.detailHeroSub}>Salaire net : {salaireNet}</p>
           ) : null}
-          <div className={styles.detailHeroMeta}>
-            <span className={styles.detailHeroType}>
-              {produitLabel}
-            </span>
-            <span className={styles.detailHeroBadge}>{etatLabel}</span>
+          <div className={styles.detailHeroFooter}>
+            <div className={styles.detailHeroMeta}>
+              <span className={styles.detailHeroType}>{produitLabel}</span>
+              <span className={styles.detailHeroBadge}>{etatLabel}</span>
+            </div>
+            <p className={styles.detailHeroRef}>Dossier n° {data.reference}</p>
           </div>
         </div>
 

@@ -13,12 +13,16 @@ import {
   getChecklistAc,
   mergeAgentChecklistAnswers,
   mergeAgentEnrichmentIntoPayload,
+  mergeCf2Analyse,
   montantSouhaiteFromPayload,
+  normalizeCf2Analyse,
   parseAgentEnrichment,
+  usesAnalyseAgrPack,
   validateAgentChecklist,
   validateAgentEnrichmentComplete,
   type AgentActiviteEnrichment,
   type AgentSalaireEnrichment,
+  type Cf2Analyse,
   type FamilleProduit,
 } from '@imf/shared';
 import { ZodError } from 'zod';
@@ -148,6 +152,10 @@ export class TerrainService {
       checklist,
       checklistAnswers: answers,
       flags,
+      analyseCf2: normalizeCf2Analyse(d.visite?.analyseCf2Json, {
+        visiteStartedAt: d.visite?.startedAt?.toISOString() ?? null,
+      }),
+      usesAnalyseAgrPack: usesAnalyseAgrPack(d.produit.code),
     };
   }
 
@@ -447,6 +455,44 @@ export class TerrainService {
     await this.prisma.visiteTerrain.update({
       where: { dossierId: id },
       data: { checklistJson: merged as Prisma.InputJsonValue },
+    });
+    return this.getOne(user, id);
+  }
+
+  async saveCf2(user: AuthUser, id: string, patch: Partial<Cf2Analyse>) {
+    const d = await this.prisma.dossier.findUnique({
+      where: { id },
+      include: { visite: true, produit: true },
+    });
+    if (!d) throw new NotFoundException('Dossier introuvable');
+    this.assertAgentOwns(d, user);
+    if (!usesAnalyseAgrPack(d.produit.code)) {
+      throw new BadRequestException(
+        'Analyse CF2 non applicable au produit DARE_DARE',
+      );
+    }
+    if (d.agentValideAt) {
+      throw new ForbiddenException('Dossier déjà soumis');
+    }
+    if (d.etat !== DossierEtat.DESCENTE && d.etat !== DossierEtat.AFFECTE) {
+      throw new BadRequestException(
+        'CF2 modifiable uniquement en descente',
+      );
+    }
+    if (!d.visite) {
+      throw new BadRequestException('Démarrez la visite d’abord');
+    }
+
+    const existing = normalizeCf2Analyse(d.visite.analyseCf2Json, {
+      visiteStartedAt: d.visite.startedAt?.toISOString() ?? null,
+    });
+    const merged = mergeCf2Analyse(existing, patch);
+
+    await this.prisma.visiteTerrain.update({
+      where: { dossierId: id },
+      data: {
+        analyseCf2Json: merged as Prisma.InputJsonValue,
+      },
     });
     return this.getOne(user, id);
   }
@@ -788,6 +834,7 @@ export class TerrainService {
       include: {
         client: { include: { zone: true, commune: true } },
         agent: { select: { id: true, displayName: true, email: true } },
+        produit: true,
         pieces: { orderBy: { createdAt: 'asc' } },
         visite: true,
         transitions: { orderBy: { createdAt: 'asc' } },
@@ -796,8 +843,13 @@ export class TerrainService {
     if (!d) throw new NotFoundException('Dossier introuvable');
     return {
       ...d,
+      type: d.produit.code,
       etatLabel: DOSSIER_ETAT_LABELS[d.etat],
       checklistAnswers: d.visite?.checklistJson ?? null,
+      analyseCf2: normalizeCf2Analyse(d.visite?.analyseCf2Json, {
+        visiteStartedAt: d.visite?.startedAt?.toISOString() ?? null,
+      }),
+      usesAnalyseAgrPack: usesAnalyseAgrPack(d.produit.code),
     };
   }
 }

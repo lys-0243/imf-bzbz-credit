@@ -12,7 +12,12 @@ import {
   Role,
 } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
-import { DOSSIER_ETAT_LABELS, montantSouhaiteFromPayload } from '@imf/shared';
+import {
+  DOSSIER_ETAT_LABELS,
+  montantSouhaiteFromPayload,
+  normalizeCf2Analyse,
+  usesAnalyseAgrPack,
+} from '@imf/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 
@@ -198,6 +203,10 @@ export class AdminService {
       etatLabel: DOSSIER_ETAT_LABELS[d.etat],
       editable: false,
       checklistAnswers: d.visite?.checklistJson ?? null,
+      analyseCf2: normalizeCf2Analyse(d.visite?.analyseCf2Json, {
+        visiteStartedAt: d.visite?.startedAt?.toISOString() ?? null,
+      }),
+      usesAnalyseAgrPack: usesAnalyseAgrPack(d.produit.code),
     };
   }
 

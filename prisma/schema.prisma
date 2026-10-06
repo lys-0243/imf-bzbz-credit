@@ -156,6 +156,7 @@ model VisiteTerrain {
   startedAt     DateTime  @default(now())
   completedAt   DateTime?
   checklistJson Json?
+  analyseCf2Json Json?
   rapportTexte  String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt

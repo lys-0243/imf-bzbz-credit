@@ -5,6 +5,7 @@ import {
   CHECKLIST_CATEGORY_LABELS,
   validateAgentChecklist,
   validateAgentEnrichmentComplete,
+  type Cf2Analyse,
   type ChecklistAnswers,
   type ChecklistCategory,
   type ChecklistItemDef,
@@ -12,6 +13,7 @@ import {
 } from '@imf/shared';
 import { ApiError, apiFetch, getApiUrl, getToken } from '../../lib/api';
 import { AgentEnrichmentForm } from './AgentEnrichmentForm';
+import { Cf2Panel } from './Cf2Panel';
 import { dashStyles as styles } from './DashboardShell';
 import {
   DossierDetailView,
@@ -27,6 +29,8 @@ type DossierDetail = DossierDetailData & {
   pieces: Piece[];
   checklist: ChecklistItemDef[];
   checklistAnswers: ChecklistAnswers;
+  analyseCf2?: Cf2Analyse | null;
+  usesAnalyseAgrPack?: boolean;
   visite?: {
     rapportTexte?: string | null;
     startedAt?: string;
@@ -328,6 +332,27 @@ export default function AgentDossierPanel({
       setError(
         e instanceof ApiError ? e.message : 'Échec enregistrement des champs',
       );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveCf2(analyse: Cf2Analyse) {
+    setBusy(true);
+    setError(null);
+    setMsg(null);
+    try {
+      await apiFetch(`/agent/dossiers/${id}/cf2`, {
+        method: 'PUT',
+        body: JSON.stringify({ analyse }),
+      });
+      await load();
+      setMsg('Analyse CF2 enregistrée.');
+    } catch (e) {
+      setError(
+        e instanceof ApiError ? e.message : 'Échec enregistrement CF2',
+      );
+      throw e;
     } finally {
       setBusy(false);
     }
@@ -924,6 +949,15 @@ export default function AgentDossierPanel({
                 />
               ),
             }),
+        cf2: (
+          <Cf2Panel
+            analyse={data.analyseCf2}
+            devise={String(payload.devise || payload.pret?.devise || 'USD')}
+            disabled={!canEdit}
+            busy={busy}
+            onSave={saveCf2}
+          />
+        ),
         operations: operationsContent,
       }}
       pendingActions={pendingActions}

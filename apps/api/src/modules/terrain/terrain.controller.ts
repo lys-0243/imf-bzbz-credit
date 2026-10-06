@@ -21,7 +21,7 @@ import {
 } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
 import { IsDateString, IsObject, IsString } from 'class-validator';
-import type { ChecklistAnswers } from '@imf/shared';
+import type { ChecklistAnswers, Cf2Analyse } from '@imf/shared';
 import { CurrentUser } from '../identity/current-user.decorator';
 import { JwtAuthGuard } from '../identity/jwt-auth.guard';
 import { Roles, RolesGuard } from '../identity/roles.guard';
@@ -38,6 +38,23 @@ class ChecklistDto {
   })
   @IsObject()
   answers!: ChecklistAnswers;
+}
+
+class Cf2Dto {
+  @ApiProperty({
+    description: 'Patch analyse CF2 (sections 2.1–2.5)',
+    example: {
+      cf21: {
+        residence: {
+          residenceDepuis: '2019',
+          statutLogement: 'locataire',
+          dateHeureVisite: '06/10/2026 09:30',
+        },
+      },
+    },
+  })
+  @IsObject()
+  analyse!: Partial<Cf2Analyse>;
 }
 
 class RapportDto {
@@ -172,6 +189,22 @@ export class TerrainController {
     @Body() dto: ChecklistDto,
   ) {
     return this.terrain.saveChecklist(user, id, dto.answers);
+  }
+
+  @Put('agent/dossiers/:id/cf2')
+  @Roles(Role.AGENT)
+  @ApiOperation({
+    summary: 'Sauver l’analyse CF2',
+    description: 'Persiste les sections Analyse AGR (2.1–2.5).',
+  })
+  @ApiParam({ name: 'id', description: 'ID du dossier' })
+  @ApiBody({ type: Cf2Dto })
+  saveCf2(
+    @CurrentUser() user: { id: string; role: Role },
+    @Param('id') id: string,
+    @Body() dto: Cf2Dto,
+  ) {
+    return this.terrain.saveCf2(user, id, dto.analyse);
   }
 
   @Put('agent/dossiers/:id/payload')
