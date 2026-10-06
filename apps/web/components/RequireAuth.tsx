@@ -3,6 +3,10 @@
 import { useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '../lib/auth';
+import {
+  PageLoading,
+  PageStateBlock,
+} from './dashboard/PageState';
 
 const ROLE_HOME: Record<string, string> = {
   AGENT: '/agent',
@@ -37,7 +41,16 @@ export function RequireAuth({
     }
   }, [user, loading, roles, router, pathname]);
 
-  if (loading) return <p>Chargement…</p>;
+  if (loading) {
+    return (
+      <PageStateBlock>
+        <PageLoading
+          title="Chargement de la page"
+          detail="Vérification de votre session…"
+        />
+      </PageStateBlock>
+    );
+  }
   if (!user) return null;
   if (roles?.length && !roles.includes(user.role)) return null;
   return <>{children}</>;

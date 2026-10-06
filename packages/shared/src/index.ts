@@ -274,6 +274,26 @@ export const agentActiviteEnrichmentSchema = z.object({
     activite6MoisConsecutifs: boolOuiNon,
     activiteEnregistreeLegalement: boolOuiNon,
   }),
+  demandeur: z.object({
+    prenom: z.string().default(''),
+    nom: z.string().default(''),
+    postNom: z.string().default(''),
+    dateNaissance: z.string().default(''),
+    typePiece: z.string().default(''),
+    numeroPiece: z.string().default(''),
+    sexe: z.string().default(''),
+    etatCivil: z.string().default(''),
+    adresseDomicile: z.string().default(''),
+    telephone: z.string().default(''),
+    email: z.string().optional().default(''),
+    conjointPrenom: z.string().optional().default(''),
+    conjointPostNom: z.string().optional().default(''),
+    conjointNom: z.string().optional().default(''),
+    conjointDateNaissance: z
+      .union([dateIso, z.literal('')])
+      .optional()
+      .default(''),
+  }),
   business: z.object({
     nomBusiness: z.string().min(1),
     adresseBusiness: z.string().min(1),
@@ -286,6 +306,11 @@ export const agentActiviteEnrichmentSchema = z.object({
   pret: z.object({
     butInvestissement: z.string().min(1),
     commentaireBut: z.string().optional().default(''),
+    montantDesire: z.union([z.coerce.number(), z.literal('')]).optional(),
+    dureeMois: z.union([z.coerce.number(), z.literal('')]).optional(),
+    capaciteMensuelle: z.union([z.coerce.number(), z.literal('')]).optional(),
+    pretAutreInstitution: z.string().optional().default(''),
+    autreInstitutionNom: z.string().optional().default(''),
     montantPretPrecedent: z.union([z.coerce.number(), z.literal('')]).optional(),
     dureePretPrecedent: z.string().optional().default(''),
   }),
@@ -320,12 +345,17 @@ export function parseAgentEnrichment(
     return { famille: 'SALAIRE' as const, data };
   }
   const data = agentActiviteEnrichmentSchema.parse(enrichment);
-  if (opts?.etatCivil === 'Marie' && !data.conjointNom?.trim()) {
+  const conjoint =
+    data.demandeur?.conjointNom?.trim() || data.conjointNom?.trim();
+  if (
+    (opts?.etatCivil === 'Marie' || data.demandeur?.etatCivil === 'Marie') &&
+    !conjoint
+  ) {
     throw new z.ZodError([
       {
         code: z.ZodIssueCode.custom,
         message: 'Conjoint obligatoire si marié(e)',
-        path: ['conjointNom'],
+        path: ['demandeur', 'conjointNom'],
       },
     ]);
   }
@@ -356,6 +386,57 @@ export function mergeAgentEnrichmentIntoPayload(
   const e = enrichment as AgentActiviteEnrichment;
   base.eligibilite = { ...e.eligibilite };
   base.business = { ...e.business };
+
+  const dem = e.demandeur;
+  if (dem) {
+    base.prenom = dem.prenom || base.prenom;
+    base.nom = dem.nom || base.nom;
+    base.postNom = dem.postNom || base.postNom;
+    base.dateNaissance = dem.dateNaissance || base.dateNaissance;
+    base.typePiece = dem.typePiece || base.typePiece;
+    base.numeroPiece = dem.numeroPiece || base.numeroPiece;
+    base.sexe = dem.sexe || base.sexe;
+    base.etatCivil = dem.etatCivil || base.etatCivil;
+    base.adresseDomicile = dem.adresseDomicile || base.adresseDomicile;
+    base.telephone = dem.telephone || base.telephone;
+    base.email = dem.email || base.email || '';
+  }
+
+  const conjointNom =
+    dem?.conjointNom || e.conjointNom || base.conjointNom || '';
+  const conjointDateNaissance =
+    dem?.conjointDateNaissance ||
+    e.conjointDateNaissance ||
+    base.conjointDateNaissance ||
+    '';
+  const conjointPrenom = dem?.conjointPrenom || base.conjointPrenom || '';
+  const conjointPostNom = dem?.conjointPostNom || base.conjointPostNom || '';
+
+  base.conjointNom = conjointNom;
+  base.conjointDateNaissance = conjointDateNaissance;
+  base.conjointPrenom = conjointPrenom;
+  base.conjointPostNom = conjointPostNom;
+
+  const montantDesire =
+    e.pret.montantDesire === '' || e.pret.montantDesire == null
+      ? base.montantSollicite
+      : e.pret.montantDesire;
+  if (typeof montantDesire === 'number') {
+    base.montantSollicite = montantDesire;
+  }
+  if (e.pret.dureeMois !== '' && e.pret.dureeMois != null) {
+    base.dureeMois = e.pret.dureeMois;
+  }
+  if (e.pret.capaciteMensuelle !== '' && e.pret.capaciteMensuelle != null) {
+    base.capaciteMensuelle = e.pret.capaciteMensuelle;
+  }
+  if (e.pret.pretAutreInstitution) {
+    base.pretAutreInstitution = e.pret.pretAutreInstitution;
+  }
+  if (e.pret.autreInstitutionNom != null) {
+    base.autreInstitutionNom = e.pret.autreInstitutionNom;
+  }
+
   base.pret = {
     ...(typeof base.pret === 'object' && base.pret ? base.pret : {}),
     butInvestissement: e.pret.butInvestissement,
@@ -365,39 +446,39 @@ export function mergeAgentEnrichmentIntoPayload(
         ? undefined
         : e.pret.montantPretPrecedent,
     dureePretPrecedent: e.pret.dureePretPrecedent || '',
-    // miroir des champs réception pour affichage legacy pret.*
     montantDesire: base.montantSollicite,
     devise: base.devise,
     dureeMois:
-      typeof base.dureeSemaines === 'number'
-        ? Math.round(base.dureeSemaines / 4)
-        : base.dureeMois,
+      e.pret.dureeMois !== '' && e.pret.dureeMois != null
+        ? e.pret.dureeMois
+        : typeof base.dureeSemaines === 'number'
+          ? Math.round(base.dureeSemaines / 4)
+          : base.dureeMois,
     capaciteMensuelle: base.capaciteMensuelle,
     pretAutreInstitution: base.pretAutreInstitution,
     autreInstitutionNom: base.autreInstitutionNom,
   };
-  base.conjointNom = e.conjointNom || '';
-  base.conjointDateNaissance = e.conjointDateNaissance || '';
-  if (base.etatCivil === 'Marie' || e.conjointNom) {
-    base.demandeur = {
-      ...(typeof base.demandeur === 'object' && base.demandeur
-        ? base.demandeur
-        : {}),
-      prenom: base.prenom,
-      nom: base.nom,
-      postNom: base.postNom,
-      sexe: base.sexe,
-      dateNaissance: base.dateNaissance,
-      etatCivil: base.etatCivil,
-      typePiece: base.typePiece,
-      numeroPiece: base.numeroPiece,
-      adresseDomicile: base.adresseDomicile,
-      telephone: base.telephone,
-      email: base.email,
-      conjointNom: e.conjointNom || '',
-      conjointDateNaissance: e.conjointDateNaissance || '',
-    };
-  }
+
+  base.demandeur = {
+    ...(typeof base.demandeur === 'object' && base.demandeur
+      ? base.demandeur
+      : {}),
+    prenom: base.prenom,
+    nom: base.nom,
+    postNom: base.postNom,
+    sexe: base.sexe,
+    dateNaissance: base.dateNaissance,
+    etatCivil: base.etatCivil,
+    typePiece: base.typePiece,
+    numeroPiece: base.numeroPiece,
+    adresseDomicile: base.adresseDomicile,
+    telephone: base.telephone,
+    email: base.email,
+    conjointPrenom,
+    conjointPostNom,
+    conjointNom,
+    conjointDateNaissance,
+  };
   return base;
 }
 
@@ -426,6 +507,13 @@ export function enrichmentFromPayload(
   const e = p.eligibilite ?? {};
   const b = p.business ?? {};
   const pret = p.pret ?? {};
+  const dem = p.demandeur ?? {};
+  const conjointNom = String(
+    dem.conjointNom ?? p.conjointNom ?? '',
+  );
+  const conjointDateNaissance = String(
+    dem.conjointDateNaissance ?? p.conjointDateNaissance ?? '',
+  );
   return {
     eligibilite: {
       age18OuPlus: Boolean(e.age18OuPlus),
@@ -437,6 +525,23 @@ export function enrichmentFromPayload(
       activite6MoisConsecutifs: Boolean(e.activite6MoisConsecutifs),
       activiteEnregistreeLegalement: Boolean(e.activiteEnregistreeLegalement),
     },
+    demandeur: {
+      prenom: String(dem.prenom ?? p.prenom ?? ''),
+      nom: String(dem.nom ?? p.nom ?? ''),
+      postNom: String(dem.postNom ?? p.postNom ?? ''),
+      dateNaissance: String(dem.dateNaissance ?? p.dateNaissance ?? ''),
+      typePiece: String(dem.typePiece ?? p.typePiece ?? ''),
+      numeroPiece: String(dem.numeroPiece ?? p.numeroPiece ?? ''),
+      sexe: String(dem.sexe ?? p.sexe ?? ''),
+      etatCivil: String(dem.etatCivil ?? p.etatCivil ?? ''),
+      adresseDomicile: String(dem.adresseDomicile ?? p.adresseDomicile ?? ''),
+      telephone: String(dem.telephone ?? p.telephone ?? ''),
+      email: String(dem.email ?? p.email ?? ''),
+      conjointPrenom: String(dem.conjointPrenom ?? p.conjointPrenom ?? ''),
+      conjointPostNom: String(dem.conjointPostNom ?? p.conjointPostNom ?? ''),
+      conjointNom,
+      conjointDateNaissance,
+    },
     business: {
       nomBusiness: String(b.nomBusiness ?? ''),
       adresseBusiness: String(b.adresseBusiness ?? ''),
@@ -447,18 +552,34 @@ export function enrichmentFromPayload(
       formeJuridique: String(b.formeJuridique ?? ''),
     },
     pret: {
-      butInvestissement: String(pret.butInvestissement ?? ''),
+      butInvestissement: String(pret.butInvestissement ?? p.motifCredit ?? ''),
       commentaireBut: String(pret.commentaireBut ?? ''),
+      montantDesire:
+        pret.montantDesire == null && p.montantSollicite == null
+          ? ''
+          : Number(pret.montantDesire ?? p.montantSollicite),
+      dureeMois:
+        pret.dureeMois == null && p.dureeMois == null
+          ? ''
+          : Number(pret.dureeMois ?? p.dureeMois),
+      capaciteMensuelle:
+        pret.capaciteMensuelle == null && p.capaciteMensuelle == null
+          ? ''
+          : Number(pret.capaciteMensuelle ?? p.capaciteMensuelle),
+      pretAutreInstitution: String(
+        pret.pretAutreInstitution ?? p.pretAutreInstitution ?? '',
+      ),
+      autreInstitutionNom: String(
+        pret.autreInstitutionNom ?? p.autreInstitutionNom ?? '',
+      ),
       montantPretPrecedent:
         pret.montantPretPrecedent == null || pret.montantPretPrecedent === ''
           ? ''
           : Number(pret.montantPretPrecedent),
       dureePretPrecedent: String(pret.dureePretPrecedent ?? ''),
     },
-    conjointNom: String(p.conjointNom ?? p.demandeur?.conjointNom ?? ''),
-    conjointDateNaissance: String(
-      p.conjointDateNaissance ?? p.demandeur?.conjointDateNaissance ?? '',
-    ),
+    conjointNom,
+    conjointDateNaissance,
   };
 }
 

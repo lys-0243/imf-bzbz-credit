@@ -12,6 +12,7 @@ import {
 } from './DashboardShell';
 import { DossierDetailView, type DossierDetailData } from './DossierDetailView';
 import { DossierListView, matchesDossierQuery } from './DossierViews';
+import { PageError, PageLoading, PageStateBlock } from './PageState';
 import { ProfileView } from './ProfileView';
 
 export type ResponsableCreditSection =
@@ -479,10 +480,24 @@ function ResponsableCreditDetail({
   }
 
   if (error && !data) {
-    return <p className={styles.listError}>{error}</p>;
+    return (
+      <PageStateBlock>
+        <PageError
+          title="Impossible de charger le dossier"
+          message={error}
+        />
+      </PageStateBlock>
+    );
   }
   if (!data) {
-    return <p className={styles.itemMeta}>Chargement du dossier…</p>;
+    return (
+      <PageStateBlock>
+        <PageLoading
+          title="Chargement du dossier"
+          detail="Récupération des informations d’affectation…"
+        />
+      </PageStateBlock>
+    );
   }
 
   const backHref = BUCKET_BACK[data.bucket || 'file'];

@@ -6,6 +6,7 @@ import {
   formatMontantDossier,
   type SidebarDossier,
 } from './DashboardShell';
+import { PageError, PageLoading } from './PageState';
 
 export function matchesDossierQuery(d: SidebarDossier, q: string) {
   const s = q.trim().toLowerCase();
@@ -120,8 +121,16 @@ export function DossierListView({
         />
       </div>
 
-      {error ? <p className={styles.listError}>{error}</p> : null}
-      {loading ? <p className={styles.itemMeta}>Chargement…</p> : null}
+      {error ? (
+        <PageError title="Impossible de charger la liste" message={error} compact />
+      ) : null}
+      {loading ? (
+        <PageLoading
+          title="Chargement de la page"
+          detail="Récupération des dossiers…"
+          compact
+        />
+      ) : null}
 
       {!loading && !error && dossiers.length === 0 ? (
         <div className={styles.emptyState}>

@@ -276,6 +276,233 @@ function ChecklistActionIcon({
   );
 }
 
+function typePieceLabel(v: unknown): string {
+  if (
+    typeof v === 'string' &&
+    TYPE_PIECE_LABELS[v as keyof typeof TYPE_PIECE_LABELS]
+  ) {
+    return TYPE_PIECE_LABELS[v as keyof typeof TYPE_PIECE_LABELS];
+  }
+  return displayVal(v);
+}
+
+function etatCivilLabel(v: unknown): string {
+  if (
+    typeof v === 'string' &&
+    ETAT_CIVIL_LABELS[v as keyof typeof ETAT_CIVIL_LABELS]
+  ) {
+    return ETAT_CIVIL_LABELS[v as keyof typeof ETAT_CIVIL_LABELS];
+  }
+  return displayVal(v);
+}
+
+function buildCf1Sections(
+  p: Record<string, any>,
+  client: DossierDetailData['client'],
+  opts: { dureeLabel: string },
+): {
+  eligibilite: FieldRow[];
+  demandeur: FieldRow[];
+  business: FieldRow[];
+  pret: FieldRow[];
+} {
+  const e = (p.eligibilite ?? {}) as Record<string, unknown>;
+  const dem = (p.demandeur ?? {}) as Record<string, unknown>;
+  const b = (p.business ?? {}) as Record<string, unknown>;
+  const pret = (p.pret ?? {}) as Record<string, unknown>;
+
+  const prenom = dem.prenom ?? p.prenom;
+  const nom = dem.nom ?? p.nom;
+  const postNom = dem.postNom ?? p.postNom;
+  const dateNaissance = dem.dateNaissance ?? p.dateNaissance;
+  const typePiece = dem.typePiece ?? p.typePiece;
+  const numeroPiece = dem.numeroPiece ?? p.numeroPiece;
+  const sexe = dem.sexe ?? p.sexe;
+  const etatCivil = dem.etatCivil ?? p.etatCivil;
+  const adresseDomicile = dem.adresseDomicile ?? p.adresseDomicile;
+  const telephone = dem.telephone ?? p.telephone;
+  const email = dem.email ?? p.email;
+  const conjointNom = dem.conjointNom ?? p.conjointNom;
+  const conjointDateNaissance =
+    dem.conjointDateNaissance ?? p.conjointDateNaissance;
+  const conjointPrenom = dem.conjointPrenom ?? p.conjointPrenom;
+  const conjointPostNom = dem.conjointPostNom ?? p.conjointPostNom;
+
+  const montant =
+    typeof pret.montantDesire === 'number'
+      ? pret.montantDesire
+      : typeof p.montantSollicite === 'number'
+        ? p.montantSollicite
+        : null;
+  const devise = (pret.devise as string | undefined) ?? p.devise ?? 'USD';
+  const dureeMois = pret.dureeMois ?? p.dureeMois;
+  const capacite = pret.capaciteMensuelle ?? p.capaciteMensuelle;
+  const but = pret.butInvestissement ?? p.motifCredit ?? p.butInvestissement;
+  const commentaireBut = pret.commentaireBut ?? p.commentaireBut;
+  const pretAutre = pret.pretAutreInstitution ?? p.pretAutreInstitution;
+  const autreInstNom = pret.autreInstitutionNom ?? p.autreInstitutionNom;
+
+  const demandeurRows: FieldRow[] = [
+    { label: 'Commune', value: client.commune?.name || '—' },
+    { label: 'N° de compte', value: displayVal(p.numeroCompte) },
+    { label: 'Prénom', value: displayVal(prenom) },
+    { label: 'Post-nom', value: displayVal(postNom) },
+    { label: 'Nom de famille', value: displayVal(nom) },
+    { label: 'Date de naissance', value: displayVal(dateNaissance) },
+    { label: "Type d'identité", value: typePieceLabel(typePiece) },
+    { label: "N° de la pièce d'identité", value: displayVal(numeroPiece) },
+    { label: 'Sexe (M / F)', value: displayVal(sexe) },
+    { label: 'État-civil', value: etatCivilLabel(etatCivil) },
+    {
+      label: 'Prénom (conjoint(e))',
+      value: displayVal(conjointPrenom),
+    },
+    {
+      label: 'Post-nom (conjoint(e))',
+      value: displayVal(conjointPostNom),
+    },
+    {
+      label: 'Nom de famille (conjoint(e))',
+      value: displayVal(conjointNom),
+    },
+    {
+      label: 'Date de naissance (conjoint(e))',
+      value: displayVal(conjointDateNaissance),
+    },
+    { label: 'Adresse du domicile', value: displayVal(adresseDomicile) },
+    { label: 'Téléphone(s)', value: displayVal(telephone) },
+    { label: 'E-mail', value: displayVal(email) },
+  ];
+
+  const pretRows: FieldRow[] = [
+    {
+      label: 'Montant désiré',
+      value: formatMontantSouhaite(montant, devise),
+    },
+    {
+      label: 'Durée de prêt',
+      value:
+        dureeMois != null && String(dureeMois).trim()
+          ? `${displayVal(dureeMois)} mois`
+          : opts.dureeLabel,
+    },
+    {
+      label: 'Combien pouvez-vous facilement payer chaque mois?',
+      value:
+        capacite == null || capacite === ''
+          ? '—'
+          : formatMontantSouhaite(
+              typeof capacite === 'number' ? capacite : Number(capacite) || null,
+              devise,
+            ),
+    },
+    { label: "But de l'investissement", value: displayVal(but) },
+    {
+      label: "Commentaire sur le but de l'investissement",
+      value: displayVal(commentaireBut),
+    },
+    {
+      label: 'Prêt auprès d’une autre institution financière',
+      value: displayVal(pretAutre),
+    },
+  ];
+  if (pretAutre && pretAutre !== 'Non') {
+    pretRows.push({
+      label: '…auprès de',
+      value: displayVal(autreInstNom),
+    });
+  }
+  pretRows.push(
+    {
+      label: 'Montant du prêt précédent',
+      value:
+        pret.montantPretPrecedent == null || pret.montantPretPrecedent === ''
+          ? '—'
+          : formatMontantSouhaite(
+              typeof pret.montantPretPrecedent === 'number'
+                ? pret.montantPretPrecedent
+                : Number(pret.montantPretPrecedent) || null,
+              devise,
+            ),
+    },
+    {
+      label: 'Durée prêt précédent',
+      value: displayVal(pret.dureePretPrecedent),
+    },
+  );
+
+  return {
+    eligibilite: [
+      {
+        label: 'Le demandeur a-t-il 18 ans ou plus?',
+        value: displayVal(e.age18OuPlus),
+      },
+      {
+        label: 'Est-il Congolais / étranger domicilié dans le pays?',
+        value: displayVal(e.congolaisOuDomiciile),
+      },
+      {
+        label:
+          'Est-il propriétaire de l’activité commerciale? (Personne Morale ou Physique)',
+        value: displayVal(e.proprietaireActivite),
+      },
+      {
+        label: 'L’activité se trouve-t-elle dans une zone opérationnelle?',
+        value: displayVal(e.activiteZoneOperationnelle),
+      },
+      {
+        label: 'Exerce-t-il actuellement l’activité?',
+        value: displayVal(e.exerceActiviteActuellement),
+      },
+      {
+        label:
+          '…et l’a-t-il exercé de manière consécutive au cours des 6 derniers mois?',
+        value: displayVal(e.activite6MoisConsecutifs),
+      },
+      {
+        label: "L'activité est-elle dans la liste d'exclusion de l'IMF?",
+        value: displayVal(e.activiteListeExclusion),
+      },
+      {
+        label: "L'activité est-elle enregistrée légalement?",
+        value: displayVal(e.activiteEnregistreeLegalement),
+      },
+    ],
+    demandeur: demandeurRows,
+    business: [
+      {
+        label: 'Nom du business',
+        value: displayVal(b.nomBusiness ?? p.nomBusiness),
+      },
+      {
+        label: 'Adresse physique du business',
+        value: displayVal(b.adresseBusiness ?? p.adresseBusiness),
+      },
+      {
+        label: "Durée d'existence à cette adresse",
+        value: displayVal(b.dureeAdresse ?? p.dureeAdresse),
+      },
+      {
+        label: 'Type de business',
+        value: displayVal(b.typeBusiness ?? p.typeBusiness),
+      },
+      {
+        label: "Durée d'existence de ce type de business",
+        value: displayVal(b.dureeTypeBusiness ?? p.dureeTypeBusiness),
+      },
+      {
+        label: 'Secteur de business',
+        value: displayVal(b.secteurBusiness ?? p.secteurBusiness),
+      },
+      {
+        label: 'Forme juridique',
+        value: displayVal(b.formeJuridique ?? p.formeJuridique),
+      },
+    ],
+    pret: pretRows,
+  };
+}
+
 function FieldsTable({
   title,
   rows,
@@ -380,10 +607,16 @@ export function DossierDetailView({
 
   const baseTabs: TabDef[] = useMemo(() => {
     const historique: TabDef = { key: 'historique', label: 'Historique' };
-    if (isReception || (p.prenom && p.montantSollicite != null && !p.demandeur)) {
-      if (famille === 'SALAIRE') {
+    const checklist: TabDef = { key: 'checklist', label: 'Checklist' };
+    const cf1: TabDef = { key: 'cf1', label: 'CF1' };
+
+    if (famille === 'SALAIRE') {
+      if (
+        isReception ||
+        (p.prenom && p.montantSollicite != null && !p.demandeur)
+      ) {
         return [
-          { key: 'checklist', label: 'Checklist' },
+          checklist,
           { key: 'identite', label: 'Identité' },
           { key: 'emploi', label: 'Emploi & prêt' },
           { key: 'demande', label: 'Demande' },
@@ -391,32 +624,15 @@ export function DossierDetailView({
         ];
       }
       return [
-        { key: 'checklist', label: 'Checklist' },
-        { key: 'identite', label: 'Identité' },
-        { key: 'elig', label: 'Éligibilité' },
-        { key: 'business', label: 'Business' },
-        { key: 'pret', label: 'Prêt' },
-        { key: 'demande', label: 'Demande' },
-        historique,
-      ];
-    }
-    if (famille === 'SALAIRE') {
-      return [
-        { key: 'checklist', label: 'Checklist' },
+        checklist,
         { key: 'identite', label: 'Identité' },
         { key: 'emploi', label: 'Emploi & prêt' },
         historique,
       ];
     }
-    return [
-      { key: 'checklist', label: 'Checklist' },
-      { key: 'client', label: 'Client' },
-      { key: 'elig', label: 'Éligibilité' },
-      { key: 'demandeur', label: 'Demandeur' },
-      { key: 'business', label: 'Business' },
-      { key: 'pret', label: 'Prêt' },
-      historique,
-    ];
+
+    // ACTIVITÉ — CF1 remplace Identité / Éligibilité / Business / Prêt / Demande
+    return [checklist, cf1, historique];
   }, [famille, isReception, p.prenom, p.montantSollicite, p.demandeur]);
 
   const tabs = useMemo(
@@ -780,15 +996,7 @@ export function DossierDetailView({
             },
             {
               label: 'Type de pièce',
-              value:
-                p.typePiece &&
-                TYPE_PIECE_LABELS[
-                  p.typePiece as keyof typeof TYPE_PIECE_LABELS
-                ]
-                  ? TYPE_PIECE_LABELS[
-                      p.typePiece as keyof typeof TYPE_PIECE_LABELS
-                    ]
-                  : displayVal(p.typePiece),
+              value: typePieceLabel(p.typePiece),
             },
             { label: 'N° de pièce', value: displayVal(p.numeroPiece) },
             { label: 'Genre', value: displayVal(p.sexe) },
@@ -796,15 +1004,7 @@ export function DossierDetailView({
             { label: 'E-mail', value: displayVal(p.email) },
             {
               label: 'État civil',
-              value:
-                p.etatCivil &&
-                ETAT_CIVIL_LABELS[
-                  p.etatCivil as keyof typeof ETAT_CIVIL_LABELS
-                ]
-                  ? ETAT_CIVIL_LABELS[
-                      p.etatCivil as keyof typeof ETAT_CIVIL_LABELS
-                    ]
-                  : displayVal(p.etatCivil),
+              value: etatCivilLabel(p.etatCivil),
             },
             {
               label: 'Adresse domicile',
@@ -891,152 +1091,29 @@ export function DossierDetailView({
         />
       );
       break;
-    case 'client':
-      tabContent = (
-        <FieldsTable
-          rows={[
-            { label: 'Commune', value: data.client.commune?.name || '—' },
-            { label: 'Statut client', value: displayVal(p.clientStatut) },
-            { label: 'N° de compte', value: displayVal(p.numeroCompte) },
-          ]}
-        />
-      );
-      break;
-    case 'elig': {
-      const e = p.eligibilite ?? {};
-      const rows: [string, string][] = [
-        ['age18OuPlus', '18 ans ou plus'],
-        ['proprietaireActivite', 'Propriétaire de l’activité'],
-        ['exerceActiviteActuellement', 'Exerce actuellement'],
-        ['activiteListeExclusion', 'Liste d’exclusion IMF'],
-        ['congolaisOuDomiciile', 'Congolais / domicilié'],
-        ['activiteZoneOperationnelle', 'Zone opérationnelle'],
-        ['activite6MoisConsecutifs', '6 mois consécutifs'],
-        ['activiteEnregistreeLegalement', 'Enregistrée légalement'],
-      ];
-      tabContent = (
-        <FieldsTable
-          rows={rows.map(([key, label]) => ({
-            label,
-            value: displayVal(e[key]),
-          }))}
-        />
-      );
-      break;
-    }
-    case 'demandeur': {
-      const dem = p.demandeur ?? {};
-      const rows: FieldRow[] = [
-        { label: 'Prénom', value: displayVal(dem.prenom) },
-        { label: 'Nom', value: displayVal(dem.nom) },
-        { label: 'Post-Nom', value: displayVal(dem.postNom) },
-        { label: 'Sexe', value: displayVal(dem.sexe) },
-        {
-          label: 'Date de naissance',
-          value: displayVal(dem.dateNaissance),
-        },
-        { label: 'État civil', value: displayVal(dem.etatCivil) },
-        { label: 'Type de pièce', value: displayVal(dem.typePiece) },
-        { label: 'N° de pièce', value: displayVal(dem.numeroPiece) },
-        {
-          label: 'Adresse domicile',
-          value: displayVal(dem.adresseDomicile),
-        },
-        { label: 'Téléphone', value: displayVal(dem.telephone) },
-        { label: 'Email', value: displayVal(dem.email) },
-      ];
-      if (dem.etatCivil === 'Marie') {
-        rows.push(
-          {
-            label: 'Conjoint (prénom et nom)',
-            value: displayVal(dem.conjointNom),
-          },
-          {
-            label: 'Date naissance conjoint',
-            value: displayVal(dem.conjointDateNaissance),
-          },
-        );
+    case 'cf1': {
+      if (extraTabContent?.cf1) {
+        tabContent = extraTabContent.cf1;
+        break;
       }
-      tabContent = <FieldsTable rows={rows} />;
-      break;
-    }
-    case 'business': {
-      const b = p.business ?? {};
+      const sections = buildCf1Sections(p, data.client, { dureeLabel });
       tabContent = (
-        <FieldsTable
-          rows={[
-            { label: 'Nom du business', value: displayVal(b.nomBusiness) },
-            {
-              label: 'Adresse physique',
-              value: displayVal(b.adresseBusiness),
-            },
-            {
-              label: 'Durée à cette adresse',
-              value: displayVal(b.dureeAdresse),
-            },
-            { label: 'Type de business', value: displayVal(b.typeBusiness) },
-            {
-              label: 'Durée de ce type',
-              value: displayVal(b.dureeTypeBusiness),
-            },
-            { label: 'Secteur', value: displayVal(b.secteurBusiness) },
-            {
-              label: 'Forme juridique',
-              value: displayVal(b.formeJuridique),
-            },
-          ]}
-        />
+        <>
+          <FieldsTable
+            title="1. Éligibilité (demande)"
+            rows={sections.eligibilite}
+          />
+          <FieldsTable
+            title="2. Information sur le demandeur"
+            rows={sections.demandeur}
+          />
+          <FieldsTable
+            title="3. Information sur le business"
+            rows={sections.business}
+          />
+          <FieldsTable title="4. Prêt sollicité" rows={sections.pret} />
+        </>
       );
-      break;
-    }
-    case 'pret': {
-      const pret = p.pret ?? {};
-      const rows: FieldRow[] = [
-        {
-          label: 'Montant désiré',
-          value: formatMontantSouhaite(
-            typeof pret.montantDesire === 'number'
-              ? pret.montantDesire
-              : null,
-            pret.devise,
-          ),
-        },
-        { label: 'Devise', value: displayVal(pret.devise) },
-        { label: 'Durée (mois)', value: displayVal(pret.dureeMois) },
-        {
-          label: 'Capacité mensuelle',
-          value: displayVal(pret.capaciteMensuelle),
-        },
-        {
-          label: 'But de l’investissement',
-          value: displayVal(pret.butInvestissement),
-        },
-        {
-          label: 'Commentaire sur le but',
-          value: displayVal(pret.commentaireBut),
-        },
-        {
-          label: 'Autre institution',
-          value: displayVal(pret.pretAutreInstitution),
-        },
-      ];
-      if (pret.pretAutreInstitution && pret.pretAutreInstitution !== 'Non') {
-        rows.push({
-          label: 'Nom institution',
-          value: displayVal(pret.autreInstitutionNom),
-        });
-      }
-      rows.push(
-        {
-          label: 'Montant prêt précédent',
-          value: displayVal(pret.montantPretPrecedent),
-        },
-        {
-          label: 'Durée prêt précédent',
-          value: displayVal(pret.dureePretPrecedent),
-        },
-      );
-      tabContent = <FieldsTable rows={rows} />;
       break;
     }
     default:

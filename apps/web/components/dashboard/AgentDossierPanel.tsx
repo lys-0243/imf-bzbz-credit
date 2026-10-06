@@ -18,6 +18,7 @@ import {
   type DossierDetailData,
   type PendingAction,
 } from './DossierDetailView';
+import { PageError, PageLoading, PageStateBlock } from './PageState';
 
 type Piece = { id: string; kind: string; blobPath: string; createdAt: string };
 
@@ -85,6 +86,7 @@ export default function AgentDossierPanel({
   useEffect(() => {
     let cancelled = false;
     setData(null);
+    setError(null);
     (async () => {
       try {
         await load();
@@ -98,6 +100,16 @@ export default function AgentDossierPanel({
       cancelled = true;
     };
   }, [load]);
+
+  async function retryLoad() {
+    setError(null);
+    setData(null);
+    try {
+      await load();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'Erreur de chargement');
+    }
+  }
 
   const byCategory = useMemo(() => {
     const map = new Map<ChecklistCategory, ChecklistItemDef[]>();
@@ -135,9 +147,12 @@ export default function AgentDossierPanel({
     if (canEditPayload && !enrichCheck.ok) {
       actions.push({
         id: 'enrichissement',
-        label: 'Compléter les champs du dossier',
+        label:
+          famille === 'ACTIVITE'
+            ? 'Compléter / corriger la CF1'
+            : 'Compléter les champs du dossier',
         reason: enrichCheck.message,
-        tab: 'completer',
+        tab: famille === 'ACTIVITE' ? 'cf1' : 'completer',
       });
     }
 
@@ -467,17 +482,24 @@ export default function AgentDossierPanel({
 
   if (error && !data) {
     return (
-      <div className={styles.panelInner}>
-        <p className={styles.msgErr}>{error}</p>
-      </div>
+      <PageStateBlock>
+        <PageError
+          title="Impossible de charger le dossier"
+          message={error}
+          onRetry={() => void retryLoad()}
+        />
+      </PageStateBlock>
     );
   }
 
   if (!data) {
     return (
-      <div className={styles.panelInner}>
-        <p className={styles.itemMeta}>Chargement du dossier…</p>
-      </div>
+      <PageStateBlock>
+        <PageLoading
+          title="Chargement du dossier"
+          detail="Récupération des informations et de la checklist…"
+        />
+      </PageStateBlock>
     );
   }
 
@@ -868,21 +890,40 @@ export default function AgentDossierPanel({
     <DossierDetailView
       data={data}
       backHref="/agent"
-      extraTabs={[
-        { key: 'completer', label: 'Compléter' },
-        { key: 'operations', label: 'Opérations Agent' },
-      ]}
+      extraTabs={
+        famille === 'ACTIVITE'
+          ? [{ key: 'operations', label: 'Opérations Agent' }]
+          : [
+              { key: 'completer', label: 'Compléter' },
+              { key: 'operations', label: 'Opérations Agent' },
+            ]
+      }
       extraTabContent={{
-        completer: (
-          <AgentEnrichmentForm
-            famille={famille}
-            etatCivil={payload.etatCivil}
-            payload={payload}
-            disabled={!canEditPayload}
-            busy={busy}
-            onSave={saveEnrichment}
-          />
-        ),
+        ...(famille === 'ACTIVITE'
+          ? {
+              cf1: (
+                <AgentEnrichmentForm
+                  famille={famille}
+                  etatCivil={payload.etatCivil}
+                  payload={payload}
+                  disabled={!canEditPayload}
+                  busy={busy}
+                  onSave={saveEnrichment}
+                />
+              ),
+            }
+          : {
+              completer: (
+                <AgentEnrichmentForm
+                  famille={famille}
+                  etatCivil={payload.etatCivil}
+                  payload={payload}
+                  disabled={!canEditPayload}
+                  busy={busy}
+                  onSave={saveEnrichment}
+                />
+              ),
+            }),
         operations: operationsContent,
       }}
       pendingActions={pendingActions}
