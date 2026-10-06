@@ -10,8 +10,10 @@ import {
   formatDureeLabel,
   formatMontantSouhaite,
   getApplicableChecklistItems,
+  getChecklistAc,
   montantSouhaiteFromPayload,
   TYPE_PIECE_LABELS,
+  type ChecklistAnswers,
   type DossierEtat,
   type FamilleProduit,
   type ProduitCreditDto,
@@ -58,6 +60,7 @@ export type DossierDetailData = {
   transitions?: DetailTransition[];
   visite?: { rapportTexte?: string | null } | null;
   scoreValue?: number | null;
+  checklistAnswers?: ChecklistAnswers | null;
 };
 
 export type PendingAction = {
@@ -102,6 +105,175 @@ function displayVal(v: unknown): string {
     return v.toLocaleString('fr-FR');
   }
   return String(v);
+}
+
+function inferDocExt(blobPath?: string | null): string {
+  if (!blobPath) return '';
+  const base = blobPath.split(/[/\\]/).pop() || '';
+  const dot = base.lastIndexOf('.');
+  if (dot < 0) return '';
+  return base.slice(dot + 1).toLowerCase();
+}
+
+function DocTypeIcon({ ext }: { ext: string }) {
+  const kind =
+    ext === 'pdf'
+      ? 'pdf'
+      : ext === 'xls' || ext === 'xlsx' || ext === 'csv'
+        ? 'xls'
+        : ext === 'doc' || ext === 'docx'
+          ? 'doc'
+          : ext === 'png' ||
+              ext === 'jpg' ||
+              ext === 'jpeg' ||
+              ext === 'gif' ||
+              ext === 'webp'
+            ? 'img'
+            : 'file';
+
+  const label =
+    kind === 'pdf'
+      ? 'PDF'
+      : kind === 'xls'
+        ? 'XLS'
+        : kind === 'doc'
+          ? 'DOC'
+          : kind === 'img'
+            ? 'IMG'
+            : 'DOC';
+
+  const toneClass =
+    kind === 'pdf'
+      ? styles.checklistDocIcon_pdf
+      : kind === 'xls'
+        ? styles.checklistDocIcon_xls
+        : kind === 'doc'
+          ? styles.checklistDocIcon_doc
+          : kind === 'img'
+            ? styles.checklistDocIcon_img
+            : styles.checklistDocIcon_file;
+
+  return (
+    <span
+      className={`${styles.checklistDocIcon} ${toneClass}`}
+      aria-hidden
+    >
+      <svg width="18" height="22" viewBox="0 0 18 22" fill="none">
+        <path
+          d="M2 1.5h9.5L16 6v14.5a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V2.5a1 1 0 0 1 1-1Z"
+          fill="currentColor"
+          opacity="0.18"
+        />
+        <path
+          d="M11.5 1.5V5a1 1 0 0 0 1 1h3.5"
+          stroke="currentColor"
+          strokeWidth="1.4"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M2 1.5h9.5L16 6v14.5a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V2.5a1 1 0 0 1 1-1Z"
+          stroke="currentColor"
+          strokeWidth="1.4"
+          strokeLinejoin="round"
+        />
+      </svg>
+      <span className={styles.checklistDocIconBadge}>{label}</span>
+    </span>
+  );
+}
+
+function ChecklistActionIcon({
+  name,
+}: {
+  name: 'upload' | 'replace' | 'view' | 'download' | 'avis';
+}) {
+  if (name === 'upload') {
+    return (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+        <path
+          d="M12 16V4m0 0l-4 4m4-4l4 4"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M4 16.5V18a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-1.5"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+        />
+      </svg>
+    );
+  }
+  if (name === 'replace') {
+    return (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+        <path
+          d="M4 12a8 8 0 0 1 13.66-5.66M20 4v5h-5"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M20 12a8 8 0 0 1-13.66 5.66M4 20v-5h5"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    );
+  }
+  if (name === 'view') {
+    return (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+        <path
+          d="M2.5 12s3.5-6.5 9.5-6.5S21.5 12 21.5 12s-3.5 6.5-9.5 6.5S2.5 12 2.5 12Z"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinejoin="round"
+        />
+        <circle cx="12" cy="12" r="2.75" stroke="currentColor" strokeWidth="2" />
+      </svg>
+    );
+  }
+  if (name === 'download') {
+    return (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+        <path
+          d="M12 4v10m0 0l4-4m-4 4l-4-4"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M4 16.5V18a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-1.5"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+        />
+      </svg>
+    );
+  }
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M5 5.5A2.5 2.5 0 0 1 7.5 3h9A2.5 2.5 0 0 1 19 5.5v8A2.5 2.5 0 0 1 16.5 16H10l-4.2 3.15A.8.8 0 0 1 4.5 18.5V5.5Z"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M8 8h8M8 11.5h5"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
 }
 
 function FieldsTable({
@@ -158,6 +330,9 @@ export function DossierDetailView({
   docBusy = false,
   docAvis = {},
   onSaveDocAvis,
+  checklistAnswers,
+  canEditAc = false,
+  onToggleAc,
   tabRequest = null,
   onTabRequestHandled,
 }: {
@@ -172,11 +347,14 @@ export function DossierDetailView({
   /** itemId → avis agent (dispense de pièce) */
   docAvis?: Record<string, string>;
   onSaveDocAvis?: (itemId: string, avis: string) => void | Promise<void>;
+  checklistAnswers?: ChecklistAnswers | null;
+  canEditAc?: boolean;
+  onToggleAc?: (itemId: string, checked: boolean) => void | Promise<void>;
   tabRequest?: string | null;
   onTabRequestHandled?: () => void;
 }) {
   const router = useRouter();
-  const [tab, setTab] = useState('recap');
+  const [tab, setTab] = useState('checklist');
   const [docError, setDocError] = useState<string | null>(null);
   const [avisTarget, setAvisTarget] = useState<{
     id: string;
@@ -201,42 +379,43 @@ export function DossierDetailView({
   const transitions = data.transitions ?? [];
 
   const baseTabs: TabDef[] = useMemo(() => {
+    const historique: TabDef = { key: 'historique', label: 'Historique' };
     if (isReception || (p.prenom && p.montantSollicite != null && !p.demandeur)) {
       if (famille === 'SALAIRE') {
         return [
-          { key: 'recap', label: 'Récapitulatif' },
+          { key: 'checklist', label: 'Checklist' },
           { key: 'identite', label: 'Identité' },
           { key: 'emploi', label: 'Emploi & prêt' },
           { key: 'demande', label: 'Demande' },
-          { key: 'docs', label: 'Documents' },
+          historique,
         ];
       }
       return [
-        { key: 'recap', label: 'Récapitulatif' },
+        { key: 'checklist', label: 'Checklist' },
         { key: 'identite', label: 'Identité' },
         { key: 'elig', label: 'Éligibilité' },
         { key: 'business', label: 'Business' },
         { key: 'pret', label: 'Prêt' },
         { key: 'demande', label: 'Demande' },
-        { key: 'docs', label: 'Documents' },
+        historique,
       ];
     }
     if (famille === 'SALAIRE') {
       return [
-        { key: 'recap', label: 'Récapitulatif' },
+        { key: 'checklist', label: 'Checklist' },
         { key: 'identite', label: 'Identité' },
         { key: 'emploi', label: 'Emploi & prêt' },
-        { key: 'docs', label: 'Documents' },
+        historique,
       ];
     }
     return [
-      { key: 'recap', label: 'Récapitulatif' },
+      { key: 'checklist', label: 'Checklist' },
       { key: 'client', label: 'Client' },
       { key: 'elig', label: 'Éligibilité' },
       { key: 'demandeur', label: 'Demandeur' },
       { key: 'business', label: 'Business' },
       { key: 'pret', label: 'Prêt' },
-      { key: 'docs', label: 'Documents' },
+      historique,
     ];
   }, [famille, isReception, p.prenom, p.montantSollicite, p.demandeur]);
 
@@ -246,7 +425,7 @@ export function DossierDetailView({
   );
 
   useEffect(() => {
-    setTab('recap');
+    setTab('checklist');
   }, [data.id]);
 
   useEffect(() => {
@@ -334,9 +513,204 @@ export function DossierDetailView({
     replaceInputRef.current?.click();
   }
 
+  const answers = checklistAnswers ?? data.checklistAnswers ?? null;
+
   let tabContent: ReactNode = null;
   switch (tab) {
-    case 'recap':
+    case 'checklist':
+      tabContent = (
+        <div className={styles.detailTableBlock}>
+          <div className={styles.checklistHeader}>
+            <h3 className={styles.detailTableTitle}>
+              Liste de contrôle de prêt
+            </h3>
+            <span className={styles.checklistCount}>
+              {docRows.length} document{docRows.length === 1 ? '' : 's'}
+            </span>
+          </div>
+          
+          {docError ? <p className={styles.msgErr}>{docError}</p> : null}
+          {docRows.length === 0 ? (
+            <p className={styles.checklistEmpty}>Aucune pièce attendue</p>
+          ) : (
+            <ul className={styles.checklistList}>
+              {docRows.map((row) => {
+                const avis = (docAvis[row.id] || '').trim();
+                const itemVal = answers?.values?.[row.id];
+                const acChecked = getChecklistAc(itemVal);
+                const scChecked = Boolean(itemVal?.sc);
+                const boChecked = Boolean(itemVal?.bo);
+                const ext = inferDocExt(row.piece?.blobPath);
+                const canTurnOnAc = row.received || Boolean(avis);
+                const acDisabled =
+                  !canEditAc ||
+                  docBusy ||
+                  !onToggleAc ||
+                  (!canTurnOnAc && !acChecked);
+                const statusLabel = row.received
+                  ? 'Reçu'
+                  : avis
+                    ? 'Dispensé'
+                    : 'Manquant';
+                const statusClass = row.received
+                  ? styles.checklistStatusOk
+                  : avis
+                    ? styles.checklistStatusAvis
+                    : styles.checklistStatusMiss;
+                return (
+                  <li key={row.id} className={styles.checklistRow}>
+                    <DocTypeIcon ext={ext} />
+                    <div className={styles.checklistDocMain}>
+                      <span className={styles.checklistDocName}>
+                        {row.label}
+                      </span>
+                      {avis ? (
+                        <span className={styles.checklistDocAvis}>
+                          Avis : {avis}
+                        </span>
+                      ) : null}
+                    </div>
+                    <span className={`${styles.checklistStatus} ${statusClass}`}>
+                      {statusLabel}
+                    </span>
+                    <div className={styles.checklistActions}>
+                      {canManageDocs ? (
+                        <button
+                          type="button"
+                          className={styles.checklistIconBtn}
+                          disabled={docBusy}
+                          title={row.received ? 'Remplacer' : 'Ajouter'}
+                          aria-label={row.received ? 'Remplacer' : 'Ajouter'}
+                          onClick={() => triggerReplace(row.kind)}
+                        >
+                          <ChecklistActionIcon
+                            name={row.received ? 'replace' : 'upload'}
+                          />
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        className={styles.checklistIconBtn}
+                        disabled={!row.piece}
+                        title="Voir"
+                        aria-label="Voir"
+                        onClick={() =>
+                          row.piece && void viewPiece(row.piece.id)
+                        }
+                      >
+                        <ChecklistActionIcon name="view" />
+                      </button>
+                      <button
+                        type="button"
+                        className={styles.checklistIconBtn}
+                        disabled={!row.piece}
+                        title="Télécharger"
+                        aria-label="Télécharger"
+                        onClick={() =>
+                          row.piece && void downloadPiece(row.piece)
+                        }
+                      >
+                        <ChecklistActionIcon name="download" />
+                      </button>
+                      {canManageDocs ? (
+                        <button
+                          type="button"
+                          className={`${styles.checklistIconBtn} ${styles.checklistIconBtnAvis}`}
+                          disabled={docBusy || avisBusy}
+                          title="Avis"
+                          aria-label="Avis"
+                          onClick={() => {
+                            setAvisTarget({
+                              id: row.id,
+                              label: row.label,
+                            });
+                            setAvisText(avis);
+                          }}
+                        >
+                          <ChecklistActionIcon name="avis" />
+                        </button>
+                      ) : null}
+                    </div>
+                    <div
+                      className={styles.checklistRoles}
+                      role="group"
+                      aria-label="Validations AC SC BO"
+                    >
+                      <label
+                        className={`${styles.checklistRole} ${
+                          acChecked ? styles.checklistRoleOn : ''
+                        } ${acDisabled ? styles.checklistRoleDisabled : ''}`}
+                        title={
+                          acDisabled && !acChecked && canEditAc
+                            ? 'Uploadez le document ou saisissez un avis avant de valider AC'
+                            : 'Agent Crédit'
+                        }
+                      >
+                        <input
+                          type="checkbox"
+                          checked={acChecked}
+                          disabled={acDisabled}
+                          aria-label={`AC — ${row.label}`}
+                          onChange={(e) => {
+                            if (!onToggleAc) return;
+                            if (e.target.checked && !canTurnOnAc) return;
+                            void onToggleAc(row.id, e.target.checked);
+                          }}
+                        />
+                        <span>AC</span>
+                      </label>
+                      <label
+                        className={`${styles.checklistRole} ${
+                          scChecked ? styles.checklistRoleOn : ''
+                        }`}
+                        title="Superviseur Crédit"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={scChecked}
+                          disabled
+                          readOnly
+                          aria-label={`SC — ${row.label}`}
+                        />
+                        <span>SC</span>
+                      </label>
+                      <label
+                        className={`${styles.checklistRole} ${
+                          boChecked ? styles.checklistRoleOn : ''
+                        }`}
+                        title="Back Office"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={boChecked}
+                          disabled
+                          readOnly
+                          aria-label={`BO — ${row.label}`}
+                        />
+                        <span>BO</span>
+                      </label>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          
+          <input
+            ref={replaceInputRef}
+            type="file"
+            hidden
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              const kind = replaceKindRef.current;
+              e.target.value = '';
+              if (file && kind && onUploadDoc) void onUploadDoc(kind, file);
+            }}
+          />
+        </div>
+      );
+      break;
+    case 'historique':
       tabContent = (
         <>
           <FieldsTable
@@ -665,126 +1039,6 @@ export function DossierDetailView({
       tabContent = <FieldsTable rows={rows} />;
       break;
     }
-    case 'docs':
-      tabContent = (
-        <div className={styles.detailTableBlock}>
-          <h3 className={styles.detailTableTitle}>Documents</h3>
-          {docError ? <p className={styles.msgErr}>{docError}</p> : null}
-          <div className={styles.tableWrap}>
-            <table className={styles.detailDataTable}>
-              <thead>
-                <tr>
-                  <th>Document</th>
-                  <th>Statut</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {docRows.length === 0 ? (
-                  <tr>
-                    <td colSpan={3}>Aucune pièce attendue</td>
-                  </tr>
-                ) : (
-                  docRows.map((row) => {
-                    const avis = (docAvis[row.id] || '').trim();
-                    return (
-                      <tr key={row.id}>
-                        <td>
-                          <strong>{row.label}</strong>
-                          {avis ? (
-                            <div className={styles.docAvisPreview}>
-                              Avis : {avis}
-                            </div>
-                          ) : null}
-                        </td>
-                        <td>
-                          <span
-                            className={
-                              row.received
-                                ? styles.docStatusOk
-                                : avis
-                                  ? styles.docStatusAvis
-                                  : styles.docStatusMiss
-                            }
-                          >
-                            {row.received
-                              ? 'Reçu'
-                              : avis
-                                ? 'Dispensé (avis)'
-                                : 'Manquant'}
-                          </span>
-                        </td>
-                        <td>
-                          <div className={styles.docActions}>
-                            <button
-                              type="button"
-                              className={styles.docActionBtn}
-                              disabled={!row.piece}
-                              onClick={() =>
-                                row.piece && void viewPiece(row.piece.id)
-                              }
-                            >
-                              Voir
-                            </button>
-                            <button
-                              type="button"
-                              className={styles.docActionBtn}
-                              disabled={!row.piece}
-                              onClick={() =>
-                                row.piece && void downloadPiece(row.piece)
-                              }
-                            >
-                              Télécharger
-                            </button>
-                            {canManageDocs ? (
-                              <>
-                                <button
-                                  type="button"
-                                  className={styles.docActionBtnPrimary}
-                                  disabled={docBusy}
-                                  onClick={() => triggerReplace(row.kind)}
-                                >
-                                  {row.received ? 'Remplacer' : 'Ajouter'}
-                                </button>
-                                <button
-                                  type="button"
-                                  className={styles.docActionBtnDanger}
-                                  disabled={docBusy || avisBusy}
-                                  onClick={() => {
-                                    setAvisTarget({
-                                      id: row.id,
-                                      label: row.label,
-                                    });
-                                    setAvisText(avis);
-                                  }}
-                                >
-                                  Avis
-                                </button>
-                              </>
-                            ) : null}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-          <input
-            ref={replaceInputRef}
-            type="file"
-            hidden
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              const kind = replaceKindRef.current;
-              e.target.value = '';
-              if (file && kind && onUploadDoc) void onUploadDoc(kind, file);
-            }}
-          />
-        </div>
-      );
-      break;
     default:
       tabContent = extraTabContent?.[tab] ?? null;
   }

@@ -1843,6 +1843,281 @@
   color: var(--imf-muted);
 }
 
+.checklistMeta {
+  margin: 0 0 0.85rem;
+  font-size: 0.92rem;
+  color: var(--imf-muted);
+}
+
+.checklistHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.35rem;
+}
+
+.checklistHeader .detailTableTitle {
+  margin: 0;
+}
+
+.checklistCount {
+  font-size: 0.88rem;
+  color: var(--imf-muted);
+  white-space: nowrap;
+}
+
+.checklistEmpty {
+  margin: 0.5rem 0 0;
+  color: var(--imf-muted);
+}
+
+.checklistList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.checklistRow {
+  display: grid;
+  grid-template-columns: 2.5rem minmax(10rem, 1.4fr) 5.5rem auto auto;
+  align-items: center;
+  gap: 0.75rem 1rem;
+  padding: 0.7rem 0.9rem;
+  background: #fff;
+  border: 1px solid rgba(15, 40, 80, 0.1);
+  border-radius: 12px;
+}
+
+.checklistDocIcon {
+  position: relative;
+  display: inline-flex;
+  width: 2.25rem;
+  height: 2.25rem;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: #5b6b7c;
+}
+
+.checklistDocIcon_pdf {
+  color: #d64545;
+}
+
+.checklistDocIcon_xls {
+  color: #2f9e62;
+}
+
+.checklistDocIcon_doc {
+  color: #3b6fd8;
+}
+
+.checklistDocIcon_img {
+  color: #8a5cf0;
+}
+
+.checklistDocIcon_file {
+  color: #6b7c8f;
+}
+
+.checklistDocIconBadge {
+  position: absolute;
+  left: 50%;
+  bottom: 2px;
+  transform: translateX(-50%);
+  font-size: 0.55rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  color: currentColor;
+}
+
+.checklistDocMain {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.checklistDocName {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--imf-blue, #1f4b99);
+  line-height: 1.3;
+}
+
+.checklistDocAvis {
+  font-size: 0.78rem;
+  color: var(--imf-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.checklistStatus {
+  font-size: 0.82rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.checklistStatusOk {
+  color: var(--imf-green);
+}
+
+.checklistStatusAvis {
+  color: #c47a12;
+}
+
+.checklistStatusMiss {
+  color: var(--imf-muted);
+}
+
+.checklistActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.25rem;
+}
+
+.checklistIconBtn {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: 1px solid rgba(15, 40, 80, 0.12);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--imf-blue, #1f4b99);
+  cursor: pointer;
+}
+
+.checklistIconBtn:hover:not(:disabled) {
+  background: rgba(31, 75, 153, 0.08);
+  border-color: rgba(31, 75, 153, 0.28);
+}
+
+.checklistIconBtnAvis {
+  color: var(--imf-red, #c62828);
+}
+
+.checklistIconBtnAvis:hover:not(:disabled) {
+  background: rgba(198, 40, 40, 0.08);
+  border-color: rgba(198, 40, 40, 0.28);
+}
+
+.checklistIconBtn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.checklistRoles {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  justify-self: end;
+}
+
+.checklistRole {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.2rem 0.4rem;
+  border-radius: 999px;
+  border: 1px solid rgba(15, 40, 80, 0.12);
+  background: #f7f8fa;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--imf-muted);
+  cursor: default;
+  user-select: none;
+}
+
+.checklistRole input {
+  width: 0.85rem;
+  height: 0.85rem;
+  margin: 0;
+  accent-color: var(--imf-blue, #1f4b99);
+}
+
+.checklistRole:has(input:not(:disabled)) {
+  cursor: pointer;
+}
+
+.checklistRoleOn {
+  color: var(--imf-green, #1f8a4c);
+  border-color: rgba(31, 138, 76, 0.4);
+  background: rgba(31, 138, 76, 0.1);
+}
+
+.checklistRoleOn input {
+  accent-color: var(--imf-green, #1f8a4c);
+}
+
+.checklistRoleDisabled {
+  opacity: 0.55;
+}
+
+.checklistLegend {
+  margin: 0.85rem 0 0;
+  font-size: 0.85rem;
+  color: var(--imf-muted);
+}
+
+.checklistRoleCol {
+  width: 3rem;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.checklistRoleCheck {
+  width: 1.1rem;
+  height: 1.1rem;
+  accent-color: var(--imf-blue);
+  cursor: pointer;
+}
+
+.checklistRoleCheck:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+@media (max-width: 1100px) {
+  .checklistRow {
+    grid-template-columns: 2.5rem minmax(8rem, 1fr) auto;
+    grid-template-areas:
+      'icon name roles'
+      'icon status actions';
+  }
+
+  .checklistDocIcon {
+    grid-area: icon;
+  }
+
+  .checklistDocMain {
+    grid-area: name;
+  }
+
+  .checklistStatus {
+    grid-area: status;
+  }
+
+  .checklistActions {
+    grid-area: actions;
+    justify-content: flex-start;
+  }
+
+  .checklistRoles {
+    grid-area: roles;
+  }
+}
+
 @media (max-width: 900px) {
   .sidebar {
     position: relative;

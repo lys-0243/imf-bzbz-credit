@@ -10,6 +10,8 @@ import {
   DOSSIER_ETAT_LABELS,
   clientFieldsFromPayload,
   getApplicableChecklistItems,
+  getChecklistAc,
+  mergeAgentChecklistAnswers,
   mergeAgentEnrichmentIntoPayload,
   montantSouhaiteFromPayload,
   parseAgentEnrichment,
@@ -399,7 +401,7 @@ export class TerrainService {
   ) {
     const d = await this.prisma.dossier.findUnique({
       where: { id },
-      include: { visite: true },
+      include: { visite: true, pieces: true, produit: true },
     });
     if (!d) throw new NotFoundException('Dossier introuvable');
     this.assertAgentOwns(d, user);
@@ -415,9 +417,36 @@ export class TerrainService {
       throw new BadRequestException('Démarrez la visite d’abord');
     }
 
+    const existing = (d.visite.checklistJson as ChecklistAnswers | null) ?? {
+      flags: { hasGarant: true },
+      values: {},
+    };
+    const merged = mergeAgentChecklistAnswers(existing, answers);
+
+    const uploadedKinds = new Set(d.pieces.map((p) => p.kind));
+    const uploadItems = getApplicableChecklistItems(
+      d.produit.famille,
+      (d.payload ?? {}) as Record<string, any>,
+      merged.flags ?? {},
+      'ALL',
+    ).filter((item) => item.input === 'upload');
+
+    for (const item of uploadItems) {
+      const val = merged.values?.[item.id];
+      if (!getChecklistAc(val)) continue;
+      const kind = item.kind ?? item.id;
+      const hasPiece = uploadedKinds.has(kind);
+      const hasAvis = Boolean((val?.note ?? '').trim());
+      if (!hasPiece && !hasAvis) {
+        throw new BadRequestException(
+          `Impossible de valider AC sans pièce ni avis : ${item.label}`,
+        );
+      }
+    }
+
     await this.prisma.visiteTerrain.update({
       where: { dossierId: id },
-      data: { checklistJson: answers as Prisma.InputJsonValue },
+      data: { checklistJson: merged as Prisma.InputJsonValue },
     });
     return this.getOne(user, id);
   }

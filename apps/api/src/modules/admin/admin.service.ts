@@ -197,6 +197,7 @@ export class AdminService {
       type: d.produit.code,
       etatLabel: DOSSIER_ETAT_LABELS[d.etat],
       editable: false,
+      checklistAnswers: d.visite?.checklistJson ?? null,
     };
   }
 

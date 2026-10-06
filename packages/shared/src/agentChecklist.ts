@@ -37,19 +37,89 @@ export type ChecklistFlags = {
   hasGarant?: boolean;
 };
 
+/** Tampons de validation liste de contrôle (Excel AC / SC / BO). */
+export type ChecklistRoleColumn = 'ac' | 'sc' | 'bo';
+
+export type ChecklistItemValue = {
+  checked?: boolean;
+  /** Agent Crédit */
+  ac?: boolean;
+  /** Superviseur / Responsable crédit */
+  sc?: boolean;
+  /** Back Office (Analyste, Conformité) */
+  bo?: boolean;
+  booleanValue?: boolean | null;
+  note?: string;
+  text?: string;
+};
+
 export type ChecklistAnswers = {
   flags?: ChecklistFlags;
-  /** itemId → check done / boolean answer / text note */
-  values?: Record<
-    string,
-    {
-      checked?: boolean;
-      booleanValue?: boolean | null;
-      note?: string;
-      text?: string;
-    }
-  >;
+  /** itemId → check done / boolean answer / text note / tampons AC·SC·BO */
+  values?: Record<string, ChecklistItemValue>;
 };
+
+/** Colonne éditable selon le rôle applicatif. */
+export function canEditChecklistRoleColumn(
+  role: string,
+  column: ChecklistRoleColumn,
+): boolean {
+  if (column === 'ac') return role === 'AGENT';
+  if (column === 'sc') return role === 'RESPONSABLE_CREDIT';
+  if (column === 'bo') return role === 'ANALYSTE' || role === 'CONFORMITE';
+  return false;
+}
+
+/** Lit le tampon AC (legacy `checked` = AC). */
+export function getChecklistAc(value?: ChecklistItemValue | null): boolean {
+  if (!value) return false;
+  if (value.ac === true) return true;
+  if (value.ac === false) return false;
+  return Boolean(value.checked);
+}
+
+/**
+ * Fusionne les réponses agent : conserve sc/bo existants,
+ * n’accepte que ac (et checked→ac) côté agent.
+ */
+export function mergeAgentChecklistAnswers(
+  existing: ChecklistAnswers | null | undefined,
+  incoming: ChecklistAnswers,
+): ChecklistAnswers {
+  const prevValues = existing?.values ?? {};
+  const nextValues: Record<string, ChecklistItemValue> = { ...prevValues };
+
+  for (const [itemId, raw] of Object.entries(incoming.values ?? {})) {
+    const prev = prevValues[itemId] ?? {};
+    const ac =
+      raw.ac !== undefined
+        ? raw.ac
+        : raw.checked !== undefined
+          ? raw.checked
+          : prev.ac;
+
+    nextValues[itemId] = {
+      ...prev,
+      ...raw,
+      ac,
+      // Agent ne peut pas écrire SC / BO
+      sc: prev.sc,
+      bo: prev.bo,
+      // Sync legacy checked avec AC quand fourni
+      checked: ac !== undefined ? ac : raw.checked ?? prev.checked,
+    };
+    // Strip accidental sc/bo from spread if incoming had them
+    if ('sc' in raw || 'bo' in raw) {
+      nextValues[itemId].sc = prev.sc;
+      nextValues[itemId].bo = prev.bo;
+    }
+  }
+
+  return {
+    flags: incoming.flags ?? existing?.flags,
+    values: nextValues,
+  };
+}
 
 const SOCIETE_KEYWORDS = [
   'sarl',
@@ -113,15 +183,43 @@ function matchesWhen(
 }
 
 export const AGENT_CHECKLIST_CATALOG: ChecklistItemDef[] = [
-  // —— DOSSIER (AGENT) ——
+  // —— DOSSIER (AGENT) — aligné feuille Excel CHECKLIST ——
   {
     id: 'piece_identite',
-    label: "Pièce d'identité visible et valide",
+    label:
+      "Copie de la carte d'électeur, passeport ou permis de conduire",
     category: 'DOSSIER',
     stage: 'AGENT',
     input: 'upload',
     kind: 'piece_identite',
     required: true,
+  },
+  {
+    id: 'lettre_demande_pret',
+    label: 'Lettre de demande de prêt',
+    category: 'DOSSIER',
+    stage: 'AGENT',
+    input: 'upload',
+    kind: 'lettre_demande_pret',
+    required: true,
+  },
+  {
+    id: 'formulaire_demande_credit',
+    label: 'Formulaire de Demande de crédit',
+    category: 'DOSSIER',
+    stage: 'AGENT',
+    input: 'upload',
+    kind: 'formulaire_demande_credit',
+    required: true,
+  },
+  {
+    id: 'demande_lettre_signees',
+    label: 'Demande de crédit signée + Lettre du client signée',
+    category: 'DOSSIER',
+    stage: 'AGENT',
+    input: 'upload',
+    kind: 'demande_lettre_signees',
+    required: false,
   },
   {
     id: 'acte_engagement_agent',
@@ -133,17 +231,8 @@ export const AGENT_CHECKLIST_CATALOG: ChecklistItemDef[] = [
     required: true,
   },
   {
-    id: 'demande_lettre_signees',
-    label: 'Demande de crédit signée + Lettre du client signée',
-    category: 'DOSSIER',
-    stage: 'AGENT',
-    input: 'upload',
-    kind: 'demande_lettre_signees',
-    required: true,
-  },
-  {
     id: 'resume_executif',
-    label: "Résumé exécutif de l'agent de crédit",
+    label: 'Résumé exécutif du crédit',
     category: 'DOSSIER',
     stage: 'AGENT',
     input: 'text',
@@ -151,18 +240,45 @@ export const AGENT_CHECKLIST_CATALOG: ChecklistItemDef[] = [
   },
   {
     id: 'resume_executif_pdf',
-    label: 'Résumé exécutif (PDF / scan, optionnel)',
+    label: 'Résumé exécutif du crédit (PDF / scan)',
     category: 'DOSSIER',
     stage: 'AGENT',
     input: 'upload',
     kind: 'resume_executif_pdf',
     required: false,
   },
+  {
+    id: 'fiche_analyse',
+    label: "Fiches d'analyse",
+    category: 'DOSSIER',
+    stage: 'AGENT',
+    input: 'upload',
+    kind: 'fiche_analyse',
+    required: false,
+  },
+  {
+    id: 'fiche_visite_pre_comite',
+    label: 'Fiche de visite Pré-comité',
+    category: 'DOSSIER',
+    stage: 'AGENT',
+    input: 'upload',
+    kind: 'fiche_visite_pre_comite',
+    required: false,
+  },
+  {
+    id: 'plan_de_route',
+    label: 'Plan de route Business et Domicile',
+    category: 'DOSSIER',
+    stage: 'AGENT',
+    input: 'upload',
+    kind: 'plan_de_route',
+    required: false,
+  },
 
   // —— CLIENT ——
   {
     id: 'releve_compte_3mois',
-    label: 'Relevé de compte client de 3 mois (du jour de la signature)',
+    label: 'Relevé de compte du client',
     category: 'CLIENT',
     stage: 'AGENT',
     input: 'upload',
@@ -350,7 +466,7 @@ export const AGENT_CHECKLIST_CATALOG: ChecklistItemDef[] = [
   },
   {
     id: 'contrat_bail_business',
-    label: 'Contrat de bail (business)',
+    label: 'Copie du contrat de bail',
     category: 'CLIENT',
     stage: 'AGENT',
     input: 'upload',
@@ -379,11 +495,21 @@ export const AGENT_CHECKLIST_CATALOG: ChecklistItemDef[] = [
   },
   {
     id: 'photo_garanties',
-    label: 'Photo de garanties',
+    label: 'Photos des biens mis en garantie',
     category: 'CLIENT',
     stage: 'AGENT',
     input: 'upload',
     kind: 'photo_garanties',
+    required: true,
+  },
+  {
+    id: 'docs_possession_garantie',
+    label:
+      "Copie des documents de possession du bien donné en garantie (carte rose, certificat d'enregistrement, …)",
+    category: 'CLIENT',
+    stage: 'AGENT',
+    input: 'upload',
+    kind: 'docs_possession_garantie',
     required: true,
   },
   {
@@ -400,7 +526,7 @@ export const AGENT_CHECKLIST_CATALOG: ChecklistItemDef[] = [
   // —— GARANT ——
   {
     id: 'garant_piece_identite',
-    label: "Garant — Pièce d'identité visible et valide",
+    label: "Copie de la carte d'identité du garant/Codébiteur(trice)",
     category: 'GARANT',
     stage: 'AGENT',
     input: 'upload',
@@ -430,7 +556,7 @@ export const AGENT_CHECKLIST_CATALOG: ChecklistItemDef[] = [
   },
   {
     id: 'garant_releve_compte',
-    label: 'Garant — Relevé de compte récent',
+    label: 'Relevé de compte du Garant',
     category: 'GARANT',
     stage: 'AGENT',
     input: 'upload',
@@ -468,20 +594,36 @@ export const AGENT_CHECKLIST_CATALOG: ChecklistItemDef[] = [
 
   // —— LATER (catalogue, non exigés à la soumission agent) ——
   {
+    id: 'contrat_pret_signe',
+    label: 'Contrat de prêt signé',
+    category: 'DOSSIER',
+    stage: 'LATER',
+    input: 'upload',
+    kind: 'contrat_pret_signe',
+  },
+  {
+    id: 'contrat_gage_signe',
+    label: 'Contrat de gage signé',
+    category: 'DOSSIER',
+    stage: 'LATER',
+    input: 'upload',
+    kind: 'contrat_gage_signe',
+  },
+  {
+    id: 'contrat_cautionnement_signe',
+    label: 'Contrat de cautionnement signé',
+    category: 'DOSSIER',
+    stage: 'LATER',
+    input: 'upload',
+    kind: 'contrat_cautionnement_signe',
+  },
+  {
     id: 'contrats_a_signer',
     label: 'Contrat de crédit, de cautionnement et de FAFE à signer par le client',
     category: 'DOSSIER',
     stage: 'LATER',
     input: 'upload',
     kind: 'contrats_a_signer',
-  },
-  {
-    id: 'fiche_analyse',
-    label: "Fiche d'analyse",
-    category: 'DOSSIER',
-    stage: 'LATER',
-    input: 'upload',
-    kind: 'fiche_analyse',
   },
   {
     id: 'fiche_credit',

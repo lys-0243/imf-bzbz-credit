@@ -175,6 +175,7 @@ export class AffectationService {
       type: d.produit.code,
       etatLabel: DOSSIER_ETAT_LABELS[d.etat],
       editable: false,
+      checklistAnswers: d.visite?.checklistJson ?? null,
       bucket: this.bucketFor(d.etat, lastRetourByRc),
       canAssign: d.etat === DossierEtat.EN_ATTENTE_ATTRIBUTION_AGENT,
       canValidate: d.etat === DossierEtat.EN_ATTENTE_VALIDATION_RC,

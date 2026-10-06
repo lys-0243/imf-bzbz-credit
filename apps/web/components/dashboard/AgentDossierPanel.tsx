@@ -171,7 +171,7 @@ export default function AgentDossierPanel({
           id: issue.itemId,
           label: issue.label,
           reason: issue.reason,
-          tab: issue.reason === 'Pièce manquante' ? 'docs' : 'operations',
+          tab: issue.reason === 'Pièce manquante' ? 'checklist' : 'operations',
         });
       }
       if (canEdit && enrichCheck.ok && checklistIssues.length === 0) {
@@ -400,6 +400,36 @@ export default function AgentDossierPanel({
     }
   }
 
+  async function toggleAc(itemId: string, checked: boolean) {
+    const next: ChecklistAnswers = {
+      ...answers,
+      values: {
+        ...answers.values,
+        [itemId]: {
+          ...answers.values?.[itemId],
+          ac: checked,
+          checked,
+        },
+      },
+    };
+    setAnswers(next);
+    setBusy(true);
+    setError(null);
+    try {
+      await apiFetch(`/agent/dossiers/${id}/checklist`, {
+        method: 'PUT',
+        body: JSON.stringify({ answers: next }),
+      });
+    } catch (e) {
+      setError(
+        e instanceof ApiError ? e.message : 'Échec enregistrement validation AC',
+      );
+      await load();
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function setFlag(key: 'dat' | 'hypotheque' | 'hasGarant', value: boolean) {
     setAnswers((prev) => ({
       ...prev,
@@ -542,7 +572,7 @@ export default function AgentDossierPanel({
         <>
           {visiteTiming ? (
             <div className={styles.detailTableBlock}>
-              <h3 className={styles.detailTableTitle}>2. Documents</h3>
+              <h3 className={styles.detailTableTitle}>2. Checklist / Documents</h3>
               <div
                 className={
                   visiteTiming === 'past'
@@ -558,7 +588,7 @@ export default function AgentDossierPanel({
                 <button
                   type="button"
                   className={`${styles.btn} ${styles.btnPrimary}`}
-                  onClick={() => setTabRequest('docs')}
+                  onClick={() => setTabRequest('checklist')}
                 >
                   {visiteTiming === 'past'
                     ? 'Ajouter les documents'
@@ -861,6 +891,9 @@ export default function AgentDossierPanel({
       onUploadDoc={upload}
       docAvis={docAvis}
       onSaveDocAvis={saveDocAvis}
+      checklistAnswers={answers}
+      canEditAc={canEdit}
+      onToggleAc={toggleAc}
       tabRequest={tabRequest}
       onTabRequestHandled={() => setTabRequest(null)}
     />
