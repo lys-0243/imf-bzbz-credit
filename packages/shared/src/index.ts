@@ -158,6 +158,23 @@ export const receptionPayloadSchema = z
     capaciteMensuelle: z.number().positive(),
     pretAutreInstitution: z.enum(PRET_AUTRE_INSTITUTION),
     autreInstitutionNom: z.string().optional(),
+    /** Snapshot lookup CBS à la réception (optionnel). */
+    bankingLookup: z
+      .object({
+        found: z.boolean(),
+        creditEnCours: z.boolean(),
+        score: z
+          .object({
+            value: z.number(),
+            produitCode: z.string(),
+            details: z.array(z.string()),
+          })
+          .nullable()
+          .optional(),
+        historiqueCount: z.number().int().nonnegative().optional(),
+        checkedAt: z.string().optional(),
+      })
+      .optional(),
   })
   .superRefine((data, ctx) => {
     if (
@@ -612,6 +629,78 @@ export const DOSSIER_ETAT_LABELS: Record<DossierEtat, string> = {
 export const FAMILLE_PRODUIT_LABELS: Record<FamilleProduit, string> = {
   SALAIRE: 'Salaire',
   ACTIVITE: 'Activité',
+};
+
+/** Statuts d’un crédit dans l’historique core banking. */
+export const BANKING_CREDIT_STATUTS = [
+  'SOLDE',
+  'EN_COURS',
+  'EN_RETARD',
+  'DEFAUT',
+] as const;
+export type BankingCreditStatut = (typeof BANKING_CREDIT_STATUTS)[number];
+
+export type BankingKyc = {
+  prenom: string;
+  nom: string;
+  postNom: string;
+  dateNaissance: string;
+  typePiece: string;
+  numeroPiece: string;
+  sexe: string;
+  telephone: string;
+  email?: string;
+  etatCivil: string;
+  adresseDomicile: string;
+  communeCode?: string;
+};
+
+export type BankingCreditHistorique = {
+  reference: string;
+  produitCode: string;
+  montant: number;
+  devise: string;
+  dateDebut: string;
+  dateFin?: string | null;
+  statut: BankingCreditStatut;
+};
+
+export type BankingScore = {
+  value: number;
+  produitCode: string;
+  details: string[];
+};
+
+export type BankingLookupResult = {
+  found: boolean;
+  numeroCompte: string;
+  kyc: BankingKyc | null;
+  creditEnCours: boolean;
+  creditsActifs: BankingCreditHistorique[];
+  historique: BankingCreditHistorique[];
+  score: BankingScore | null;
+  ouvertLe?: string | null;
+};
+
+export type BankingDecisionNotify = {
+  numeroCompte: string;
+  dossierReference: string;
+  produitCode: string;
+  etatFinal: string;
+  montant: number | null;
+  dureeSemaines: number | null;
+  devise: string | null;
+  client: {
+    fullName: string;
+    phone: string;
+  };
+  decidedAt: string;
+};
+
+export type BankingNotifyResult = {
+  ok: boolean;
+  provider: string;
+  message?: string;
 };
 
 export * from './agentChecklist';

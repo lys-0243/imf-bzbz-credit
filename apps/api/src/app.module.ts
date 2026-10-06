@@ -12,6 +12,7 @@ import { DocumentsModule } from './modules/documents/documents.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { ClientsModule } from './modules/clients/clients.module';
 import { AdminModule } from './modules/admin/admin.module';
+import { BankingModule } from './modules/banking/banking.module';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { AdminModule } from './modules/admin/admin.module';
     ConformiteModule,
     DocumentsModule,
     AdminModule,
+    BankingModule,
   ],
   controllers: [HealthController],
 })
