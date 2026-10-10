@@ -15,6 +15,7 @@ import {
   formatProduitBornesHint,
   produitDureeBornesEnSemaines,
   TYPE_PIECE_LABELS,
+  type BankingLookupResult,
   type ProduitCreditDto,
 } from '@imf/shared';
 import { api } from '../api';
@@ -48,6 +49,13 @@ type Props = {
 
 const STEPS = ['Compte', 'Identité', 'Prêt demandé'] as const;
 
+const STATUT_LABELS: Record<string, string> = {
+  SOLDE: 'Soldé',
+  EN_COURS: 'En cours',
+  EN_RETARD: 'En retard',
+  DEFAUT: 'Défaut',
+};
+
 function filled(v: string | undefined) {
   return Boolean(v && String(v).trim());
 }
@@ -60,6 +68,46 @@ function missingMessage(missing: string[]): string | null {
   return `Champs obligatoires manquants : ${missing.join(', ')}`;
 }
 
+function applyKycPrefill(
+  form: ReceptionForm,
+  lookup: BankingLookupResult,
+  communes: Commune[],
+): ReceptionForm {
+  const kyc = lookup.kyc;
+  if (!kyc) return form;
+  const next: ReceptionForm = { ...form };
+  if (filled(kyc.prenom)) next.prenom = kyc.prenom.trim();
+  if (filled(kyc.nom)) next.nom = kyc.nom.trim();
+  if (filled(kyc.postNom)) next.postNom = kyc.postNom.trim();
+  if (filled(kyc.dateNaissance)) next.dateNaissance = kyc.dateNaissance.trim();
+  if (filled(kyc.numeroPiece)) next.numeroPiece = kyc.numeroPiece.trim();
+  if (filled(kyc.telephone)) next.telephone = kyc.telephone.trim();
+  if (filled(kyc.email)) next.email = kyc.email!.trim();
+  if (filled(kyc.adresseDomicile)) {
+    next.adresseDomicile = kyc.adresseDomicile.trim();
+  }
+  if (TYPES_PIECE.includes(kyc.typePiece as (typeof TYPES_PIECE)[number])) {
+    next.typePiece = kyc.typePiece as (typeof TYPES_PIECE)[number];
+  }
+  if (SEXES.includes(kyc.sexe as (typeof SEXES)[number])) {
+    next.sexe = kyc.sexe as (typeof SEXES)[number];
+  }
+  if (ETATS_CIVILS.includes(kyc.etatCivil as (typeof ETATS_CIVILS)[number])) {
+    next.etatCivil = kyc.etatCivil as (typeof ETATS_CIVILS)[number];
+  }
+  if (kyc.communeCode) {
+    const code = kyc.communeCode.trim().toUpperCase();
+    const match = communes.find(
+      (c) =>
+        c.code.toUpperCase() === code ||
+        c.name.toUpperCase() === code ||
+        c.name.toUpperCase().includes(code),
+    );
+    if (match) next.communeId = match.id;
+  }
+  return next;
+}
+
 export function RegisterScreen({ produit, onCreated, onCancel }: Props) {
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
@@ -70,6 +118,8 @@ export function RegisterScreen({ produit, onCreated, onCancel }: Props) {
     defaultReceptionPayload(''),
   );
   const [busy, setBusy] = useState(false);
+  const [lookupBusy, setLookupBusy] = useState(false);
+  const [lookup, setLookup] = useState<BankingLookupResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{
     variant: 'success' | 'error';
@@ -122,6 +172,9 @@ export function RegisterScreen({ produit, onCreated, onCancel }: Props) {
       if (!filled(form.numeroCompte)) {
         return 'Champ obligatoire manquant : N° de compte';
       }
+      if (!lookup) {
+        return 'Vérifiez le compte auprès du core banking avant de continuer';
+      }
       return null;
     }
     if (s === 1) {
@@ -166,12 +219,40 @@ export function RegisterScreen({ produit, onCreated, onCancel }: Props) {
     return null;
   }
 
+  async function onLookup() {
+    if (!filled(form.numeroCompte)) {
+      setError('Champ obligatoire manquant : N° de compte');
+      return;
+    }
+    setLookupBusy(true);
+    setError(null);
+    setLookup(null);
+    try {
+      const q = new URLSearchParams({
+        numeroCompte: form.numeroCompte.trim(),
+        produitCode: produit.code,
+      });
+      const res = await api<BankingLookupResult>(`/banking/lookup?${q}`);
+      setLookup(res);
+      if (res.found && res.kyc) {
+        setForm((f) => applyKycPrefill(f, res, communes));
+      }
+    } catch (e: any) {
+      setError(e.message || 'Échec de la vérification du compte');
+    } finally {
+      setLookupBusy(false);
+    }
+  }
+
   function tryGoTo(next: number) {
     if (next > step) {
       const err = validateStep(step);
       if (err) {
         setError(err);
         return;
+      }
+      if (step === 0 && lookup?.found && lookup.kyc) {
+        setForm((f) => applyKycPrefill(f, lookup, communes));
       }
     }
     setError(null);
@@ -220,6 +301,17 @@ export function RegisterScreen({ produit, onCreated, onCancel }: Props) {
           form.pretAutreInstitution === 'Non'
             ? undefined
             : form.autreInstitutionNom.trim(),
+        ...(lookup
+          ? {
+              bankingLookup: {
+                found: lookup.found,
+                creditEnCours: lookup.creditEnCours,
+                score: lookup.score,
+                historiqueCount: lookup.historique.length,
+                checkedAt: new Date().toISOString(),
+              },
+            }
+          : {}),
       };
       const created = await api<{ id: string; reference?: string }>(
         '/dossiers',
@@ -316,17 +408,96 @@ export function RegisterScreen({ produit, onCreated, onCancel }: Props) {
               label="N° de compte"
               required
               value={form.numeroCompte}
-              onChangeText={(v) => setForm({ ...form, numeroCompte: v })}
+              onChangeText={(v) => {
+                setLookup(null);
+                setForm({ ...form, numeroCompte: v });
+              }}
             />
             <Text style={styles.fieldHint}>
-              Saisissez le numéro de compte du demandeur pour vérifier son
-              historique avant de poursuivre.
+              Vérifiez le compte pour obtenir le score et préremplir l’identité
+              (modifiable à l’étape suivante).
             </Text>
+            <Pressable
+              style={[
+                styles.verifyBtn,
+                lookupBusy && styles.ctaDisabled,
+              ]}
+              disabled={lookupBusy}
+              onPress={onLookup}
+            >
+              {lookupBusy ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.navPrimaryText}>Vérifier le compte</Text>
+              )}
+            </Pressable>
+
+            {lookup ? (
+              <View style={styles.avisBox}>
+                {lookup.found ? (
+                  <>
+                    <Text style={styles.avisTitle}>Avis core banking</Text>
+                    {lookup.score ? (
+                      <Text style={styles.scoreValue}>
+                        Score {lookup.score.value}/100
+                        <Text style={styles.scoreMeta}>
+                          {' '}
+                          · {lookup.score.produitCode}
+                        </Text>
+                      </Text>
+                    ) : null}
+                    {lookup.score?.details?.map((d) => (
+                      <Text key={d} style={styles.avisDetail}>
+                        · {d}
+                      </Text>
+                    ))}
+                    <Text style={styles.avisLine}>
+                      Crédit en cours :{' '}
+                      {lookup.creditEnCours
+                        ? `Oui (${lookup.creditsActifs.length})`
+                        : 'Non'}
+                    </Text>
+                    {lookup.historique.length ? (
+                      <View style={styles.histBlock}>
+                        <Text style={styles.histTitle}>Historique</Text>
+                        {lookup.historique.map((h) => (
+                          <View key={h.reference} style={styles.histRow}>
+                            <Text style={styles.histRef}>{h.reference}</Text>
+                            <Text style={styles.histMeta}>
+                              {h.produitCode} ·{' '}
+                              {h.montant.toLocaleString('fr-FR')} {h.devise} ·{' '}
+                              {STATUT_LABELS[h.statut] || h.statut}
+                            </Text>
+                          </View>
+                        ))}
+                      </View>
+                    ) : (
+                      <Text style={styles.avisLine}>
+                        Aucun historique de crédit.
+                      </Text>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <Text style={styles.avisTitle}>Compte inconnu</Text>
+                    <Text style={styles.avisLine}>
+                      Aucune fiche core banking pour ce numéro. Vous pouvez
+                      continuer et saisir l’identité manuellement.
+                    </Text>
+                  </>
+                )}
+              </View>
+            ) : null}
           </Section>
         ) : null}
 
         {step === 1 ? (
           <Section title="Identité du demandeur">
+            {lookup?.found ? (
+              <Text style={styles.prefillHint}>
+                Champs préremplis depuis le core banking — modifiables.
+              </Text>
+            ) : null}
             <ListSelectField
               label="Commune"
               required
@@ -595,6 +766,79 @@ const styles = StyleSheet.create({
     color: colors.neutral.textMuted,
     marginTop: -4,
     marginBottom: 10,
+  },
+  prefillHint: {
+    fontFamily: fonts.regular,
+    fontSize: 12,
+    color: colors.primary.blue,
+    marginBottom: 10,
+  },
+  verifyBtn: {
+    backgroundColor: colors.primary.blue,
+    borderRadius: 28,
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  avisBox: {
+    borderWidth: 1,
+    borderColor: '#d8deea',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 8,
+    backgroundColor: '#f7f9fc',
+  },
+  avisTitle: {
+    fontFamily: fonts.semiBold,
+    fontSize: 15,
+    color: colors.neutral.text,
+    marginBottom: 6,
+  },
+  scoreValue: {
+    fontFamily: fonts.bold,
+    fontSize: 28,
+    color: colors.primary.blue,
+    marginBottom: 4,
+  },
+  scoreMeta: {
+    fontFamily: fonts.regular,
+    fontSize: 14,
+    color: colors.neutral.textMuted,
+  },
+  avisDetail: {
+    fontFamily: fonts.regular,
+    fontSize: 12,
+    color: colors.neutral.textMuted,
+    marginBottom: 2,
+  },
+  avisLine: {
+    fontFamily: fonts.regular,
+    fontSize: 13,
+    color: colors.neutral.text,
+    marginTop: 8,
+  },
+  histBlock: { marginTop: 12 },
+  histTitle: {
+    fontFamily: fonts.semiBold,
+    fontSize: 13,
+    color: colors.neutral.text,
+    marginBottom: 6,
+  },
+  histRow: {
+    paddingVertical: 6,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#d8deea',
+  },
+  histRef: {
+    fontFamily: fonts.semiBold,
+    fontSize: 13,
+    color: colors.neutral.text,
+  },
+  histMeta: {
+    fontFamily: fonts.regular,
+    fontSize: 12,
+    color: colors.neutral.textMuted,
+    marginTop: 2,
   },
   error: {
     color: '#b00020',

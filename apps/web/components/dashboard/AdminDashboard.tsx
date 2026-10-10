@@ -15,6 +15,7 @@ import {
   DossierDetailView,
   type DossierDetailData,
 } from './DossierDetailView';
+import { PageError, PageLoading, PageStateBlock } from './PageState';
 import { ProfileView } from './ProfileView';
 import { AdminSheet } from './AdminSheet';
 
@@ -1780,13 +1781,20 @@ function AdminDossierDetail({ id }: { id: string }) {
 
   if (error && !data) {
     return (
-      <div>
-        <p className={styles.listError}>{error}</p>
-      </div>
+      <PageStateBlock>
+        <PageError title="Impossible de charger le dossier" message={error} />
+      </PageStateBlock>
     );
   }
   if (!data) {
-    return <p className={styles.adminMuted}>Chargement du dossier…</p>;
+    return (
+      <PageStateBlock>
+        <PageLoading
+          title="Chargement du dossier"
+          detail="Récupération des informations admin…"
+        />
+      </PageStateBlock>
+    );
   }
 
   return (

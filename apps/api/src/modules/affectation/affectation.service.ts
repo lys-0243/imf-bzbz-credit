@@ -5,7 +5,12 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { DossierEtat, Role } from '@prisma/client';
-import { DOSSIER_ETAT_LABELS, montantSouhaiteFromPayload } from '@imf/shared';
+import {
+  DOSSIER_ETAT_LABELS,
+  montantSouhaiteFromPayload,
+  normalizeCf2Analyse,
+  usesAnalyseAgrPack,
+} from '@imf/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { WorkflowService } from '../workflow/workflow.service';
@@ -175,6 +180,11 @@ export class AffectationService {
       type: d.produit.code,
       etatLabel: DOSSIER_ETAT_LABELS[d.etat],
       editable: false,
+      checklistAnswers: d.visite?.checklistJson ?? null,
+      analyseCf2: normalizeCf2Analyse(d.visite?.analyseCf2Json, {
+        visiteStartedAt: d.visite?.startedAt?.toISOString() ?? null,
+      }),
+      usesAnalyseAgrPack: usesAnalyseAgrPack(d.produit.code),
       bucket: this.bucketFor(d.etat, lastRetourByRc),
       canAssign: d.etat === DossierEtat.EN_ATTENTE_ATTRIBUTION_AGENT,
       canValidate: d.etat === DossierEtat.EN_ATTENTE_VALIDATION_RC,

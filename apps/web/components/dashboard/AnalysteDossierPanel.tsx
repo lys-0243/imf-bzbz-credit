@@ -2,19 +2,21 @@
 
 import { useEffect, useState } from 'react';
 import { ApiError, apiFetch } from '../../lib/api';
-import { dashStyles as styles } from './DashboardShell';
 import {
   DossierDetailView,
   type DossierDetailData,
 } from './DossierDetailView';
+import { PageError, PageLoading, PageStateBlock } from './PageState';
 
 export default function AnalysteDossierPanel({ id }: { id: string }) {
   const [data, setData] = useState<DossierDetailData | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
     setData(null);
+    setError(null);
     (async () => {
       try {
         const d = await apiFetch<DossierDetailData>(`/analyste/dossiers/${id}`);
@@ -24,27 +26,34 @@ export default function AnalysteDossierPanel({ id }: { id: string }) {
         }
       } catch (e) {
         if (!cancelled) {
-          setError(e instanceof ApiError ? e.message : 'Erreur');
+          setError(e instanceof ApiError ? e.message : 'Erreur de chargement');
         }
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [id]);
+  }, [id, reloadKey]);
 
   if (error && !data) {
     return (
-      <div className={styles.panelInner}>
-        <p className={styles.msgErr}>{error}</p>
-      </div>
+      <PageStateBlock>
+        <PageError
+          title="Impossible de charger le dossier"
+          message={error}
+          onRetry={() => setReloadKey((k) => k + 1)}
+        />
+      </PageStateBlock>
     );
   }
   if (!data) {
     return (
-      <div className={styles.panelInner}>
-        <p className={styles.itemMeta}>Chargement du dossier…</p>
-      </div>
+      <PageStateBlock>
+        <PageLoading
+          title="Chargement du dossier"
+          detail="Préparation de la fiche d’analyse…"
+        />
+      </PageStateBlock>
     );
   }
 

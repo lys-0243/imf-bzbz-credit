@@ -52,16 +52,60 @@ export class ApiError extends Error {
   status: number;
   body: unknown;
   constructor(status: number, body: unknown) {
-    let msg = `Erreur HTTP ${status}`;
-    if (typeof body === 'object' && body && 'message' in body) {
-      const m = (body as { message: unknown }).message;
-      if (typeof m === 'string') msg = m;
-      else if (Array.isArray(m)) msg = m.join(', ');
-    }
-    super(msg);
+    super(formatApiErrorMessage(status, body));
     this.status = status;
     this.body = body;
   }
+}
+
+function formatApiErrorMessage(status: number, body: unknown): string {
+  if (typeof body === 'string' && body.trim()) return body;
+  if (!body || typeof body !== 'object') return `Erreur HTTP ${status}`;
+
+  const root = body as {
+    message?: unknown;
+    issues?: unknown;
+  };
+
+  const fromIssues = (issues: unknown): string | null => {
+    if (!Array.isArray(issues) || issues.length === 0) return null;
+    const parts = issues
+      .map((issue) => {
+        if (!issue || typeof issue !== 'object') return null;
+        const row = issue as { message?: unknown; path?: unknown };
+        const msg = typeof row.message === 'string' ? row.message : null;
+        if (!msg) return null;
+        const path = Array.isArray(row.path)
+          ? row.path.filter((p) => typeof p === 'string' || typeof p === 'number').join('.')
+          : '';
+        return path ? `${path}: ${msg}` : msg;
+      })
+      .filter(Boolean);
+    return parts.length ? parts.slice(0, 3).join(' · ') : null;
+  };
+
+  if (typeof root.message === 'string' && root.message.trim()) {
+    const nested = fromIssues(root.issues);
+    return nested ? `${root.message} — ${nested}` : root.message;
+  }
+
+  if (Array.isArray(root.message)) {
+    return root.message.map(String).join(', ');
+  }
+
+  if (root.message && typeof root.message === 'object') {
+    const nested = root.message as { message?: unknown; issues?: unknown };
+    const nestedIssues = fromIssues(nested.issues) ?? fromIssues(root.issues);
+    if (typeof nested.message === 'string' && nested.message.trim()) {
+      return nestedIssues ? `${nested.message} — ${nestedIssues}` : nested.message;
+    }
+    if (nestedIssues) return nestedIssues;
+  }
+
+  const issues = fromIssues(root.issues);
+  if (issues) return issues;
+
+  return `Erreur HTTP ${status}`;
 }
 
 export async function apiFetch<T = unknown>(

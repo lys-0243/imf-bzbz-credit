@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { useRouter } from 'next/navigation';
 import {
   DOSSIER_ETAT_LABELS,
   dureeFromPayload,
@@ -10,13 +9,18 @@ import {
   formatDureeLabel,
   formatMontantSouhaite,
   getApplicableChecklistItems,
+  getChecklistAc,
   montantSouhaiteFromPayload,
   TYPE_PIECE_LABELS,
+  usesAnalyseAgrPack,
+  type Cf2Analyse,
+  type ChecklistAnswers,
   type DossierEtat,
   type FamilleProduit,
   type ProduitCreditDto,
 } from '@imf/shared';
 import { getApiUrl, getToken } from '../../lib/api';
+import { Cf2Panel } from './Cf2Panel';
 import { dashStyles as styles } from './DashboardShell';
 
 export type DetailTransition = {
@@ -58,6 +62,9 @@ export type DossierDetailData = {
   transitions?: DetailTransition[];
   visite?: { rapportTexte?: string | null } | null;
   scoreValue?: number | null;
+  checklistAnswers?: ChecklistAnswers | null;
+  analyseCf2?: Cf2Analyse | null;
+  usesAnalyseAgrPack?: boolean;
 };
 
 export type PendingAction = {
@@ -102,6 +109,402 @@ function displayVal(v: unknown): string {
     return v.toLocaleString('fr-FR');
   }
   return String(v);
+}
+
+function inferDocExt(blobPath?: string | null): string {
+  if (!blobPath) return '';
+  const base = blobPath.split(/[/\\]/).pop() || '';
+  const dot = base.lastIndexOf('.');
+  if (dot < 0) return '';
+  return base.slice(dot + 1).toLowerCase();
+}
+
+function DocTypeIcon({ ext }: { ext: string }) {
+  const kind =
+    ext === 'pdf'
+      ? 'pdf'
+      : ext === 'xls' || ext === 'xlsx' || ext === 'csv'
+        ? 'xls'
+        : ext === 'doc' || ext === 'docx'
+          ? 'doc'
+          : ext === 'png' ||
+              ext === 'jpg' ||
+              ext === 'jpeg' ||
+              ext === 'gif' ||
+              ext === 'webp'
+            ? 'img'
+            : 'file';
+
+  const label =
+    kind === 'pdf'
+      ? 'PDF'
+      : kind === 'xls'
+        ? 'XLS'
+        : kind === 'doc'
+          ? 'DOC'
+          : kind === 'img'
+            ? 'IMG'
+            : 'DOC';
+
+  const toneClass =
+    kind === 'pdf'
+      ? styles.checklistDocIcon_pdf
+      : kind === 'xls'
+        ? styles.checklistDocIcon_xls
+        : kind === 'doc'
+          ? styles.checklistDocIcon_doc
+          : kind === 'img'
+            ? styles.checklistDocIcon_img
+            : styles.checklistDocIcon_file;
+
+  return (
+    <span
+      className={`${styles.checklistDocIcon} ${toneClass}`}
+      aria-hidden
+    >
+      <svg width="18" height="22" viewBox="0 0 18 22" fill="none">
+        <path
+          d="M2 1.5h9.5L16 6v14.5a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V2.5a1 1 0 0 1 1-1Z"
+          fill="currentColor"
+          opacity="0.18"
+        />
+        <path
+          d="M11.5 1.5V5a1 1 0 0 0 1 1h3.5"
+          stroke="currentColor"
+          strokeWidth="1.4"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M2 1.5h9.5L16 6v14.5a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V2.5a1 1 0 0 1 1-1Z"
+          stroke="currentColor"
+          strokeWidth="1.4"
+          strokeLinejoin="round"
+        />
+      </svg>
+      <span className={styles.checklistDocIconBadge}>{label}</span>
+    </span>
+  );
+}
+
+function ChecklistActionIcon({
+  name,
+}: {
+  name: 'upload' | 'replace' | 'view' | 'download' | 'avis';
+}) {
+  if (name === 'upload') {
+    return (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+        <path
+          d="M12 16V4m0 0l-4 4m4-4l4 4"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M4 16.5V18a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-1.5"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+        />
+      </svg>
+    );
+  }
+  if (name === 'replace') {
+    return (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+        <path
+          d="M4 12a8 8 0 0 1 13.66-5.66M20 4v5h-5"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M20 12a8 8 0 0 1-13.66 5.66M4 20v-5h5"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    );
+  }
+  if (name === 'view') {
+    return (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+        <path
+          d="M2.5 12s3.5-6.5 9.5-6.5S21.5 12 21.5 12s-3.5 6.5-9.5 6.5S2.5 12 2.5 12Z"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinejoin="round"
+        />
+        <circle cx="12" cy="12" r="2.75" stroke="currentColor" strokeWidth="2" />
+      </svg>
+    );
+  }
+  if (name === 'download') {
+    return (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+        <path
+          d="M12 4v10m0 0l4-4m-4 4l-4-4"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M4 16.5V18a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-1.5"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+        />
+      </svg>
+    );
+  }
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M5 5.5A2.5 2.5 0 0 1 7.5 3h9A2.5 2.5 0 0 1 19 5.5v8A2.5 2.5 0 0 1 16.5 16H10l-4.2 3.15A.8.8 0 0 1 4.5 18.5V5.5Z"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M8 8h8M8 11.5h5"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function typePieceLabel(v: unknown): string {
+  if (
+    typeof v === 'string' &&
+    TYPE_PIECE_LABELS[v as keyof typeof TYPE_PIECE_LABELS]
+  ) {
+    return TYPE_PIECE_LABELS[v as keyof typeof TYPE_PIECE_LABELS];
+  }
+  return displayVal(v);
+}
+
+function etatCivilLabel(v: unknown): string {
+  if (
+    typeof v === 'string' &&
+    ETAT_CIVIL_LABELS[v as keyof typeof ETAT_CIVIL_LABELS]
+  ) {
+    return ETAT_CIVIL_LABELS[v as keyof typeof ETAT_CIVIL_LABELS];
+  }
+  return displayVal(v);
+}
+
+function buildCf1Sections(
+  p: Record<string, any>,
+  client: DossierDetailData['client'],
+  opts: { dureeLabel: string },
+): {
+  eligibilite: FieldRow[];
+  demandeur: FieldRow[];
+  business: FieldRow[];
+  pret: FieldRow[];
+} {
+  const e = (p.eligibilite ?? {}) as Record<string, unknown>;
+  const dem = (p.demandeur ?? {}) as Record<string, unknown>;
+  const b = (p.business ?? {}) as Record<string, unknown>;
+  const pret = (p.pret ?? {}) as Record<string, unknown>;
+
+  const prenom = dem.prenom ?? p.prenom;
+  const nom = dem.nom ?? p.nom;
+  const postNom = dem.postNom ?? p.postNom;
+  const dateNaissance = dem.dateNaissance ?? p.dateNaissance;
+  const typePiece = dem.typePiece ?? p.typePiece;
+  const numeroPiece = dem.numeroPiece ?? p.numeroPiece;
+  const sexe = dem.sexe ?? p.sexe;
+  const etatCivil = dem.etatCivil ?? p.etatCivil;
+  const adresseDomicile = dem.adresseDomicile ?? p.adresseDomicile;
+  const telephone = dem.telephone ?? p.telephone;
+  const email = dem.email ?? p.email;
+  const conjointNom = dem.conjointNom ?? p.conjointNom;
+  const conjointDateNaissance =
+    dem.conjointDateNaissance ?? p.conjointDateNaissance;
+  const conjointPrenom = dem.conjointPrenom ?? p.conjointPrenom;
+  const conjointPostNom = dem.conjointPostNom ?? p.conjointPostNom;
+
+  const montant =
+    typeof pret.montantDesire === 'number'
+      ? pret.montantDesire
+      : typeof p.montantSollicite === 'number'
+        ? p.montantSollicite
+        : null;
+  const devise = (pret.devise as string | undefined) ?? p.devise ?? 'USD';
+  const dureeMois = pret.dureeMois ?? p.dureeMois;
+  const capacite = pret.capaciteMensuelle ?? p.capaciteMensuelle;
+  const but = pret.butInvestissement ?? p.motifCredit ?? p.butInvestissement;
+  const commentaireBut = pret.commentaireBut ?? p.commentaireBut;
+  const pretAutre = pret.pretAutreInstitution ?? p.pretAutreInstitution;
+  const autreInstNom = pret.autreInstitutionNom ?? p.autreInstitutionNom;
+
+  const demandeurRows: FieldRow[] = [
+    { label: 'Commune', value: client.commune?.name || '—' },
+    { label: 'N° de compte', value: displayVal(p.numeroCompte) },
+    { label: 'Prénom', value: displayVal(prenom) },
+    { label: 'Post-nom', value: displayVal(postNom) },
+    { label: 'Nom de famille', value: displayVal(nom) },
+    { label: 'Date de naissance', value: displayVal(dateNaissance) },
+    { label: "Type d'identité", value: typePieceLabel(typePiece) },
+    { label: "N° de la pièce d'identité", value: displayVal(numeroPiece) },
+    { label: 'Sexe (M / F)', value: displayVal(sexe) },
+    { label: 'État-civil', value: etatCivilLabel(etatCivil) },
+    {
+      label: 'Prénom (conjoint(e))',
+      value: displayVal(conjointPrenom),
+    },
+    {
+      label: 'Post-nom (conjoint(e))',
+      value: displayVal(conjointPostNom),
+    },
+    {
+      label: 'Nom de famille (conjoint(e))',
+      value: displayVal(conjointNom),
+    },
+    {
+      label: 'Date de naissance (conjoint(e))',
+      value: displayVal(conjointDateNaissance),
+    },
+    { label: 'Adresse du domicile', value: displayVal(adresseDomicile) },
+    { label: 'Téléphone(s)', value: displayVal(telephone) },
+    { label: 'E-mail', value: displayVal(email) },
+  ];
+
+  const pretRows: FieldRow[] = [
+    {
+      label: 'Montant désiré',
+      value: formatMontantSouhaite(montant, devise),
+    },
+    {
+      label: 'Durée de prêt',
+      value:
+        dureeMois != null && String(dureeMois).trim()
+          ? `${displayVal(dureeMois)} mois`
+          : opts.dureeLabel,
+    },
+    {
+      label: 'Combien pouvez-vous facilement payer chaque mois?',
+      value:
+        capacite == null || capacite === ''
+          ? '—'
+          : formatMontantSouhaite(
+              typeof capacite === 'number' ? capacite : Number(capacite) || null,
+              devise,
+            ),
+    },
+    { label: "But de l'investissement", value: displayVal(but) },
+    {
+      label: "Commentaire sur le but de l'investissement",
+      value: displayVal(commentaireBut),
+    },
+    {
+      label: 'Prêt auprès d’une autre institution financière',
+      value: displayVal(pretAutre),
+    },
+  ];
+  if (pretAutre && pretAutre !== 'Non') {
+    pretRows.push({
+      label: '…auprès de',
+      value: displayVal(autreInstNom),
+    });
+  }
+  pretRows.push(
+    {
+      label: 'Montant du prêt précédent',
+      value:
+        pret.montantPretPrecedent == null || pret.montantPretPrecedent === ''
+          ? '—'
+          : formatMontantSouhaite(
+              typeof pret.montantPretPrecedent === 'number'
+                ? pret.montantPretPrecedent
+                : Number(pret.montantPretPrecedent) || null,
+              devise,
+            ),
+    },
+    {
+      label: 'Durée prêt précédent',
+      value: displayVal(pret.dureePretPrecedent),
+    },
+  );
+
+  return {
+    eligibilite: [
+      {
+        label: 'Le demandeur a-t-il 18 ans ou plus?',
+        value: displayVal(e.age18OuPlus),
+      },
+      {
+        label: 'Est-il Congolais / étranger domicilié dans le pays?',
+        value: displayVal(e.congolaisOuDomiciile),
+      },
+      {
+        label:
+          'Est-il propriétaire de l’activité commerciale? (Personne Morale ou Physique)',
+        value: displayVal(e.proprietaireActivite),
+      },
+      {
+        label: 'L’activité se trouve-t-elle dans une zone opérationnelle?',
+        value: displayVal(e.activiteZoneOperationnelle),
+      },
+      {
+        label: 'Exerce-t-il actuellement l’activité?',
+        value: displayVal(e.exerceActiviteActuellement),
+      },
+      {
+        label:
+          '…et l’a-t-il exercé de manière consécutive au cours des 6 derniers mois?',
+        value: displayVal(e.activite6MoisConsecutifs),
+      },
+      {
+        label: "L'activité est-elle dans la liste d'exclusion de l'IMF?",
+        value: displayVal(e.activiteListeExclusion),
+      },
+      {
+        label: "L'activité est-elle enregistrée légalement?",
+        value: displayVal(e.activiteEnregistreeLegalement),
+      },
+    ],
+    demandeur: demandeurRows,
+    business: [
+      {
+        label: 'Nom du business',
+        value: displayVal(b.nomBusiness ?? p.nomBusiness),
+      },
+      {
+        label: 'Adresse physique du business',
+        value: displayVal(b.adresseBusiness ?? p.adresseBusiness),
+      },
+      {
+        label: "Durée d'existence à cette adresse",
+        value: displayVal(b.dureeAdresse ?? p.dureeAdresse),
+      },
+      {
+        label: 'Type de business',
+        value: displayVal(b.typeBusiness ?? p.typeBusiness),
+      },
+      {
+        label: "Durée d'existence de ce type de business",
+        value: displayVal(b.dureeTypeBusiness ?? p.dureeTypeBusiness),
+      },
+      {
+        label: 'Secteur de business',
+        value: displayVal(b.secteurBusiness ?? p.secteurBusiness),
+      },
+      {
+        label: 'Forme juridique',
+        value: displayVal(b.formeJuridique ?? p.formeJuridique),
+      },
+    ],
+    pret: pretRows,
+  };
 }
 
 function FieldsTable({
@@ -149,7 +552,6 @@ async function fetchPieceBlob(pieceId: string) {
 
 export function DossierDetailView({
   data,
-  backHref,
   extraTabs,
   extraTabContent,
   pendingActions = [],
@@ -158,11 +560,14 @@ export function DossierDetailView({
   docBusy = false,
   docAvis = {},
   onSaveDocAvis,
+  checklistAnswers,
+  canEditAc = false,
+  onToggleAc,
   tabRequest = null,
   onTabRequestHandled,
 }: {
   data: DossierDetailData;
-  backHref: string;
+  backHref?: string;
   extraTabs?: TabDef[];
   extraTabContent?: Record<string, ReactNode>;
   pendingActions?: PendingAction[];
@@ -172,11 +577,13 @@ export function DossierDetailView({
   /** itemId → avis agent (dispense de pièce) */
   docAvis?: Record<string, string>;
   onSaveDocAvis?: (itemId: string, avis: string) => void | Promise<void>;
+  checklistAnswers?: ChecklistAnswers | null;
+  canEditAc?: boolean;
+  onToggleAc?: (itemId: string, checked: boolean) => void | Promise<void>;
   tabRequest?: string | null;
   onTabRequestHandled?: () => void;
 }) {
-  const router = useRouter();
-  const [tab, setTab] = useState('recap');
+  const [tab, setTab] = useState('historique');
   const [docError, setDocError] = useState<string | null>(null);
   const [avisTarget, setAvisTarget] = useState<{
     id: string;
@@ -201,53 +608,70 @@ export function DossierDetailView({
   const transitions = data.transitions ?? [];
 
   const baseTabs: TabDef[] = useMemo(() => {
-    if (isReception || (p.prenom && p.montantSollicite != null && !p.demandeur)) {
-      if (famille === 'SALAIRE') {
+    const historique: TabDef = { key: 'historique', label: 'Historique' };
+    const checklist: TabDef = { key: 'checklist', label: 'Checklist' };
+    const cf1: TabDef = { key: 'cf1', label: 'CF1' };
+    const cf2: TabDef = { key: 'cf2', label: 'CF2' };
+    const agrPack =
+      data.usesAnalyseAgrPack ??
+      usesAnalyseAgrPack(data.produit?.code ?? data.type);
+
+    if (famille === 'SALAIRE') {
+      const core = agrPack ? [checklist] : [];
+      if (
+        isReception ||
+        (p.prenom && p.montantSollicite != null && !p.demandeur)
+      ) {
         return [
-          { key: 'recap', label: 'Récapitulatif' },
+          ...core,
+          ...(agrPack ? [cf2] : []),
           { key: 'identite', label: 'Identité' },
           { key: 'emploi', label: 'Emploi & prêt' },
           { key: 'demande', label: 'Demande' },
-          { key: 'docs', label: 'Documents' },
+          historique,
         ];
       }
       return [
-        { key: 'recap', label: 'Récapitulatif' },
-        { key: 'identite', label: 'Identité' },
-        { key: 'elig', label: 'Éligibilité' },
-        { key: 'business', label: 'Business' },
-        { key: 'pret', label: 'Prêt' },
-        { key: 'demande', label: 'Demande' },
-        { key: 'docs', label: 'Documents' },
-      ];
-    }
-    if (famille === 'SALAIRE') {
-      return [
-        { key: 'recap', label: 'Récapitulatif' },
+        ...core,
+        ...(agrPack ? [cf2] : []),
         { key: 'identite', label: 'Identité' },
         { key: 'emploi', label: 'Emploi & prêt' },
-        { key: 'docs', label: 'Documents' },
+        historique,
       ];
     }
-    return [
-      { key: 'recap', label: 'Récapitulatif' },
-      { key: 'client', label: 'Client' },
-      { key: 'elig', label: 'Éligibilité' },
-      { key: 'demandeur', label: 'Demandeur' },
-      { key: 'business', label: 'Business' },
-      { key: 'pret', label: 'Prêt' },
-      { key: 'docs', label: 'Documents' },
-    ];
-  }, [famille, isReception, p.prenom, p.montantSollicite, p.demandeur]);
+
+    // ACTIVITÉ — CF1 remplace Identité / Éligibilité / Business / Prêt / Demande
+    if (!agrPack) {
+      return [historique];
+    }
+    return [checklist, cf1, cf2, historique];
+  }, [
+    famille,
+    isReception,
+    p.prenom,
+    p.montantSollicite,
+    p.demandeur,
+    data.usesAnalyseAgrPack,
+    data.produit?.code,
+    data.type,
+  ]);
 
   const tabs = useMemo(
     () => [...baseTabs, ...(extraTabs ?? [])],
     [baseTabs, extraTabs],
   );
 
+  const defaultTab = baseTabs[0]?.key ?? 'historique';
+
   useEffect(() => {
-    setTab('recap');
-  }, [data.id]);
+    setTab(defaultTab);
+  }, [data.id, defaultTab]);
+
+  useEffect(() => {
+    if (!tabs.some((t) => t.key === tab)) {
+      setTab(defaultTab);
+    }
+  }, [tabs, tab, defaultTab]);
 
   useEffect(() => {
     if (!tabRequest) return;
@@ -334,9 +758,204 @@ export function DossierDetailView({
     replaceInputRef.current?.click();
   }
 
+  const answers = checklistAnswers ?? data.checklistAnswers ?? null;
+
   let tabContent: ReactNode = null;
   switch (tab) {
-    case 'recap':
+    case 'checklist':
+      tabContent = (
+        <div className={styles.detailTableBlock}>
+          <div className={styles.checklistHeader}>
+            <h3 className={styles.detailTableTitle}>
+              Liste de contrôle de prêt
+            </h3>
+            <span className={styles.checklistCount}>
+              {docRows.length} document{docRows.length === 1 ? '' : 's'}
+            </span>
+          </div>
+          
+          {docError ? <p className={styles.msgErr}>{docError}</p> : null}
+          {docRows.length === 0 ? (
+            <p className={styles.checklistEmpty}>Aucune pièce attendue</p>
+          ) : (
+            <ul className={styles.checklistList}>
+              {docRows.map((row) => {
+                const avis = (docAvis[row.id] || '').trim();
+                const itemVal = answers?.values?.[row.id];
+                const acChecked = getChecklistAc(itemVal);
+                const scChecked = Boolean(itemVal?.sc);
+                const boChecked = Boolean(itemVal?.bo);
+                const ext = inferDocExt(row.piece?.blobPath);
+                const canTurnOnAc = row.received || Boolean(avis);
+                const acDisabled =
+                  !canEditAc ||
+                  docBusy ||
+                  !onToggleAc ||
+                  (!canTurnOnAc && !acChecked);
+                const statusLabel = row.received
+                  ? 'Reçu'
+                  : avis
+                    ? 'Dispensé'
+                    : 'Manquant';
+                const statusClass = row.received
+                  ? styles.checklistStatusOk
+                  : avis
+                    ? styles.checklistStatusAvis
+                    : styles.checklistStatusMiss;
+                return (
+                  <li key={row.id} className={styles.checklistRow}>
+                    <DocTypeIcon ext={ext} />
+                    <div className={styles.checklistDocMain}>
+                      <span className={styles.checklistDocName}>
+                        {row.label}
+                      </span>
+                      {avis ? (
+                        <span className={styles.checklistDocAvis}>
+                          Avis : {avis}
+                        </span>
+                      ) : null}
+                    </div>
+                    <span className={`${styles.checklistStatus} ${statusClass}`}>
+                      {statusLabel}
+                    </span>
+                    <div className={styles.checklistActions}>
+                      {canManageDocs ? (
+                        <button
+                          type="button"
+                          className={styles.checklistIconBtn}
+                          disabled={docBusy}
+                          title={row.received ? 'Remplacer' : 'Ajouter'}
+                          aria-label={row.received ? 'Remplacer' : 'Ajouter'}
+                          onClick={() => triggerReplace(row.kind)}
+                        >
+                          <ChecklistActionIcon
+                            name={row.received ? 'replace' : 'upload'}
+                          />
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        className={styles.checklistIconBtn}
+                        disabled={!row.piece}
+                        title="Voir"
+                        aria-label="Voir"
+                        onClick={() =>
+                          row.piece && void viewPiece(row.piece.id)
+                        }
+                      >
+                        <ChecklistActionIcon name="view" />
+                      </button>
+                      <button
+                        type="button"
+                        className={styles.checklistIconBtn}
+                        disabled={!row.piece}
+                        title="Télécharger"
+                        aria-label="Télécharger"
+                        onClick={() =>
+                          row.piece && void downloadPiece(row.piece)
+                        }
+                      >
+                        <ChecklistActionIcon name="download" />
+                      </button>
+                      {canManageDocs ? (
+                        <button
+                          type="button"
+                          className={`${styles.checklistIconBtn} ${styles.checklistIconBtnAvis}`}
+                          disabled={docBusy || avisBusy}
+                          title="Avis"
+                          aria-label="Avis"
+                          onClick={() => {
+                            setAvisTarget({
+                              id: row.id,
+                              label: row.label,
+                            });
+                            setAvisText(avis);
+                          }}
+                        >
+                          <ChecklistActionIcon name="avis" />
+                        </button>
+                      ) : null}
+                    </div>
+                    <div
+                      className={styles.checklistRoles}
+                      role="group"
+                      aria-label="Validations AC SC BO"
+                    >
+                      <label
+                        className={`${styles.checklistRole} ${
+                          acChecked ? styles.checklistRoleOn : ''
+                        } ${acDisabled ? styles.checklistRoleDisabled : ''}`}
+                        title={
+                          acDisabled && !acChecked && canEditAc
+                            ? 'Uploadez le document ou saisissez un avis avant de valider AC'
+                            : 'Agent Crédit'
+                        }
+                      >
+                        <input
+                          type="checkbox"
+                          checked={acChecked}
+                          disabled={acDisabled}
+                          aria-label={`AC — ${row.label}`}
+                          onChange={(e) => {
+                            if (!onToggleAc) return;
+                            if (e.target.checked && !canTurnOnAc) return;
+                            void onToggleAc(row.id, e.target.checked);
+                          }}
+                        />
+                        <span>AC</span>
+                      </label>
+                      <label
+                        className={`${styles.checklistRole} ${
+                          scChecked ? styles.checklistRoleOn : ''
+                        }`}
+                        title="Superviseur Crédit"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={scChecked}
+                          disabled
+                          readOnly
+                          aria-label={`SC — ${row.label}`}
+                        />
+                        <span>SC</span>
+                      </label>
+                      <label
+                        className={`${styles.checklistRole} ${
+                          boChecked ? styles.checklistRoleOn : ''
+                        }`}
+                        title="Back Office"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={boChecked}
+                          disabled
+                          readOnly
+                          aria-label={`BO — ${row.label}`}
+                        />
+                        <span>BO</span>
+                      </label>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          
+          <input
+            ref={replaceInputRef}
+            type="file"
+            hidden
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              const kind = replaceKindRef.current;
+              e.target.value = '';
+              if (file && kind && onUploadDoc) void onUploadDoc(kind, file);
+            }}
+          />
+        </div>
+      );
+      break;
+    case 'historique':
       tabContent = (
         <>
           <FieldsTable
@@ -406,15 +1025,7 @@ export function DossierDetailView({
             },
             {
               label: 'Type de pièce',
-              value:
-                p.typePiece &&
-                TYPE_PIECE_LABELS[
-                  p.typePiece as keyof typeof TYPE_PIECE_LABELS
-                ]
-                  ? TYPE_PIECE_LABELS[
-                      p.typePiece as keyof typeof TYPE_PIECE_LABELS
-                    ]
-                  : displayVal(p.typePiece),
+              value: typePieceLabel(p.typePiece),
             },
             { label: 'N° de pièce', value: displayVal(p.numeroPiece) },
             { label: 'Genre', value: displayVal(p.sexe) },
@@ -422,15 +1033,7 @@ export function DossierDetailView({
             { label: 'E-mail', value: displayVal(p.email) },
             {
               label: 'État civil',
-              value:
-                p.etatCivil &&
-                ETAT_CIVIL_LABELS[
-                  p.etatCivil as keyof typeof ETAT_CIVIL_LABELS
-                ]
-                  ? ETAT_CIVIL_LABELS[
-                      p.etatCivil as keyof typeof ETAT_CIVIL_LABELS
-                    ]
-                  : displayVal(p.etatCivil),
+              value: etatCivilLabel(p.etatCivil),
             },
             {
               label: 'Adresse domicile',
@@ -517,274 +1120,45 @@ export function DossierDetailView({
         />
       );
       break;
-    case 'client':
-      tabContent = (
-        <FieldsTable
-          rows={[
-            { label: 'Commune', value: data.client.commune?.name || '—' },
-            { label: 'Statut client', value: displayVal(p.clientStatut) },
-            { label: 'N° de compte', value: displayVal(p.numeroCompte) },
-          ]}
-        />
-      );
-      break;
-    case 'elig': {
-      const e = p.eligibilite ?? {};
-      const rows: [string, string][] = [
-        ['age18OuPlus', '18 ans ou plus'],
-        ['proprietaireActivite', 'Propriétaire de l’activité'],
-        ['exerceActiviteActuellement', 'Exerce actuellement'],
-        ['activiteListeExclusion', 'Liste d’exclusion IMF'],
-        ['congolaisOuDomiciile', 'Congolais / domicilié'],
-        ['activiteZoneOperationnelle', 'Zone opérationnelle'],
-        ['activite6MoisConsecutifs', '6 mois consécutifs'],
-        ['activiteEnregistreeLegalement', 'Enregistrée légalement'],
-      ];
-      tabContent = (
-        <FieldsTable
-          rows={rows.map(([key, label]) => ({
-            label,
-            value: displayVal(e[key]),
-          }))}
-        />
-      );
-      break;
-    }
-    case 'demandeur': {
-      const dem = p.demandeur ?? {};
-      const rows: FieldRow[] = [
-        { label: 'Prénom', value: displayVal(dem.prenom) },
-        { label: 'Nom', value: displayVal(dem.nom) },
-        { label: 'Post-Nom', value: displayVal(dem.postNom) },
-        { label: 'Sexe', value: displayVal(dem.sexe) },
-        {
-          label: 'Date de naissance',
-          value: displayVal(dem.dateNaissance),
-        },
-        { label: 'État civil', value: displayVal(dem.etatCivil) },
-        { label: 'Type de pièce', value: displayVal(dem.typePiece) },
-        { label: 'N° de pièce', value: displayVal(dem.numeroPiece) },
-        {
-          label: 'Adresse domicile',
-          value: displayVal(dem.adresseDomicile),
-        },
-        { label: 'Téléphone', value: displayVal(dem.telephone) },
-        { label: 'Email', value: displayVal(dem.email) },
-      ];
-      if (dem.etatCivil === 'Marie') {
-        rows.push(
-          {
-            label: 'Conjoint (prénom et nom)',
-            value: displayVal(dem.conjointNom),
-          },
-          {
-            label: 'Date naissance conjoint',
-            value: displayVal(dem.conjointDateNaissance),
-          },
-        );
+    case 'cf1': {
+      if (extraTabContent?.cf1) {
+        tabContent = extraTabContent.cf1;
+        break;
       }
-      tabContent = <FieldsTable rows={rows} />;
-      break;
-    }
-    case 'business': {
-      const b = p.business ?? {};
+      const sections = buildCf1Sections(p, data.client, { dureeLabel });
       tabContent = (
-        <FieldsTable
-          rows={[
-            { label: 'Nom du business', value: displayVal(b.nomBusiness) },
-            {
-              label: 'Adresse physique',
-              value: displayVal(b.adresseBusiness),
-            },
-            {
-              label: 'Durée à cette adresse',
-              value: displayVal(b.dureeAdresse),
-            },
-            { label: 'Type de business', value: displayVal(b.typeBusiness) },
-            {
-              label: 'Durée de ce type',
-              value: displayVal(b.dureeTypeBusiness),
-            },
-            { label: 'Secteur', value: displayVal(b.secteurBusiness) },
-            {
-              label: 'Forme juridique',
-              value: displayVal(b.formeJuridique),
-            },
-          ]}
-        />
-      );
-      break;
-    }
-    case 'pret': {
-      const pret = p.pret ?? {};
-      const rows: FieldRow[] = [
-        {
-          label: 'Montant désiré',
-          value: formatMontantSouhaite(
-            typeof pret.montantDesire === 'number'
-              ? pret.montantDesire
-              : null,
-            pret.devise,
-          ),
-        },
-        { label: 'Devise', value: displayVal(pret.devise) },
-        { label: 'Durée (mois)', value: displayVal(pret.dureeMois) },
-        {
-          label: 'Capacité mensuelle',
-          value: displayVal(pret.capaciteMensuelle),
-        },
-        {
-          label: 'But de l’investissement',
-          value: displayVal(pret.butInvestissement),
-        },
-        {
-          label: 'Commentaire sur le but',
-          value: displayVal(pret.commentaireBut),
-        },
-        {
-          label: 'Autre institution',
-          value: displayVal(pret.pretAutreInstitution),
-        },
-      ];
-      if (pret.pretAutreInstitution && pret.pretAutreInstitution !== 'Non') {
-        rows.push({
-          label: 'Nom institution',
-          value: displayVal(pret.autreInstitutionNom),
-        });
-      }
-      rows.push(
-        {
-          label: 'Montant prêt précédent',
-          value: displayVal(pret.montantPretPrecedent),
-        },
-        {
-          label: 'Durée prêt précédent',
-          value: displayVal(pret.dureePretPrecedent),
-        },
-      );
-      tabContent = <FieldsTable rows={rows} />;
-      break;
-    }
-    case 'docs':
-      tabContent = (
-        <div className={styles.detailTableBlock}>
-          <h3 className={styles.detailTableTitle}>Documents</h3>
-          {docError ? <p className={styles.msgErr}>{docError}</p> : null}
-          <div className={styles.tableWrap}>
-            <table className={styles.detailDataTable}>
-              <thead>
-                <tr>
-                  <th>Document</th>
-                  <th>Statut</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {docRows.length === 0 ? (
-                  <tr>
-                    <td colSpan={3}>Aucune pièce attendue</td>
-                  </tr>
-                ) : (
-                  docRows.map((row) => {
-                    const avis = (docAvis[row.id] || '').trim();
-                    return (
-                      <tr key={row.id}>
-                        <td>
-                          <strong>{row.label}</strong>
-                          {avis ? (
-                            <div className={styles.docAvisPreview}>
-                              Avis : {avis}
-                            </div>
-                          ) : null}
-                        </td>
-                        <td>
-                          <span
-                            className={
-                              row.received
-                                ? styles.docStatusOk
-                                : avis
-                                  ? styles.docStatusAvis
-                                  : styles.docStatusMiss
-                            }
-                          >
-                            {row.received
-                              ? 'Reçu'
-                              : avis
-                                ? 'Dispensé (avis)'
-                                : 'Manquant'}
-                          </span>
-                        </td>
-                        <td>
-                          <div className={styles.docActions}>
-                            <button
-                              type="button"
-                              className={styles.docActionBtn}
-                              disabled={!row.piece}
-                              onClick={() =>
-                                row.piece && void viewPiece(row.piece.id)
-                              }
-                            >
-                              Voir
-                            </button>
-                            <button
-                              type="button"
-                              className={styles.docActionBtn}
-                              disabled={!row.piece}
-                              onClick={() =>
-                                row.piece && void downloadPiece(row.piece)
-                              }
-                            >
-                              Télécharger
-                            </button>
-                            {canManageDocs ? (
-                              <>
-                                <button
-                                  type="button"
-                                  className={styles.docActionBtnPrimary}
-                                  disabled={docBusy}
-                                  onClick={() => triggerReplace(row.kind)}
-                                >
-                                  {row.received ? 'Remplacer' : 'Ajouter'}
-                                </button>
-                                <button
-                                  type="button"
-                                  className={styles.docActionBtnDanger}
-                                  disabled={docBusy || avisBusy}
-                                  onClick={() => {
-                                    setAvisTarget({
-                                      id: row.id,
-                                      label: row.label,
-                                    });
-                                    setAvisText(avis);
-                                  }}
-                                >
-                                  Avis
-                                </button>
-                              </>
-                            ) : null}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-          <input
-            ref={replaceInputRef}
-            type="file"
-            hidden
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              const kind = replaceKindRef.current;
-              e.target.value = '';
-              if (file && kind && onUploadDoc) void onUploadDoc(kind, file);
-            }}
+        <>
+          <FieldsTable
+            title="1. Éligibilité (demande)"
+            rows={sections.eligibilite}
           />
-        </div>
+          <FieldsTable
+            title="2. Information sur le demandeur"
+            rows={sections.demandeur}
+          />
+          <FieldsTable
+            title="3. Information sur le business"
+            rows={sections.business}
+          />
+          <FieldsTable title="4. Prêt sollicité" rows={sections.pret} />
+        </>
       );
       break;
+    }
+    case 'cf2': {
+      if (extraTabContent?.cf2) {
+        tabContent = extraTabContent.cf2;
+        break;
+      }
+      tabContent = (
+        <Cf2Panel
+          analyse={data.analyseCf2}
+          devise={String(p.devise || p.pret?.devise || 'USD')}
+          disabled
+        />
+      );
+      break;
+    }
     default:
       tabContent = extraTabContent?.[tab] ?? null;
   }
@@ -792,41 +1166,18 @@ export function DossierDetailView({
   return (
     <div className={styles.detailPage}>
       <div className={styles.detailFixed}>
-        <div className={styles.detailTopBar}>
-          <button
-            type="button"
-            className={styles.detailBack}
-            onClick={() => router.push(backHref)}
-            aria-label="Retour"
-          >
-            <svg
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.2"
-            >
-              <path d="M15 6l-6 6 6 6" />
-            </svg>
-          </button>
-          <h1 className={styles.detailTopTitle}>
-            Dossier n° {data.reference}
-          </h1>
-          <span className={styles.detailTopSpacer} aria-hidden />
-        </div>
-
         <div className={styles.detailHero}>
           <p className={styles.detailHeroName}>{data.client.fullName}</p>
           <p className={styles.detailHeroAmount}>{montantLabel}</p>
           {salaireNet ? (
             <p className={styles.detailHeroSub}>Salaire net : {salaireNet}</p>
           ) : null}
-          <div className={styles.detailHeroMeta}>
-            <span className={styles.detailHeroType}>
-              {produitLabel}
-            </span>
-            <span className={styles.detailHeroBadge}>{etatLabel}</span>
+          <div className={styles.detailHeroFooter}>
+            <div className={styles.detailHeroMeta}>
+              <span className={styles.detailHeroType}>{produitLabel}</span>
+              <span className={styles.detailHeroBadge}>{etatLabel}</span>
+            </div>
+            <p className={styles.detailHeroRef}>Dossier n° {data.reference}</p>
           </div>
         </div>
 
