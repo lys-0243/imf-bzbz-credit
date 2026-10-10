@@ -8,606 +8,868 @@ import {
   View,
 } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fonts } from '@imf/assets';
-import type { CreditType } from '@imf/shared';
-import { api } from '../api';
-import { DateField } from '../components/DateField';
-import { BoolField, Field, ListSelectField, MoneyField, Section, SelectField } from '../components/Form';
 import {
-  CLIENT_STATUTS,
-  DEVISES,
-  defaultIndividuelPayload,
-  defaultSalairePayload,
+  ETAT_CIVIL_LABELS,
+  formatProduitBornesHint,
+  produitDureeBornesEnSemaines,
+  TYPE_PIECE_LABELS,
+  type BankingLookupResult,
+  type ProduitCreditDto,
+} from '@imf/shared';
+import { api } from '../api';
+import { useAuth } from '../auth';
+import { DateField } from '../components/DateField';
+import {
+  DurationField,
+  Field,
+  ListSelectField,
+  MoneyField,
+  Section,
+  SelectField,
+} from '../components/Form';
+import { HomeHeader } from '../components/HomeHeader';
+import { ResultSheet } from '../components/ResultSheet';
+import {
   ETATS_CIVILS,
   PRET_AUTRE_INSTITUTION,
   SEXES,
   TYPES_PIECE,
+  defaultReceptionPayload,
   type Commune,
-  type IndividuelForm,
-  type SalaireForm,
+  type ReceptionForm,
 } from '../formDefaults';
 
-const TYPE_LABELS: Record<CreditType, string> = {
-  DARE_DARE: 'Dare-Dare',
-  INDIVIDUEL: 'Individuel',
-  SALAIRE: 'Salaire',
-};
-
 type Props = {
-  type: CreditType;
+  produit: ProduitCreditDto;
   onCreated: (id: string) => void;
   onCancel: () => void;
+};
+
+const STEPS = ['Compte', 'Identité', 'Prêt demandé'] as const;
+
+const STATUT_LABELS: Record<string, string> = {
+  SOLDE: 'Soldé',
+  EN_COURS: 'En cours',
+  EN_RETARD: 'En retard',
+  DEFAUT: 'Défaut',
 };
 
 function filled(v: string | undefined) {
   return Boolean(v && String(v).trim());
 }
 
-function validateIndStep(step: number, ind: IndividuelForm): string | null {
-  if (step === 0) {
-    if (!ind.communeId) return 'Sélectionnez une commune';
-    if (ind.clientStatut === 'ANCIEN' && !filled(ind.numeroCompte)) {
-      return 'N° de compte obligatoire pour un ancien client';
-    }
-    return null;
+function missingMessage(missing: string[]): string | null {
+  if (!missing.length) return null;
+  if (missing.length === 1) {
+    return `Champ obligatoire manquant : ${missing[0]}`;
   }
-  if (step === 1) return null; // booleans always set
-  if (step === 2) {
-    const d = ind.demandeur;
-    if (
-      !filled(d.prenom) ||
-      !filled(d.nom) ||
-      !filled(d.postNom) ||
-      !filled(d.dateNaissance) ||
-      !filled(d.numeroPiece) ||
-      !filled(d.adresseDomicile) ||
-      !filled(d.telephone)
-    ) {
-      return 'Complétez tous les champs obligatoires du demandeur';
-    }
-    if (d.etatCivil === 'Marie') {
-      if (!filled(d.conjointNom) || !filled(d.conjointDateNaissance)) {
-        return 'Informations conjoint obligatoires si Marié';
-      }
-    }
-    return null;
-  }
-  if (step === 3) {
-    const b = ind.business;
-    if (
-      !filled(b.nomBusiness) ||
-      !filled(b.adresseBusiness) ||
-      !filled(b.dureeAdresse) ||
-      !filled(b.typeBusiness) ||
-      !filled(b.dureeTypeBusiness) ||
-      !filled(b.secteurBusiness) ||
-      !filled(b.formeJuridique)
-    ) {
-      return 'Complétez tous les champs business obligatoires';
-    }
-    return null;
-  }
-  if (step === 4) {
-    const p = ind.pret;
-    if (
-      !(p.montantDesire > 0) ||
-      !(p.dureeMois > 0) ||
-      !(p.capaciteMensuelle > 0) ||
-      !filled(p.butInvestissement) ||
-      !filled(p.commentaireBut)
-    ) {
-      return 'Complétez tous les champs prêt obligatoires';
-    }
-    if (p.pretAutreInstitution !== 'Non' && !filled(p.autreInstitutionNom)) {
-      return 'Indiquez l’institution de l’autre prêt';
-    }
-    return null;
-  }
-  return null;
+  return `Champs obligatoires manquants : ${missing.join(', ')}`;
 }
 
-function validateSalStep(step: number, sal: SalaireForm): string | null {
-  if (step === 0) {
-    if (!sal.communeId) return 'Sélectionnez une commune';
-    if (
-      !filled(sal.prenom) ||
-      !filled(sal.nom) ||
-      !filled(sal.postNom) ||
-      !filled(sal.telephone) ||
-      !filled(sal.adresseDomicile)
-    ) {
-      return 'Complétez tous les champs identité obligatoires';
-    }
-    return null;
+function applyKycPrefill(
+  form: ReceptionForm,
+  lookup: BankingLookupResult,
+  communes: Commune[],
+): ReceptionForm {
+  const kyc = lookup.kyc;
+  if (!kyc) return form;
+  const next: ReceptionForm = { ...form };
+  if (filled(kyc.prenom)) next.prenom = kyc.prenom.trim();
+  if (filled(kyc.nom)) next.nom = kyc.nom.trim();
+  if (filled(kyc.postNom)) next.postNom = kyc.postNom.trim();
+  if (filled(kyc.dateNaissance)) next.dateNaissance = kyc.dateNaissance.trim();
+  if (filled(kyc.numeroPiece)) next.numeroPiece = kyc.numeroPiece.trim();
+  if (filled(kyc.telephone)) next.telephone = kyc.telephone.trim();
+  if (filled(kyc.email)) next.email = kyc.email!.trim();
+  if (filled(kyc.adresseDomicile)) {
+    next.adresseDomicile = kyc.adresseDomicile.trim();
   }
-  if (step === 1) {
-    if (
-      !filled(sal.societe) ||
-      !filled(sal.adresseSociete) ||
-      !filled(sal.fonctionService) ||
-      !(sal.montantSollicite > 0) ||
-      !(sal.dureeMois > 0) ||
-      !(sal.salaireNet > 0) ||
-      !(sal.capaciteMensuelle > 0)
-    ) {
-      return 'Complétez tous les champs emploi / prêt obligatoires';
-    }
-    return null;
+  if (TYPES_PIECE.includes(kyc.typePiece as (typeof TYPES_PIECE)[number])) {
+    next.typePiece = kyc.typePiece as (typeof TYPES_PIECE)[number];
   }
-  return null;
+  if (SEXES.includes(kyc.sexe as (typeof SEXES)[number])) {
+    next.sexe = kyc.sexe as (typeof SEXES)[number];
+  }
+  if (ETATS_CIVILS.includes(kyc.etatCivil as (typeof ETATS_CIVILS)[number])) {
+    next.etatCivil = kyc.etatCivil as (typeof ETATS_CIVILS)[number];
+  }
+  if (kyc.communeCode) {
+    const code = kyc.communeCode.trim().toUpperCase();
+    const match = communes.find(
+      (c) =>
+        c.code.toUpperCase() === code ||
+        c.name.toUpperCase() === code ||
+        c.name.toUpperCase().includes(code),
+    );
+    if (match) next.communeId = match.id;
+  }
+  return next;
 }
 
-export function RegisterScreen({ type, onCreated, onCancel }: Props) {
-  const [communes, setCommunes] = useState<Commune[]>([]);
+export function RegisterScreen({ produit, onCreated, onCancel }: Props) {
+  const { user } = useAuth();
+  const insets = useSafeAreaInsets();
   const [step, setStep] = useState(0);
   const [maxReached, setMaxReached] = useState(0);
+  const [communes, setCommunes] = useState<Commune[]>([]);
+  const [form, setForm] = useState<ReceptionForm>(() =>
+    defaultReceptionPayload(''),
+  );
   const [busy, setBusy] = useState(false);
+  const [lookupBusy, setLookupBusy] = useState(false);
+  const [lookup, setLookup] = useState<BankingLookupResult | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [ind, setInd] = useState(() => defaultIndividuelPayload(''));
-  const [sal, setSal] = useState(() => defaultSalairePayload(''));
+  const [result, setResult] = useState<{
+    variant: 'success' | 'error';
+    title: string;
+    message: string;
+    dossierId?: string;
+  } | null>(null);
+
+  const currency = form.devise || 'USD';
+
+  const dureeBornes = useMemo(
+    () => produitDureeBornesEnSemaines(produit),
+    [produit],
+  );
 
   useEffect(() => {
-    api<Commune[]>('/communes')
-      .then(setCommunes)
-      .catch(() => setError('Impossible de charger les communes'));
+    api<Commune[]>('/communes').then(setCommunes).catch(() => setCommunes([]));
   }, []);
 
-  const communeNames = useMemo(() => communes.map((c) => c.name), [communes]);
-  const communeName = (id: string) =>
-    communes.find((c) => c.id === id)?.name || '';
-  const setCommuneByName = (name: string) => {
+  useEffect(() => {
+    setForm((prev) => ({
+      ...prev,
+      dureeSemaines: Math.max(
+        dureeBornes.min,
+        prev.dureeSemaines || dureeBornes.min,
+      ),
+      montantSollicite:
+        prev.montantSollicite > 0
+          ? prev.montantSollicite
+          : produit.montantMin,
+    }));
+  }, [produit, dureeBornes.min]);
+
+  const communeNames = useMemo(
+    () => communes.map((c) => c.name).sort((a, b) => a.localeCompare(b, 'fr')),
+    [communes],
+  );
+
+  function communeName(id: string) {
+    return communes.find((c) => c.id === id)?.name || '';
+  }
+
+  function setCommuneByName(name: string) {
     const c = communes.find((x) => x.name === name);
-    if (!c) return;
-    setInd((p) => ({ ...p, communeId: c.id }));
-    setSal((p) => ({ ...p, communeId: c.id }));
-  };
+    if (c) setForm((f) => ({ ...f, communeId: c.id }));
+  }
 
-  const stepsInd = ['Client', 'Éligibilité', 'Demandeur', 'Business', 'Prêt'];
-  const stepsSal = ['Identité', 'Emploi & prêt'];
-  const steps = type === 'SALAIRE' ? stepsSal : stepsInd;
+  function validateStep(s: number): string | null {
+    if (s === 0) {
+      if (!filled(form.numeroCompte)) {
+        return 'Champ obligatoire manquant : N° de compte';
+      }
+      if (!lookup) {
+        return 'Vérifiez le compte auprès du core banking avant de continuer';
+      }
+      return null;
+    }
+    if (s === 1) {
+      const missing: string[] = [];
+      if (!form.communeId) missing.push('Commune');
+      if (!filled(form.prenom)) missing.push('Prénom');
+      if (!filled(form.nom)) missing.push('Nom de famille');
+      if (!filled(form.postNom)) missing.push('Postnom');
+      if (!filled(form.dateNaissance)) missing.push('Date de naissance');
+      if (!filled(form.numeroPiece)) missing.push("N° de pièce d'identité");
+      if (!filled(form.telephone)) missing.push('Téléphone');
+      if (!filled(form.adresseDomicile)) missing.push('Adresse du domicile');
+      return missingMessage(missing);
+    }
+    const missing: string[] = [];
+    if (!(form.montantSollicite > 0)) missing.push('Montant sollicité');
+    if (!(form.dureeSemaines > 0)) missing.push('Durée de prêt');
+    if (!filled(form.motifCredit)) missing.push('Motif du crédit');
+    if (!(form.capaciteMensuelle > 0)) {
+      missing.push('Capacité de remboursement mensuel');
+    }
+    if (
+      form.pretAutreInstitution !== 'Non' &&
+      !filled(form.autreInstitutionNom)
+    ) {
+      missing.push("Nom de l'institution");
+    }
+    const msg = missingMessage(missing);
+    if (msg) return msg;
+    if (
+      form.montantSollicite < produit.montantMin ||
+      form.montantSollicite > produit.montantMax
+    ) {
+      return `Montant hors bornes (${produit.montantMin.toLocaleString('fr-FR')} – ${produit.montantMax.toLocaleString('fr-FR')} USD)`;
+    }
+    if (
+      form.dureeSemaines < dureeBornes.min ||
+      form.dureeSemaines > dureeBornes.max
+    ) {
+      return `Durée hors bornes (${dureeBornes.min} – ${dureeBornes.max} semaines)`;
+    }
+    return null;
+  }
 
-  const tryGoTo = (next: number) => {
-    if (next <= step) {
-      setStep(next);
-      setError(null);
+  async function onLookup() {
+    if (!filled(form.numeroCompte)) {
+      setError('Champ obligatoire manquant : N° de compte');
       return;
     }
-    if (next > step + 1) return;
-    if (next > maxReached + 1) return;
+    setLookupBusy(true);
+    setError(null);
+    setLookup(null);
+    try {
+      const q = new URLSearchParams({
+        numeroCompte: form.numeroCompte.trim(),
+        produitCode: produit.code,
+      });
+      const res = await api<BankingLookupResult>(`/banking/lookup?${q}`);
+      setLookup(res);
+      if (res.found && res.kyc) {
+        setForm((f) => applyKycPrefill(f, res, communes));
+      }
+    } catch (e: any) {
+      setError(e.message || 'Échec de la vérification du compte');
+    } finally {
+      setLookupBusy(false);
+    }
+  }
 
-    const err =
-      type === 'SALAIRE'
-        ? validateSalStep(step, sal)
-        : validateIndStep(step, ind);
-    if (err) {
-      setError(err);
-      return;
+  function tryGoTo(next: number) {
+    if (next > step) {
+      const err = validateStep(step);
+      if (err) {
+        setError(err);
+        return;
+      }
+      if (step === 0 && lookup?.found && lookup.kyc) {
+        setForm((f) => applyKycPrefill(f, lookup, communes));
+      }
     }
     setError(null);
     setStep(next);
     setMaxReached((m) => Math.max(m, next));
-  };
+  }
 
-  const submit = async () => {
-    const err =
-      type === 'SALAIRE'
-        ? validateSalStep(step, sal)
-        : validateIndStep(step, ind);
-    if (err) {
-      setError(err);
-      return;
+  async function onSubmit() {
+    for (let i = 0; i < STEPS.length; i++) {
+      const err = validateStep(i);
+      if (err) {
+        setStep(i);
+        setError(err);
+        setResult({
+          variant: 'error',
+          title: 'Formulaire incomplet',
+          message: err,
+        });
+        return;
+      }
     }
     setBusy(true);
     setError(null);
     try {
-      const payload =
-        type === 'SALAIRE'
+      const payload = {
+        communeId: form.communeId,
+        numeroCompte: form.numeroCompte.trim(),
+        prenom: form.prenom.trim(),
+        nom: form.nom.trim(),
+        postNom: form.postNom.trim(),
+        dateNaissance: form.dateNaissance,
+        typePiece: form.typePiece,
+        numeroPiece: form.numeroPiece.trim(),
+        sexe: form.sexe,
+        telephone: form.telephone.trim(),
+        email: form.email?.trim() || '',
+        etatCivil: form.etatCivil,
+        adresseDomicile: form.adresseDomicile.trim(),
+        devise: form.devise || 'USD',
+        montantSollicite: Number(form.montantSollicite),
+        dureeSemaines: Number(form.dureeSemaines),
+        motifCredit: form.motifCredit.trim(),
+        capaciteMensuelle: Number(form.capaciteMensuelle),
+        pretAutreInstitution: form.pretAutreInstitution,
+        autreInstitutionNom:
+          form.pretAutreInstitution === 'Non'
+            ? undefined
+            : form.autreInstitutionNom.trim(),
+        ...(lookup
           ? {
-              ...sal,
-              montantSollicite: Number(sal.montantSollicite),
-              dureeMois: Number(sal.dureeMois),
-              dureeAnnees: Number(sal.dureeAnnees),
-              dureeSemaines: Number(sal.dureeSemaines),
-              salaireNet: Number(sal.salaireNet),
-              capaciteMensuelle: Number(sal.capaciteMensuelle),
-              email: sal.email || undefined,
-              motifCredit: sal.motifCredit || undefined,
-              cautionGarantie: sal.cautionGarantie || undefined,
-              numeroCompte: sal.numeroCompte || undefined,
-              depotBc: sal.depotBc || undefined,
+              bankingLookup: {
+                found: lookup.found,
+                creditEnCours: lookup.creditEnCours,
+                score: lookup.score,
+                historiqueCount: lookup.historique.length,
+                checkedAt: new Date().toISOString(),
+              },
             }
-          : {
-              ...ind,
-              numeroCompte:
-                ind.clientStatut === 'ANCIEN' ? ind.numeroCompte : undefined,
-              pret: {
-                ...ind.pret,
-                montantDesire: Number(ind.pret.montantDesire),
-                dureeMois: Number(ind.pret.dureeMois),
-                capaciteMensuelle: Number(ind.pret.capaciteMensuelle),
-                montantPretPrecedent: ind.pret.montantPretPrecedent
-                  ? Number(ind.pret.montantPretPrecedent)
-                  : undefined,
-                dureePretPrecedent: ind.pret.dureePretPrecedent
-                  ? Number(ind.pret.dureePretPrecedent)
-                  : undefined,
-                autreInstitutionNom:
-                  ind.pret.pretAutreInstitution === 'Non'
-                    ? undefined
-                    : ind.pret.autreInstitutionNom,
-              },
-              demandeur: {
-                ...ind.demandeur,
-                email: ind.demandeur.email || undefined,
-                conjointNom:
-                  ind.demandeur.etatCivil === 'Marie'
-                    ? ind.demandeur.conjointNom
-                    : undefined,
-                conjointDateNaissance:
-                  ind.demandeur.etatCivil === 'Marie'
-                    ? ind.demandeur.conjointDateNaissance
-                    : undefined,
-              },
-            };
-      const created = await api<{ id: string }>('/dossiers', {
-        method: 'POST',
-        body: JSON.stringify({ type, payload }),
+          : {}),
+      };
+      const created = await api<{ id: string; reference?: string }>(
+        '/dossiers',
+        {
+          method: 'POST',
+          body: JSON.stringify({ produitId: produit.id, payload }),
+        },
+      );
+      setResult({
+        variant: 'success',
+        title: 'Dossier créé',
+        message: created.reference
+          ? `Référence ${created.reference} — envoyé au responsable crédit.`
+          : 'Le dossier a été envoyé au responsable crédit.',
+        dossierId: created.id,
       });
-      onCreated(created.id);
     } catch (e: any) {
-      setError(e.message || 'Échec enregistrement');
+      const msg = e.message || 'Échec enregistrement';
+      setError(msg);
+      setResult({
+        variant: 'error',
+        title: 'Échec de l’enregistrement',
+        message: msg,
+      });
     } finally {
       setBusy(false);
     }
-  };
+  }
+
+  function closeResult() {
+    const id = result?.dossierId;
+    const wasSuccess = result?.variant === 'success';
+    setResult(null);
+    if (wasSuccess && id) onCreated(id);
+  }
 
   return (
     <View style={styles.root}>
-      <View style={styles.topBar}>
-        <Pressable onPress={onCancel}>
-          <Text style={styles.cancel}>Annuler</Text>
-        </Pressable>
-        <View style={styles.typeBadge}>
-          <Text style={styles.typeBadgeText}>{TYPE_LABELS[type]}</Text>
-        </View>
-      </View>
+      <HomeHeader
+        displayName={user?.displayName || ''}
+        variant="compact"
+        title={produit.label}
+        trailing="close"
+        onClose={onCancel}
+      />
 
       <KeyboardAwareScrollView
-        contentContainerStyle={styles.pad}
+        style={styles.scroll}
+        contentContainerStyle={[
+          styles.pad,
+          { paddingBottom: 100 + Math.max(insets.bottom, 8) },
+        ]}
         enableOnAndroid
         extraScrollHeight={Platform.OS === 'ios' ? 24 : 80}
         keyboardShouldPersistTaps="handled"
       >
+        <Text style={styles.stepMeta}>
+          Étape {step + 1} sur {STEPS.length}
+        </Text>
         <Text style={styles.h1}>Nouvelle demande</Text>
+        <View style={styles.typeChip}>
+          <Text style={styles.typeChipText}>{produit.label}</Text>
+        </View>
+        <Text style={styles.hint}>{formatProduitBornesHint(produit)}</Text>
 
-        <View style={styles.steps}>
-          {steps.map((s, i) => {
-            const locked = i > maxReached && i > step;
+        <View style={styles.progressTrack}>
+          {STEPS.map((s, i) => {
+            const locked = i > maxReached;
+            const on = i <= step;
             return (
               <Pressable
                 key={s}
+                style={styles.progressSegWrap}
                 onPress={() => !locked && tryGoTo(i)}
-                style={[
-                  styles.step,
-                  step === i && styles.stepOn,
-                  locked && styles.stepLocked,
-                ]}
+                disabled={locked}
+                accessibilityLabel={s}
               >
-                <Text
-                  style={
-                    step === i
-                      ? styles.stepTextOn
-                      : locked
-                        ? styles.stepTextLocked
-                        : undefined
-                  }
-                >
-                  {s}
-                </Text>
+                <View
+                  style={[
+                    styles.progressSeg,
+                    on && styles.progressSegOn,
+                    locked && styles.progressSegLocked,
+                  ]}
+                />
               </Pressable>
             );
           })}
         </View>
+        <Text style={styles.stepLabel}>{STEPS[step]}</Text>
 
-        {type !== 'SALAIRE' && step === 0 && (
-          <Section title="Client">
+        {step === 0 ? (
+          <Section title="Identification du compte">
+            <Field
+              label="N° de compte"
+              required
+              value={form.numeroCompte}
+              onChangeText={(v) => {
+                setLookup(null);
+                setForm({ ...form, numeroCompte: v });
+              }}
+            />
+            <Text style={styles.fieldHint}>
+              Vérifiez le compte pour obtenir le score et préremplir l’identité
+              (modifiable à l’étape suivante).
+            </Text>
+            <Pressable
+              style={[
+                styles.verifyBtn,
+                lookupBusy && styles.ctaDisabled,
+              ]}
+              disabled={lookupBusy}
+              onPress={onLookup}
+            >
+              {lookupBusy ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.navPrimaryText}>Vérifier le compte</Text>
+              )}
+            </Pressable>
+
+            {lookup ? (
+              <View style={styles.avisBox}>
+                {lookup.found ? (
+                  <>
+                    <Text style={styles.avisTitle}>Avis core banking</Text>
+                    {lookup.score ? (
+                      <Text style={styles.scoreValue}>
+                        Score {lookup.score.value}/100
+                        <Text style={styles.scoreMeta}>
+                          {' '}
+                          · {lookup.score.produitCode}
+                        </Text>
+                      </Text>
+                    ) : null}
+                    {lookup.score?.details?.map((d) => (
+                      <Text key={d} style={styles.avisDetail}>
+                        · {d}
+                      </Text>
+                    ))}
+                    <Text style={styles.avisLine}>
+                      Crédit en cours :{' '}
+                      {lookup.creditEnCours
+                        ? `Oui (${lookup.creditsActifs.length})`
+                        : 'Non'}
+                    </Text>
+                    {lookup.historique.length ? (
+                      <View style={styles.histBlock}>
+                        <Text style={styles.histTitle}>Historique</Text>
+                        {lookup.historique.map((h) => (
+                          <View key={h.reference} style={styles.histRow}>
+                            <Text style={styles.histRef}>{h.reference}</Text>
+                            <Text style={styles.histMeta}>
+                              {h.produitCode} ·{' '}
+                              {h.montant.toLocaleString('fr-FR')} {h.devise} ·{' '}
+                              {STATUT_LABELS[h.statut] || h.statut}
+                            </Text>
+                          </View>
+                        ))}
+                      </View>
+                    ) : (
+                      <Text style={styles.avisLine}>
+                        Aucun historique de crédit.
+                      </Text>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <Text style={styles.avisTitle}>Compte inconnu</Text>
+                    <Text style={styles.avisLine}>
+                      Aucune fiche core banking pour ce numéro. Vous pouvez
+                      continuer et saisir l’identité manuellement.
+                    </Text>
+                  </>
+                )}
+              </View>
+            ) : null}
+          </Section>
+        ) : null}
+
+        {step === 1 ? (
+          <Section title="Identité du demandeur">
+            {lookup?.found ? (
+              <Text style={styles.prefillHint}>
+                Champs préremplis depuis le core banking — modifiables.
+              </Text>
+            ) : null}
             <ListSelectField
               label="Commune"
               required
-              value={communeName(ind.communeId)}
+              value={communeName(form.communeId)}
               options={communeNames}
               onChange={setCommuneByName}
               placeholder="Sélectionner une commune"
+              subtitle="Commune de résidence"
+              searchPlaceholder="Rechercher une commune"
+            />
+            <Field
+              label="Prénom"
+              required
+              value={form.prenom}
+              onChangeText={(v) => setForm({ ...form, prenom: v })}
+            />
+            <Field
+              label="Nom de famille"
+              required
+              value={form.nom}
+              onChangeText={(v) => setForm({ ...form, nom: v })}
+            />
+            <Field
+              label="Postnom"
+              required
+              value={form.postNom}
+              onChangeText={(v) => setForm({ ...form, postNom: v })}
+            />
+            <DateField
+              label="Date de naissance"
+              required
+              value={form.dateNaissance}
+              onChange={(iso) => setForm({ ...form, dateNaissance: iso })}
             />
             <SelectField
-              label="Nouveau ou ancien"
+              label="Type de pièce d'identité"
               required
-              value={ind.clientStatut}
-              options={CLIENT_STATUTS}
-              onChange={(v) => setInd({ ...ind, clientStatut: v as any })}
+              value={TYPE_PIECE_LABELS[form.typePiece]}
+              options={TYPES_PIECE.map((t) => TYPE_PIECE_LABELS[t])}
+              onChange={(label) => {
+                const key = TYPES_PIECE.find(
+                  (t) => TYPE_PIECE_LABELS[t] === label,
+                );
+                if (key) setForm({ ...form, typePiece: key });
+              }}
             />
-            {ind.clientStatut === 'ANCIEN' && (
-              <Field
-                label="N° de compte"
-                required
-                value={ind.numeroCompte}
-                onChangeText={(v) => setInd({ ...ind, numeroCompte: v })}
-              />
-            )}
-          </Section>
-        )}
-
-        {type !== 'SALAIRE' && step === 1 && (
-          <Section title="Éligibilité">
-            {(
-              [
-                ['age18OuPlus', '18 ans ou plus ?'],
-                ['proprietaireActivite', 'Propriétaire de l’activité ?'],
-                ['exerceActiviteActuellement', 'Exerce actuellement ?'],
-                ['activiteListeExclusion', 'Liste d’exclusion IMF ?'],
-                ['congolaisOuDomiciile', 'Congolais / domicilié ?'],
-                ['activiteZoneOperationnelle', 'Zone opérationnelle ?'],
-                ['activite6MoisConsecutifs', '6 mois consécutifs ?'],
-                ['activiteEnregistreeLegalement', 'Enregistrée légalement ?'],
-              ] as const
-            ).map(([key, label]) => (
-              <BoolField
-                key={key}
-                label={label}
-                required
-                value={ind.eligibilite[key]}
-                onChange={(v) =>
-                  setInd({
-                    ...ind,
-                    eligibilite: { ...ind.eligibilite, [key]: v },
-                  })
-                }
-              />
-            ))}
-          </Section>
-        )}
-
-        {type !== 'SALAIRE' && step === 2 && (
-          <Section title="Demandeur">
-            <Field label="Prénom" required value={ind.demandeur.prenom} onChangeText={(v) => setInd({ ...ind, demandeur: { ...ind.demandeur, prenom: v } })} />
-            <Field label="Nom" required value={ind.demandeur.nom} onChangeText={(v) => setInd({ ...ind, demandeur: { ...ind.demandeur, nom: v } })} />
-            <Field label="Post-Nom" required value={ind.demandeur.postNom} onChangeText={(v) => setInd({ ...ind, demandeur: { ...ind.demandeur, postNom: v } })} />
-            <DateField label="Date de naissance" required value={ind.demandeur.dateNaissance} onChange={(v) => setInd({ ...ind, demandeur: { ...ind.demandeur, dateNaissance: v } })} />
-            <SelectField label="Sexe" required value={ind.demandeur.sexe} options={SEXES} onChange={(v) => setInd({ ...ind, demandeur: { ...ind.demandeur, sexe: v as any } })} />
-            <SelectField label="Type de pièce" required value={ind.demandeur.typePiece} options={TYPES_PIECE} onChange={(v) => setInd({ ...ind, demandeur: { ...ind.demandeur, typePiece: v as any } })} />
-            <Field label="N° de pièce" required value={ind.demandeur.numeroPiece} onChangeText={(v) => setInd({ ...ind, demandeur: { ...ind.demandeur, numeroPiece: v } })} />
+            <Field
+              label="Numéro de la pièce d'identité"
+              required
+              value={form.numeroPiece}
+              onChangeText={(v) => setForm({ ...form, numeroPiece: v })}
+            />
+            <SelectField
+              label="Genre"
+              required
+              value={form.sexe}
+              options={[...SEXES]}
+              onChange={(v) =>
+                setForm({ ...form, sexe: v as (typeof SEXES)[number] })
+              }
+            />
+            <Field
+              label="Téléphone"
+              required
+              value={form.telephone}
+              onChangeText={(v) => setForm({ ...form, telephone: v })}
+              keyboardType="phone-pad"
+            />
+            <Field
+              label="E-mail"
+              value={form.email || ''}
+              onChangeText={(v) => setForm({ ...form, email: v })}
+              keyboardType="email-address"
+            />
             <SelectField
               label="État civil"
               required
-              value={ind.demandeur.etatCivil}
-              options={ETATS_CIVILS}
-              onChange={(v) =>
-                setInd({
-                  ...ind,
-                  demandeur: { ...ind.demandeur, etatCivil: v as any },
-                })
-              }
+              value={ETAT_CIVIL_LABELS[form.etatCivil]}
+              options={ETATS_CIVILS.map((e) => ETAT_CIVIL_LABELS[e])}
+              onChange={(label) => {
+                const key = ETATS_CIVILS.find(
+                  (e) => ETAT_CIVIL_LABELS[e] === label,
+                );
+                if (key) setForm({ ...form, etatCivil: key });
+              }}
             />
-            {ind.demandeur.etatCivil === 'Marie' && (
-              <>
-                <Field label="Prénom et nom conjoint" required value={ind.demandeur.conjointNom || ''} onChangeText={(v) => setInd({ ...ind, demandeur: { ...ind.demandeur, conjointNom: v } })} />
-                <DateField label="Date naissance conjoint" required value={ind.demandeur.conjointDateNaissance || ''} onChange={(v) => setInd({ ...ind, demandeur: { ...ind.demandeur, conjointDateNaissance: v } })} />
-              </>
-            )}
-            <Field label="Adresse domicile" required value={ind.demandeur.adresseDomicile} onChangeText={(v) => setInd({ ...ind, demandeur: { ...ind.demandeur, adresseDomicile: v } })} />
-            <Field label="Téléphone" required value={ind.demandeur.telephone} onChangeText={(v) => setInd({ ...ind, demandeur: { ...ind.demandeur, telephone: v } })} keyboardType="phone-pad" />
-            <Field label="Email" value={ind.demandeur.email || ''} onChangeText={(v) => setInd({ ...ind, demandeur: { ...ind.demandeur, email: v } })} keyboardType="email-address" />
+            <Field
+              label="Adresse du domicile"
+              required
+              value={form.adresseDomicile}
+              onChangeText={(v) => setForm({ ...form, adresseDomicile: v })}
+            />
           </Section>
-        )}
+        ) : null}
 
-        {type !== 'SALAIRE' && step === 3 && (
-          <Section title="Business">
-            <Field label="Nom du business" required value={ind.business.nomBusiness} onChangeText={(v) => setInd({ ...ind, business: { ...ind.business, nomBusiness: v } })} />
-            <Field label="Adresse physique" required value={ind.business.adresseBusiness} onChangeText={(v) => setInd({ ...ind, business: { ...ind.business, adresseBusiness: v } })} />
-            <Field label="Durée à cette adresse" required value={ind.business.dureeAdresse} onChangeText={(v) => setInd({ ...ind, business: { ...ind.business, dureeAdresse: v } })} />
-            <Field label="Type de business" required value={ind.business.typeBusiness} onChangeText={(v) => setInd({ ...ind, business: { ...ind.business, typeBusiness: v } })} />
-            <Field label="Durée de ce type" required value={ind.business.dureeTypeBusiness} onChangeText={(v) => setInd({ ...ind, business: { ...ind.business, dureeTypeBusiness: v } })} />
-            <Field label="Secteur" required value={ind.business.secteurBusiness} onChangeText={(v) => setInd({ ...ind, business: { ...ind.business, secteurBusiness: v } })} />
-            <Field label="Forme juridique" required value={ind.business.formeJuridique} onChangeText={(v) => setInd({ ...ind, business: { ...ind.business, formeJuridique: v } })} />
-          </Section>
-        )}
-
-        {type !== 'SALAIRE' && step === 4 && (
-          <Section title="Prêt sollicité">
-            <SelectField
-              label="Devise"
-              required
-              value={ind.pret.devise}
-              options={DEVISES}
-              onChange={(v) =>
-                setInd({ ...ind, pret: { ...ind.pret, devise: v as (typeof DEVISES)[number] } })
-              }
-            />
-            <MoneyField
-              label="Montant désiré"
-              required
-              currency={ind.pret.devise}
-              value={ind.pret.montantDesire}
-              onChange={(v) =>
-                setInd({ ...ind, pret: { ...ind.pret, montantDesire: v ?? 0 } })
-              }
-            />
-            <Field label="Durée (mois)" required value={String(ind.pret.dureeMois || '')} onChangeText={(v) => setInd({ ...ind, pret: { ...ind.pret, dureeMois: Number(v) || 0 } })} keyboardType="numeric" />
-            <MoneyField
-              label="Montant prêt précédent"
-              currency={ind.pret.devise}
-              value={ind.pret.montantPretPrecedent}
-              allowEmpty
-              onChange={(v) =>
-                setInd({ ...ind, pret: { ...ind.pret, montantPretPrecedent: v } })
-              }
-            />
-            <Field label="Durée prêt précédent" value={ind.pret.dureePretPrecedent != null ? String(ind.pret.dureePretPrecedent) : ''} onChangeText={(v) => setInd({ ...ind, pret: { ...ind.pret, dureePretPrecedent: v ? Number(v) : undefined } })} keyboardType="numeric" />
-            <MoneyField
-              label="Capacité mensuelle de remboursement"
-              required
-              currency={ind.pret.devise}
-              value={ind.pret.capaciteMensuelle}
-              onChange={(v) =>
-                setInd({ ...ind, pret: { ...ind.pret, capaciteMensuelle: v ?? 0 } })
-              }
-            />
-            <Field label="But de l’investissement" required value={ind.pret.butInvestissement} onChangeText={(v) => setInd({ ...ind, pret: { ...ind.pret, butInvestissement: v } })} />
-            <Field label="Commentaire sur le but" required value={ind.pret.commentaireBut} onChangeText={(v) => setInd({ ...ind, pret: { ...ind.pret, commentaireBut: v } })} />
-            <SelectField label="Prêt autre institution ?" required value={ind.pret.pretAutreInstitution} options={PRET_AUTRE_INSTITUTION} onChange={(v) => setInd({ ...ind, pret: { ...ind.pret, pretAutreInstitution: v as any } })} />
-            {ind.pret.pretAutreInstitution !== 'Non' && (
-              <Field label="Laquelle ?" required value={ind.pret.autreInstitutionNom || ''} onChangeText={(v) => setInd({ ...ind, pret: { ...ind.pret, autreInstitutionNom: v } })} />
-            )}
-          </Section>
-        )}
-
-        {type === 'SALAIRE' && step === 0 && (
-          <Section title="Identité">
-            <ListSelectField
-              label="Commune"
-              required
-              value={communeName(sal.communeId)}
-              options={communeNames}
-              onChange={setCommuneByName}
-              placeholder="Sélectionner une commune"
-            />
-            <Field label="Prénom" required value={sal.prenom} onChangeText={(v) => setSal({ ...sal, prenom: v })} />
-            <Field label="Nom" required value={sal.nom} onChangeText={(v) => setSal({ ...sal, nom: v })} />
-            <Field label="Post-Nom" required value={sal.postNom} onChangeText={(v) => setSal({ ...sal, postNom: v })} />
-            <SelectField label="Sexe" required value={sal.sexe} options={SEXES} onChange={(v) => setSal({ ...sal, sexe: v as any })} />
-            <Field label="Téléphone" required value={sal.telephone} onChangeText={(v) => setSal({ ...sal, telephone: v })} keyboardType="phone-pad" />
-            <Field label="Email" value={sal.email || ''} onChangeText={(v) => setSal({ ...sal, email: v })} keyboardType="email-address" />
-            <Field label="Adresse domicile" required value={sal.adresseDomicile} onChangeText={(v) => setSal({ ...sal, adresseDomicile: v })} />
-          </Section>
-        )}
-
-        {type === 'SALAIRE' && step === 1 && (
-          <Section title="Emploi & prêt">
-            <Field label="Société" required value={sal.societe} onChangeText={(v) => setSal({ ...sal, societe: v })} />
-            <Field label="Adresse société" required value={sal.adresseSociete} onChangeText={(v) => setSal({ ...sal, adresseSociete: v })} />
-            <Field label="Fonction / Service" required value={sal.fonctionService} onChangeText={(v) => setSal({ ...sal, fonctionService: v })} />
-            <SelectField
-              label="Devise"
-              required
-              value={sal.devise}
-              options={DEVISES}
-              onChange={(v) => setSal({ ...sal, devise: v as (typeof DEVISES)[number] })}
-            />
+        {step === 2 ? (
+          <Section title="Informations sur le prêt demandé">
             <MoneyField
               label="Montant sollicité"
               required
-              currency={sal.devise}
-              value={sal.montantSollicite}
-              onChange={(v) => setSal({ ...sal, montantSollicite: v ?? 0 })}
+              currency={currency}
+              value={form.montantSollicite}
+              onChange={(v) => setForm({ ...form, montantSollicite: v ?? 0 })}
             />
-            <Field label="Durée (mois)" required value={String(sal.dureeMois || '')} onChangeText={(v) => setSal({ ...sal, dureeMois: Number(v) || 0 })} keyboardType="numeric" />
-            <Field label="Durée (années)" required value={String(sal.dureeAnnees || '')} onChangeText={(v) => setSal({ ...sal, dureeAnnees: Number(v) || 0 })} keyboardType="numeric" />
-            <Field label="Durée (semaines)" required value={String(sal.dureeSemaines || '')} onChangeText={(v) => setSal({ ...sal, dureeSemaines: Number(v) || 0 })} keyboardType="numeric" />
-            <Field label="Motif" value={sal.motifCredit || ''} onChangeText={(v) => setSal({ ...sal, motifCredit: v })} />
-            <MoneyField
-              label="Salaire net"
+            <DurationField
+              label="Durée de prêt"
               required
-              currency={sal.devise}
-              value={sal.salaireNet}
-              onChange={(v) => setSal({ ...sal, salaireNet: v ?? 0 })}
+              unit="semaines"
+              value={form.dureeSemaines}
+              onChange={(v) =>
+                setForm({ ...form, dureeSemaines: v ?? 0 })
+              }
+            />
+            <Text style={styles.fieldHint}>
+              Bornes : {dureeBornes.min} – {dureeBornes.max} semaines
+            </Text>
+            <Field
+              label="Motif du crédit"
+              required
+              value={form.motifCredit}
+              onChangeText={(v) => setForm({ ...form, motifCredit: v })}
             />
             <MoneyField
-              label="Capacité mensuelle de remboursement"
+              label="Capacité de remboursement mensuel"
               required
-              currency={sal.devise}
-              value={sal.capaciteMensuelle}
-              onChange={(v) => setSal({ ...sal, capaciteMensuelle: v ?? 0 })}
+              currency={currency}
+              value={form.capaciteMensuelle}
+              onChange={(v) => setForm({ ...form, capaciteMensuelle: v ?? 0 })}
             />
-            <Field label="Caution / garantie" value={sal.cautionGarantie || ''} onChangeText={(v) => setSal({ ...sal, cautionGarantie: v })} />
-            <Field label="N° de compte" value={sal.numeroCompte || ''} onChangeText={(v) => setSal({ ...sal, numeroCompte: v })} />
-            <Field label="Dépôt BC" value={sal.depotBc || ''} onChangeText={(v) => setSal({ ...sal, depotBc: v })} />
+            <SelectField
+              label="Prêt auprès d'une autre institution (demandeur ou conjoint)"
+              required
+              value={form.pretAutreInstitution}
+              options={[...PRET_AUTRE_INSTITUTION]}
+              onChange={(v) =>
+                setForm({
+                  ...form,
+                  pretAutreInstitution:
+                    v as (typeof PRET_AUTRE_INSTITUTION)[number],
+                })
+              }
+            />
+            {form.pretAutreInstitution !== 'Non' ? (
+              <Field
+                label="Nom de l'institution"
+                required
+                value={form.autreInstitutionNom || ''}
+                onChangeText={(v) =>
+                  setForm({ ...form, autreInstitutionNom: v })
+                }
+              />
+            ) : null}
           </Section>
-        )}
+        ) : null}
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
-        <View style={styles.nav}>
-          {step > 0 && (
-            <Pressable style={styles.secondary} onPress={() => tryGoTo(step - 1)}>
-              <Text>Précédent</Text>
-            </Pressable>
-          )}
-          {step < steps.length - 1 ? (
-            <Pressable style={styles.primary} onPress={() => tryGoTo(step + 1)}>
-              <Text style={styles.primaryText}>Suivant</Text>
+        <View style={styles.navRow}>
+          {step > 0 ? (
+            <Pressable
+              style={[styles.navBtn, styles.navSecondary]}
+              onPress={() => tryGoTo(step - 1)}
+            >
+              <Text style={styles.navSecondaryText}>Retour</Text>
             </Pressable>
           ) : (
-            <Pressable style={styles.primary} onPress={submit} disabled={busy}>
+            <View style={{ flex: 1 }} />
+          )}
+          {step < STEPS.length - 1 ? (
+            <Pressable
+              style={[styles.navBtn, styles.navPrimary]}
+              onPress={() => tryGoTo(step + 1)}
+            >
+              <Text style={styles.navPrimaryText}>Suivant</Text>
+            </Pressable>
+          ) : (
+            <Pressable
+              style={[
+                styles.navBtn,
+                styles.navPrimary,
+                busy && styles.ctaDisabled,
+              ]}
+              disabled={busy}
+              onPress={onSubmit}
+            >
               {busy ? (
                 <ActivityIndicator color="#fff" />
               ) : (
-                <Text style={styles.primaryText}>Enregistrer</Text>
+                <Text style={styles.navPrimaryText}>Enregistrer</Text>
               )}
             </Pressable>
           )}
         </View>
       </KeyboardAwareScrollView>
+
+      <ResultSheet
+        visible={!!result}
+        variant={result?.variant ?? 'success'}
+        title={result?.title ?? ''}
+        message={result?.message ?? ''}
+        primaryLabel={result?.variant === 'error' ? 'Corriger' : 'Voir le dossier'}
+        onPrimary={closeResult}
+        onClose={closeResult}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.neutral.background, paddingTop: 8 },
-  topBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
+  root: { flex: 1, backgroundColor: colors.neutral.background },
+  scroll: { flex: 1 },
+  pad: { paddingHorizontal: 20, paddingTop: 16 },
+  stepMeta: {
+    fontFamily: fonts.regular,
+    fontSize: 13,
+    color: colors.neutral.textMuted,
     marginBottom: 4,
   },
-  cancel: { color: colors.primary.red, fontFamily: fonts.bold },
-  typeBadge: {
-    backgroundColor: colors.primary.blue,
+  h1: {
+    fontFamily: fonts.bold,
+    fontSize: 22,
+    color: colors.neutral.text,
+    marginBottom: 8,
+  },
+  typeChip: {
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(40, 64, 128, 0.1)',
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 12,
+    borderRadius: 20,
+    marginBottom: 6,
   },
-  typeBadgeText: { color: '#fff', fontFamily: fonts.bold },
-  pad: { padding: 16, paddingBottom: 80 },
-  h1: {
-    fontSize: 22,
-    fontFamily: fonts.bold,
-    marginBottom: 12,
+  typeChipText: {
+    fontFamily: fonts.semiBold,
+    fontSize: 13,
     color: colors.primary.blue,
   },
-  steps: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12 },
-  step: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: colors.neutral.border,
-    backgroundColor: colors.neutral.surface,
+  hint: {
+    fontFamily: fonts.regular,
+    fontSize: 13,
+    color: colors.neutral.textMuted,
+    marginBottom: 12,
   },
-  stepOn: { backgroundColor: '#dce3f0', borderColor: colors.primary.blue },
-  stepLocked: { opacity: 0.45 },
-  stepTextOn: { fontFamily: fonts.bold },
-  stepTextLocked: { color: colors.neutral.placeholder },
-  nav: {
+  progressTrack: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 12,
+    gap: 6,
+    marginBottom: 8,
+  },
+  progressSegWrap: { flex: 1 },
+  progressSeg: {
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#e5e5e5',
+  },
+  progressSegOn: { backgroundColor: colors.primary.blue },
+  progressSegLocked: { opacity: 0.4 },
+  stepLabel: {
+    fontFamily: fonts.semiBold,
+    fontSize: 15,
+    color: colors.primary.blue,
+    marginBottom: 12,
+  },
+  fieldHint: {
+    fontFamily: fonts.regular,
+    fontSize: 12,
+    color: colors.neutral.textMuted,
+    marginTop: -4,
+    marginBottom: 10,
+  },
+  prefillHint: {
+    fontFamily: fonts.regular,
+    fontSize: 12,
+    color: colors.primary.blue,
+    marginBottom: 10,
+  },
+  verifyBtn: {
+    backgroundColor: colors.primary.blue,
+    borderRadius: 28,
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  avisBox: {
+    borderWidth: 1,
+    borderColor: '#d8deea',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 8,
+    backgroundColor: '#f7f9fc',
+  },
+  avisTitle: {
+    fontFamily: fonts.semiBold,
+    fontSize: 15,
+    color: colors.neutral.text,
+    marginBottom: 6,
+  },
+  scoreValue: {
+    fontFamily: fonts.bold,
+    fontSize: 28,
+    color: colors.primary.blue,
+    marginBottom: 4,
+  },
+  scoreMeta: {
+    fontFamily: fonts.regular,
+    fontSize: 14,
+    color: colors.neutral.textMuted,
+  },
+  avisDetail: {
+    fontFamily: fonts.regular,
+    fontSize: 12,
+    color: colors.neutral.textMuted,
+    marginBottom: 2,
+  },
+  avisLine: {
+    fontFamily: fonts.regular,
+    fontSize: 13,
+    color: colors.neutral.text,
     marginTop: 8,
   },
-  primary: {
+  histBlock: { marginTop: 12 },
+  histTitle: {
+    fontFamily: fonts.semiBold,
+    fontSize: 13,
+    color: colors.neutral.text,
+    marginBottom: 6,
+  },
+  histRow: {
+    paddingVertical: 6,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#d8deea',
+  },
+  histRef: {
+    fontFamily: fonts.semiBold,
+    fontSize: 13,
+    color: colors.neutral.text,
+  },
+  histMeta: {
+    fontFamily: fonts.regular,
+    fontSize: 12,
+    color: colors.neutral.textMuted,
+    marginTop: 2,
+  },
+  error: {
+    color: '#b00020',
+    fontFamily: fonts.regular,
+    marginBottom: 12,
+  },
+  navRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 8,
+    marginBottom: 24,
+  },
+  navBtn: {
     flex: 1,
-    backgroundColor: colors.primary.blue,
-    padding: 14,
-    borderRadius: 8,
+    borderRadius: 28,
+    paddingVertical: 16,
     alignItems: 'center',
   },
-  primaryText: { color: '#fff', fontFamily: fonts.semiBold },
-  secondary: {
-    padding: 14,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#aaa',
-    backgroundColor: colors.neutral.surface,
+  navPrimary: { backgroundColor: colors.primary.blue },
+  navSecondary: {
+    backgroundColor: '#f0f0f0',
   },
-  error: { color: colors.primary.red, marginVertical: 8, fontFamily: fonts.regular },
+  navPrimaryText: {
+    color: '#fff',
+    fontFamily: fonts.bold,
+    fontSize: 16,
+  },
+  navSecondaryText: {
+    color: colors.neutral.text,
+    fontFamily: fonts.semiBold,
+    fontSize: 16,
+  },
+  ctaDisabled: { opacity: 0.6 },
 });

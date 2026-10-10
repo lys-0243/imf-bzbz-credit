@@ -1,0 +1,82 @@
+.viewport {
+  position: fixed;
+  z-index: 12000;
+  right: 20px;
+  bottom: 20px;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 10px;
+  width: min(360px, calc(100vw - 32px));
+  pointer-events: none;
+}
+
+.toast {
+  pointer-events: auto;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: start;
+  padding: 12px 14px;
+  border-radius: var(--imf-radius);
+  border: 1px solid var(--imf-border);
+  background: #fff;
+  box-shadow: 0 10px 28px rgba(17, 17, 17, 0.12);
+  animation: toastIn 180ms ease-out;
+}
+
+.message {
+  margin: 0;
+  font-size: 0.92rem;
+  line-height: 1.35;
+  color: var(--imf-text);
+}
+
+.close {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--imf-muted);
+  font-size: 1.15rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 2px;
+}
+
+.close:hover {
+  color: var(--imf-text);
+}
+
+.success {
+  border-color: color-mix(in srgb, var(--imf-green) 45%, var(--imf-border));
+  background: color-mix(in srgb, var(--imf-green) 10%, #fff);
+}
+
+.error {
+  border-color: color-mix(in srgb, var(--imf-red) 45%, var(--imf-border));
+  background: color-mix(in srgb, var(--imf-red) 8%, #fff);
+}
+
+.info {
+  border-color: color-mix(in srgb, var(--imf-blue) 35%, var(--imf-border));
+  background: color-mix(in srgb, var(--imf-blue) 7%, #fff);
+}
+
+@keyframes toastIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 640px) {
+  .viewport {
+    right: 12px;
+    bottom: 12px;
+    left: 12px;
+    width: auto;
+  }
+}

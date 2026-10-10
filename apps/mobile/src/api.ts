@@ -3,8 +3,6 @@ import * as SecureStore from 'expo-secure-store';
 
 const TOKEN_KEY = 'imf_access_token';
 
-export { API_URL };
-
 export async function getToken() {
   return SecureStore.getItemAsync(TOKEN_KEY);
 }

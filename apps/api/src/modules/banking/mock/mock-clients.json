@@ -1,0 +1,382 @@
+[
+  {
+    "numeroCompte": "1002003001",
+    "ouvertLe": "2019-03-12",
+    "cas": "fiable_historique_solde",
+    "kyc": {
+      "prenom": "Jean",
+      "nom": "Mukendi",
+      "postNom": "Kabongo",
+      "dateNaissance": "1985-06-14",
+      "typePiece": "Carte Electeur",
+      "numeroPiece": "CD-KIN-850614-001",
+      "sexe": "Masculin",
+      "telephone": "+243810000001",
+      "email": "j.mukendi@example.cd",
+      "etatCivil": "Marie",
+      "adresseDomicile": "12 av. de la Liberation, Gombe",
+      "communeCode": "GOMBE"
+    },
+    "historique": [
+      {
+        "reference": "SAL-2019-001",
+        "produitCode": "SALAIRE",
+        "montant": 2500,
+        "devise": "USD",
+        "dateDebut": "2019-04-01",
+        "dateFin": "2020-04-01",
+        "statut": "SOLDE"
+      },
+      {
+        "reference": "SAL-2021-014",
+        "produitCode": "SALAIRE",
+        "montant": 4000,
+        "devise": "USD",
+        "dateDebut": "2021-02-15",
+        "dateFin": "2022-08-15",
+        "statut": "SOLDE"
+      },
+      {
+        "reference": "PER-2023-008",
+        "produitCode": "PERSONNEL",
+        "montant": 800,
+        "devise": "USD",
+        "dateDebut": "2023-01-10",
+        "dateFin": "2023-12-10",
+        "statut": "SOLDE"
+      }
+    ]
+  },
+  {
+    "numeroCompte": "1002003002",
+    "ouvertLe": "2020-07-01",
+    "cas": "credit_en_cours_salaire",
+    "kyc": {
+      "prenom": "Marie",
+      "nom": "Kalala",
+      "postNom": "Nzuzi",
+      "dateNaissance": "1990-11-02",
+      "typePiece": "Passeport",
+      "numeroPiece": "OP1234567",
+      "sexe": "Feminin",
+      "telephone": "+243810000002",
+      "email": "m.kalala@example.cd",
+      "etatCivil": "Celibataire",
+      "adresseDomicile": "45 rue Valée, Ngaliema",
+      "communeCode": "NGALIEMA"
+    },
+    "historique": [
+      {
+        "reference": "SAL-2022-040",
+        "produitCode": "SALAIRE",
+        "montant": 3000,
+        "devise": "USD",
+        "dateDebut": "2022-05-01",
+        "dateFin": "2023-05-01",
+        "statut": "SOLDE"
+      },
+      {
+        "reference": "SAL-2025-112",
+        "produitCode": "SALAIRE",
+        "montant": 5000,
+        "devise": "USD",
+        "dateDebut": "2025-06-01",
+        "dateFin": null,
+        "statut": "EN_COURS"
+      }
+    ]
+  },
+  {
+    "numeroCompte": "1002003003",
+    "ouvertLe": "2018-01-20",
+    "cas": "credit_en_cours_agr",
+    "kyc": {
+      "prenom": "Patrick",
+      "nom": "Ilunga",
+      "postNom": "Mwamba",
+      "dateNaissance": "1978-09-30",
+      "typePiece": "Carte Electeur",
+      "numeroPiece": "CD-KIN-780930-003",
+      "sexe": "Masculin",
+      "telephone": "+243810000003",
+      "email": "",
+      "etatCivil": "Marie",
+      "adresseDomicile": "Marché Central, Kinshasa",
+      "communeCode": "KINSHASA"
+    },
+    "historique": [
+      {
+        "reference": "AGR-2020-003",
+        "produitCode": "AGR",
+        "montant": 8000,
+        "devise": "USD",
+        "dateDebut": "2020-03-01",
+        "dateFin": "2021-09-01",
+        "statut": "SOLDE"
+      },
+      {
+        "reference": "AGR-2025-055",
+        "produitCode": "AGR",
+        "montant": 12000,
+        "devise": "USD",
+        "dateDebut": "2025-01-15",
+        "dateFin": null,
+        "statut": "EN_COURS"
+      }
+    ]
+  },
+  {
+    "numeroCompte": "1002003004",
+    "ouvertLe": "2021-05-08",
+    "cas": "retard_passe",
+    "kyc": {
+      "prenom": "Grace",
+      "nom": "Tshibanda",
+      "postNom": "Lukusa",
+      "dateNaissance": "1992-04-18",
+      "typePiece": "Carte Electeur",
+      "numeroPiece": "CD-KIN-920418-004",
+      "sexe": "Feminin",
+      "telephone": "+243810000004",
+      "email": "g.tshibanda@example.cd",
+      "etatCivil": "Divorce",
+      "adresseDomicile": "8 av. Kasavubu, Barumbu",
+      "communeCode": "BARUMBU"
+    },
+    "historique": [
+      {
+        "reference": "DDR-2022-019",
+        "produitCode": "DARE_DARE",
+        "montant": 1500,
+        "devise": "USD",
+        "dateDebut": "2022-08-01",
+        "dateFin": "2022-10-15",
+        "statut": "EN_RETARD"
+      },
+      {
+        "reference": "DDR-2022-019B",
+        "produitCode": "DARE_DARE",
+        "montant": 1500,
+        "devise": "USD",
+        "dateDebut": "2022-08-01",
+        "dateFin": "2022-11-01",
+        "statut": "SOLDE"
+      },
+      {
+        "reference": "CLK-2024-002",
+        "produitCode": "CONSO_LIKELEMBA",
+        "montant": 2000,
+        "devise": "USD",
+        "dateDebut": "2024-03-01",
+        "dateFin": "2024-04-01",
+        "statut": "SOLDE"
+      }
+    ]
+  },
+  {
+    "numeroCompte": "1002003005",
+    "ouvertLe": "2017-11-11",
+    "cas": "defaut",
+    "kyc": {
+      "prenom": "André",
+      "nom": "Ntumba",
+      "postNom": "Kasongo",
+      "dateNaissance": "1975-01-22",
+      "typePiece": "Carte Electeur",
+      "numeroPiece": "EL-750122-005",
+      "sexe": "Masculin",
+      "telephone": "+243810000005",
+      "email": "",
+      "etatCivil": "Veuf",
+      "adresseDomicile": "Zone industrielle, Limete",
+      "communeCode": "LIMETE"
+    },
+    "historique": [
+      {
+        "reference": "PRJ-2019-007",
+        "produitCode": "PROJET",
+        "montant": 25000,
+        "devise": "USD",
+        "dateDebut": "2019-06-01",
+        "dateFin": "2021-01-01",
+        "statut": "DEFAUT"
+      },
+      {
+        "reference": "AGR-2018-011",
+        "produitCode": "AGR",
+        "montant": 5000,
+        "devise": "USD",
+        "dateDebut": "2018-02-01",
+        "dateFin": "2019-02-01",
+        "statut": "SOLDE"
+      }
+    ]
+  },
+  {
+    "numeroCompte": "1002003006",
+    "ouvertLe": "2025-08-01",
+    "cas": "nouveau_historique_vide",
+    "kyc": {
+      "prenom": "Sarah",
+      "nom": "Kasongo",
+      "postNom": "Mpiana",
+      "dateNaissance": "1998-12-05",
+      "typePiece": "Carte Electeur",
+      "numeroPiece": "CD-KIN-981205-006",
+      "sexe": "Feminin",
+      "telephone": "+243810000006",
+      "email": "s.kasongo@example.cd",
+      "etatCivil": "Celibataire",
+      "adresseDomicile": "Résidence Oasis, Mont-Ngafula",
+      "communeCode": "MONT_NGAFULA"
+    },
+    "historique": []
+  },
+  {
+    "numeroCompte": "1002003007",
+    "ouvertLe": "2022-09-14",
+    "cas": "kyc_partiel",
+    "kyc": {
+      "prenom": "Dieu",
+      "nom": "Kabila",
+      "postNom": "Mbombo",
+      "dateNaissance": "1988-07-07",
+      "typePiece": "Carte Electeur",
+      "numeroPiece": "CD-KIN-880707-007",
+      "sexe": "Masculin",
+      "telephone": "+243810000007",
+      "email": "",
+      "etatCivil": "Marie",
+      "adresseDomicile": "Avenue principale",
+      "communeCode": ""
+    },
+    "historique": [
+      {
+        "reference": "AUT-2023-001",
+        "produitCode": "AUTO",
+        "montant": 8000,
+        "devise": "USD",
+        "dateDebut": "2023-04-01",
+        "dateFin": "2025-04-01",
+        "statut": "SOLDE"
+      }
+    ]
+  },
+  {
+    "numeroCompte": "1002003008",
+    "ouvertLe": "2016-02-29",
+    "cas": "credit_en_cours_long_terme",
+    "kyc": {
+      "prenom": "Clarisse",
+      "nom": "Mpiana",
+      "postNom": "Banza",
+      "dateNaissance": "1982-03-25",
+      "typePiece": "Passeport",
+      "numeroPiece": "OP9988776",
+      "sexe": "Feminin",
+      "telephone": "+243810000008",
+      "email": "c.mpiana@example.cd",
+      "etatCivil": "Marie",
+      "adresseDomicile": "Q. Binza, Ngaliema",
+      "communeCode": "NGALIEMA"
+    },
+    "historique": [
+      {
+        "reference": "LTM-2024-003",
+        "produitCode": "LONG_TERME",
+        "montant": 80000,
+        "devise": "USD",
+        "dateDebut": "2024-01-01",
+        "dateFin": null,
+        "statut": "EN_COURS"
+      },
+      {
+        "reference": "ALK-2021-009",
+        "produitCode": "AGR_LIKELEMBA",
+        "montant": 3000,
+        "devise": "USD",
+        "dateDebut": "2021-06-01",
+        "dateFin": "2022-06-01",
+        "statut": "SOLDE"
+      }
+    ]
+  },
+  {
+    "numeroCompte": "1002003009",
+    "ouvertLe": "2023-01-05",
+    "cas": "credit_en_cours_personnel",
+    "kyc": {
+      "prenom": "Thérèse",
+      "nom": "Ngalula",
+      "postNom": "Mbuyi",
+      "dateNaissance": "1995-08-19",
+      "typePiece": "Carte Electeur",
+      "numeroPiece": "CD-KIN-950819-009",
+      "sexe": "Feminin",
+      "telephone": "+243810000009",
+      "email": "t.ngalula@example.cd",
+      "etatCivil": "Celibataire",
+      "adresseDomicile": "Cité de l'UA, Lingwala",
+      "communeCode": "LINGWALA"
+    },
+    "historique": [
+      {
+        "reference": "PER-2025-021",
+        "produitCode": "PERSONNEL",
+        "montant": 2500,
+        "devise": "USD",
+        "dateDebut": "2025-03-01",
+        "dateFin": null,
+        "statut": "EN_COURS"
+      }
+    ]
+  },
+  {
+    "numeroCompte": "1002003010",
+    "ouvertLe": "2015-10-10",
+    "cas": "mixte_solde_et_retard",
+    "kyc": {
+      "prenom": "Christian",
+      "nom": "Mwamba",
+      "postNom": "Tshimanga",
+      "dateNaissance": "1980-05-11",
+      "typePiece": "Carte Electeur",
+      "numeroPiece": "CD-KIN-800511-010",
+      "sexe": "Masculin",
+      "telephone": "+243810000010",
+      "email": "c.mwamba@example.cd",
+      "etatCivil": "Marie",
+      "adresseDomicile": "Boulevard Triomphal, Kintambo",
+      "communeCode": "KINTAMBO"
+    },
+    "historique": [
+      {
+        "reference": "AGR-2016-002",
+        "produitCode": "AGR",
+        "montant": 4000,
+        "devise": "USD",
+        "dateDebut": "2016-01-01",
+        "dateFin": "2017-01-01",
+        "statut": "SOLDE"
+      },
+      {
+        "reference": "PRJ-2018-004",
+        "produitCode": "PROJET",
+        "montant": 15000,
+        "devise": "USD",
+        "dateDebut": "2018-05-01",
+        "dateFin": "2020-05-01",
+        "statut": "EN_RETARD"
+      },
+      {
+        "reference": "SAL-2022-088",
+        "produitCode": "SALAIRE",
+        "montant": 3500,
+        "devise": "USD",
+        "dateDebut": "2022-09-01",
+        "dateFin": "2023-09-01",
+        "statut": "SOLDE"
+      }
+    ]
+  }
+]

@@ -3,6 +3,25 @@
   "collection": "@nestjs/schematics",
   "sourceRoot": "src",
   "compilerOptions": {
-    "deleteOutDir": true
+    "deleteOutDir": true,
+    "plugins": [
+      {
+        "name": "@nestjs/swagger",
+        "options": {
+          "classValidatorShim": true,
+          "introspectComments": true
+        }
+      }
+    ],
+    "assets": [
+      {
+        "include": "modules/banking/mock/**/*.json",
+        "watchAssets": true
+      },
+      {
+        "include": "modules/banking/mock/**/*.md",
+        "watchAssets": true
+      }
+    ]
   }
 }

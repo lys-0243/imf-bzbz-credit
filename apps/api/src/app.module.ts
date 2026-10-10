@@ -11,10 +11,13 @@ import { ConformiteModule } from './modules/conformite/conformite.module';
 import { DocumentsModule } from './modules/documents/documents.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { ClientsModule } from './modules/clients/clients.module';
+import { AdminModule } from './modules/admin/admin.module';
+import { BankingModule } from './modules/banking/banking.module';
 
 @Module({
   imports: [
     PrismaModule,
+    AuditModule,
     IdentityModule,
     DemandesModule,
     ClientsModule,
@@ -24,7 +27,8 @@ import { ClientsModule } from './modules/clients/clients.module';
     ScoringModule,
     ConformiteModule,
     DocumentsModule,
-    AuditModule,
+    AdminModule,
+    BankingModule,
   ],
   controllers: [HealthController],
 })
