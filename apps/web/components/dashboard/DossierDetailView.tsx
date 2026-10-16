@@ -35,6 +35,9 @@ export type DetailPiece = {
   id: string;
   kind: string;
   blobPath: string;
+  url?: string | null;
+  originalName?: string | null;
+  mimeType?: string | null;
   createdAt?: string;
 };
 
@@ -189,7 +192,7 @@ function DocTypeIcon({ ext }: { ext: string }) {
 function ChecklistActionIcon({
   name,
 }: {
-  name: 'upload' | 'replace' | 'view' | 'download' | 'avis';
+  name: 'upload' | 'replace' | 'download' | 'avis';
 }) {
   if (name === 'upload') {
     return (
@@ -227,19 +230,6 @@ function ChecklistActionIcon({
           strokeLinecap="round"
           strokeLinejoin="round"
         />
-      </svg>
-    );
-  }
-  if (name === 'view') {
-    return (
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
-        <path
-          d="M2.5 12s3.5-6.5 9.5-6.5S21.5 12 21.5 12s-3.5 6.5-9.5 6.5S2.5 12 2.5 12Z"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinejoin="round"
-        />
-        <circle cx="12" cy="12" r="2.75" stroke="currentColor" strokeWidth="2" />
       </svg>
     );
   }
@@ -541,13 +531,48 @@ function FieldsTable({
   );
 }
 
-async function fetchPieceBlob(pieceId: string) {
+function extFromName(name?: string | null): string {
+  if (!name) return '';
+  const base = name.split(/[/\\?#]/).pop() || '';
+  const dot = base.lastIndexOf('.');
+  if (dot < 0) return '';
+  return base.slice(dot + 1).toLowerCase();
+}
+
+function pieceDownloadName(piece: DetailPiece, blobMime?: string): string {
+  const raw = (piece.originalName || '').trim() || `piece-${piece.id}`;
+  if (extFromName(raw)) return raw;
+  const mime = (piece.mimeType || blobMime || '').toLowerCase();
+  if (mime === 'application/pdf') return `${raw}.pdf`;
+  if (mime === 'image/png') return `${raw}.png`;
+  if (mime === 'image/webp') return `${raw}.webp`;
+  if (mime === 'image/jpeg' || mime === 'image/jpg') return `${raw}.jpg`;
+  const fromPath = extFromName(piece.blobPath);
+  if (fromPath) return `${raw}.${fromPath}`;
+  return raw;
+}
+
+async function fetchPieceBlob(piece: DetailPiece): Promise<Blob> {
   const token = getToken();
-  const res = await fetch(`${getApiUrl()}/documents/pieces/${pieceId}`, {
+  const res = await fetch(`${getApiUrl()}/documents/pieces/${piece.id}`, {
     headers: token ? { Authorization: `Bearer ${token}` } : undefined,
   });
   if (!res.ok) throw new Error('Téléchargement impossible');
   return res.blob();
+}
+
+async function downloadPieceFile(piece: DetailPiece) {
+  const blob = await fetchPieceBlob(piece);
+  const filename = pieceDownloadName(piece, blob.type);
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.rel = 'noopener';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
 export function DossierDetailView({
@@ -585,6 +610,7 @@ export function DossierDetailView({
 }) {
   const [tab, setTab] = useState('historique');
   const [docError, setDocError] = useState<string | null>(null);
+  const [downloadBusy, setDownloadBusy] = useState(false);
   const [avisTarget, setAvisTarget] = useState<{
     id: string;
     label: string;
@@ -724,32 +750,15 @@ export function DossierDetailView({
       ? String(p.salaireNet).trim()
       : null;
 
-  async function viewPiece(pieceId: string) {
-    setDocError(null);
-    try {
-      const blob = await fetchPieceBlob(pieceId);
-      const url = URL.createObjectURL(blob);
-      window.open(url, '_blank', 'noopener,noreferrer');
-      setTimeout(() => URL.revokeObjectURL(url), 60_000);
-    } catch {
-      setDocError('Impossible d’ouvrir le document.');
-    }
-  }
-
   async function downloadPiece(piece: DetailPiece) {
     setDocError(null);
+    setDownloadBusy(true);
     try {
-      const blob = await fetchPieceBlob(piece.id);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = piece.blobPath || `piece-${piece.id}`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
+      await downloadPieceFile(piece);
     } catch {
       setDocError('Impossible de télécharger le document.');
+    } finally {
+      setDownloadBusy(false);
     }
   }
 
@@ -836,19 +845,7 @@ export function DossierDetailView({
                       <button
                         type="button"
                         className={styles.checklistIconBtn}
-                        disabled={!row.piece}
-                        title="Voir"
-                        aria-label="Voir"
-                        onClick={() =>
-                          row.piece && void viewPiece(row.piece.id)
-                        }
-                      >
-                        <ChecklistActionIcon name="view" />
-                      </button>
-                      <button
-                        type="button"
-                        className={styles.checklistIconBtn}
-                        disabled={!row.piece}
+                        disabled={!row.piece || downloadBusy}
                         title="Télécharger"
                         aria-label="Télécharger"
                         onClick={() =>
@@ -857,7 +854,7 @@ export function DossierDetailView({
                       >
                         <ChecklistActionIcon name="download" />
                       </button>
-                      {canManageDocs ? (
+                      {canManageDocs && !row.received ? (
                         <button
                           type="button"
                           className={`${styles.checklistIconBtn} ${styles.checklistIconBtnAvis}`}
@@ -1299,6 +1296,7 @@ export function DossierDetailView({
           </div>
         </div>
       ) : null}
+
     </div>
   );
 }

@@ -7,17 +7,26 @@ import {
   newCf2FamilyMember,
   newCf2Reference,
   normalizeCf2Analyse,
+  resolveMensualite,
   sumDepensesFamiliales,
   totalDepensesPrivees,
   type Cf21Data,
   type Cf22Data,
+  type Cf23Data,
+  type Cf24Data,
+  type Cf25Data,
   type Cf2Analyse,
   type Cf2DepensesFamiliales,
   type Cf2SectionKey,
 } from '@imf/shared';
 import { dashStyles as styles } from './DashboardShell';
 import { Cf22Section } from './Cf22Section';
+import { Cf23Section } from './Cf23Section';
+import { Cf24Section } from './Cf24Section';
+import { Cf25Section } from './Cf25Section';
 import { useToast } from '../Toast';
+
+type Cf2DirtyKey = 'cf21' | 'cf22' | 'cf23' | 'cf24' | 'cf25';
 
 type Props = {
   analyse: Cf2Analyse | null | undefined;
@@ -233,7 +242,7 @@ export function Cf2Panel({
     normalizeCf2Analyse(analyse),
   );
   const formRef = useRef(form);
-  const dirtySectionsRef = useRef(new Set<'cf21' | 'cf22'>());
+  const dirtySectionsRef = useRef(new Set<Cf2DirtyKey>());
   formRef.current = form;
 
   useEffect(() => {
@@ -242,6 +251,9 @@ export function Cf2Panel({
       ...next,
       cf21: dirtySectionsRef.current.has('cf21') ? prev.cf21 : next.cf21,
       cf22: dirtySectionsRef.current.has('cf22') ? prev.cf22 : next.cf22,
+      cf23: dirtySectionsRef.current.has('cf23') ? prev.cf23 : next.cf23,
+      cf24: dirtySectionsRef.current.has('cf24') ? prev.cf24 : next.cf24,
+      cf25: dirtySectionsRef.current.has('cf25') ? prev.cf25 : next.cf25,
     }));
   }, [analyse]);
 
@@ -282,19 +294,66 @@ export function Cf2Panel({
     setForm((prev) => ({ ...prev, cf22: next }));
   }
 
-  async function handleSaveSection(which: 'cf21' | 'cf22') {
+  function patchCf23(next: Cf23Data) {
+    dirtySectionsRef.current.add('cf23');
+    setForm((prev) => ({ ...prev, cf23: next }));
+  }
+
+  function patchCf24(next: Cf24Data) {
+    dirtySectionsRef.current.add('cf24');
+    setForm((prev) => ({ ...prev, cf24: next }));
+  }
+
+  function patchCf25(next: Cf25Data) {
+    dirtySectionsRef.current.add('cf25');
+    setForm((prev) => ({ ...prev, cf25: next }));
+  }
+
+  async function handleSaveSection(which: Cf2DirtyKey) {
     if (!onSave) return;
     const snapshot = formRef.current;
-    const patch: Partial<Cf2Analyse> =
-      which === 'cf21' ? { cf21: snapshot.cf21 } : { cf22: snapshot.cf22 };
-    const ok = which === 'cf22' ? 'CF2.2 enregistrée.' : 'CF2.1 enregistrée.';
+    let sectionData = snapshot[which];
+    if (which === 'cf25') {
+      const dateProposition = new Date().toLocaleString('fr-FR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+      const mensualiteNum = resolveMensualite(snapshot.cf25);
+      const cf25 = {
+        ...snapshot.cf25,
+        dateProposition,
+        mensualite:
+          mensualiteNum > 0
+            ? String(
+                Math.round(mensualiteNum * 100) / 100,
+              )
+            : snapshot.cf25.mensualite,
+      };
+      sectionData = cf25;
+      dirtySectionsRef.current.add('cf25');
+      setForm((prev) => ({ ...prev, cf25 }));
+      formRef.current = { ...formRef.current, cf25 };
+    }
+    const patch: Partial<Cf2Analyse> = { [which]: sectionData };
+    const labels: Record<Cf2DirtyKey, string> = {
+      cf21: 'CF2.1 enregistrée.',
+      cf22: 'CF2.2 enregistrée.',
+      cf23: 'CF2.3 enregistrée.',
+      cf24: 'CF2.4 enregistrée.',
+      cf25: 'CF2.5 enregistrée.',
+    };
     try {
       await onSave(patch);
       dirtySectionsRef.current.delete(which);
-      toast.success(ok);
+      toast.success(labels[which]);
     } catch (e) {
       toast.error(
-        e instanceof Error ? e.message : `Échec enregistrement ${which.toUpperCase()}`,
+        e instanceof Error
+          ? e.message
+          : `Échec enregistrement ${which.toUpperCase()}`,
       );
     }
   }
@@ -835,11 +894,35 @@ export function Cf2Panel({
           onChange={patchCf22}
           onSave={onSave ? () => handleSaveSection('cf22') : undefined}
         />
+      ) : section === 'cf23' ? (
+        <Cf23Section
+          cf23={form.cf23}
+          stock={form.cf22.stock}
+          achats={form.cf22.achats}
+          devise={devise}
+          disabled={disabled}
+          busy={busy}
+          onChange={patchCf23}
+          onSave={onSave ? () => handleSaveSection('cf23') : undefined}
+        />
+      ) : section === 'cf24' ? (
+        <Cf24Section
+          analyse={form}
+          devise={devise}
+          disabled={disabled}
+          busy={busy}
+          onChange={patchCf24}
+          onSave={onSave ? () => handleSaveSection('cf24') : undefined}
+        />
       ) : (
-        <div className={styles.cf2Shell}>
-          <p className={styles.cf2ShellTitle}>Bientôt disponible</p>
-          <p className={styles.cf2ShellText}>{meta.summary}</p>
-        </div>
+        <Cf25Section
+          analyse={form}
+          devise={devise}
+          disabled={disabled}
+          busy={busy}
+          onChange={patchCf25}
+          onSave={onSave ? () => handleSaveSection('cf25') : undefined}
+        />
       )}
     </div>
   );

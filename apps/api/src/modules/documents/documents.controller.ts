@@ -1,20 +1,18 @@
 import {
   Controller,
   Get,
+  NotFoundException,
   Param,
   Res,
-  StreamableFile,
   UseGuards,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiOperation,
   ApiParam,
-  ApiProduces,
   ApiTags,
 } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
-import { createReadStream } from 'fs';
 import type { Response } from 'express';
 import { JwtAuthGuard } from '../identity/jwt-auth.guard';
 import { Roles, RolesGuard } from '../identity/roles.guard';
@@ -45,21 +43,33 @@ export class DocumentsController {
 
   @Get('pieces/:id')
   @ApiOperation({
-    summary: 'Télécharger une pièce',
-    description: 'Retourne le fichier binaire de la pièce jointe.',
+    summary: 'Ouvrir / télécharger une pièce',
+    description:
+      'Proxie le binaire Cloudinary (aperçu iframe / téléchargement disque).',
   })
   @ApiParam({ name: 'id', description: 'ID de la pièce' })
-  @ApiProduces('application/octet-stream')
-  async download(
-    @Param('id') id: string,
-    @Res({ passthrough: true }) res: Response,
-  ) {
+  async download(@Param('id') id: string, @Res() res: Response) {
     const piece = await this.documents.findPiece(id);
-    const abs = await this.documents.resolveAbsolutePath(piece.blobPath);
-    res.set({
-      'Content-Disposition': `attachment; filename="${piece.blobPath}"`,
-    });
-    return new StreamableFile(createReadStream(abs));
+    if (!piece.url) {
+      throw new NotFoundException('URL Cloudinary introuvable pour cette pièce');
+    }
+    const upstream = await fetch(piece.url);
+    if (!upstream.ok) {
+      throw new NotFoundException('Fichier introuvable sur Cloudinary');
+    }
+    const buffer = Buffer.from(await upstream.arrayBuffer());
+    const mime =
+      piece.mimeType ||
+      upstream.headers.get('content-type') ||
+      'application/octet-stream';
+    const filename = piece.originalName || `piece-${piece.id}`;
+    res.setHeader('Content-Type', mime);
+    res.setHeader('Content-Length', String(buffer.length));
+    res.setHeader(
+      'Content-Disposition',
+      `inline; filename*=UTF-8''${encodeURIComponent(filename)}`,
+    );
+    return res.send(buffer);
   }
 
   @Get('dossiers/:dossierId')

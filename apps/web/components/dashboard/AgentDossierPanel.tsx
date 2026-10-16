@@ -23,7 +23,14 @@ import {
 } from './DossierDetailView';
 import { PageError, PageLoading, PageStateBlock } from './PageState';
 
-type Piece = { id: string; kind: string; blobPath: string; createdAt: string };
+type Piece = {
+  id: string;
+  kind: string;
+  blobPath: string;
+  url?: string | null;
+  originalName?: string | null;
+  createdAt: string;
+};
 
 type DossierDetail = DossierDetailData & {
   editable: boolean;

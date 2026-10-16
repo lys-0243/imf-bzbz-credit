@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as ImagePicker from 'expo-image-picker';
 import { colors, fonts } from '@imf/assets';
 import {
   ETAT_CIVIL_LABELS,
@@ -40,6 +41,12 @@ import {
   type Commune,
   type ReceptionForm,
 } from '../formDefaults';
+
+type IdDocAsset = {
+  uri: string;
+  name: string;
+  mimeType: string;
+};
 
 type Props = {
   produit: ProduitCreditDto;
@@ -121,6 +128,7 @@ export function RegisterScreen({ produit, onCreated, onCancel }: Props) {
   const [lookupBusy, setLookupBusy] = useState(false);
   const [lookup, setLookup] = useState<BankingLookupResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [idDoc, setIdDoc] = useState<IdDocAsset | null>(null);
   const [result, setResult] = useState<{
     variant: 'success' | 'error';
     title: string;
@@ -185,6 +193,7 @@ export function RegisterScreen({ produit, onCreated, onCancel }: Props) {
       if (!filled(form.postNom)) missing.push('Postnom');
       if (!filled(form.dateNaissance)) missing.push('Date de naissance');
       if (!filled(form.numeroPiece)) missing.push("N° de pièce d'identité");
+      if (!idDoc) missing.push("Scan de la pièce d'identité");
       if (!filled(form.telephone)) missing.push('Téléphone');
       if (!filled(form.adresseDomicile)) missing.push('Adresse du domicile');
       return missingMessage(missing);
@@ -217,6 +226,35 @@ export function RegisterScreen({ produit, onCreated, onCancel }: Props) {
       return `Durée hors bornes (${dureeBornes.min} – ${dureeBornes.max} semaines)`;
     }
     return null;
+  }
+
+  async function pickIdDoc() {
+    setError(null);
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      setError('Autorisez l’accès à la galerie pour joindre la pièce.');
+      return;
+    }
+    const picked = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      quality: 0.85,
+      allowsMultipleSelection: false,
+    });
+    if (picked.canceled || !picked.assets?.[0]) return;
+    const asset = picked.assets[0];
+    const uri = asset.uri;
+    const mimeType = asset.mimeType || 'image/jpeg';
+    const ext =
+      mimeType === 'image/png'
+        ? 'png'
+        : mimeType === 'image/webp'
+          ? 'webp'
+          : 'jpg';
+    setIdDoc({
+      uri,
+      name: asset.fileName || `piece_identite.${ext}`,
+      mimeType,
+    });
   }
 
   async function onLookup() {
@@ -313,11 +351,23 @@ export function RegisterScreen({ produit, onCreated, onCancel }: Props) {
             }
           : {}),
       };
+      if (!idDoc) {
+        throw new Error("Scan de la pièce d'identité requis");
+      }
+      const fd = new FormData();
+      fd.append('produitId', produit.id);
+      fd.append('payload', JSON.stringify(payload));
+      fd.append('kind', 'piece_identite');
+      fd.append('file', {
+        uri: idDoc.uri,
+        name: idDoc.name,
+        type: idDoc.mimeType,
+      } as any);
       const created = await api<{ id: string; reference?: string }>(
         '/dossiers',
         {
           method: 'POST',
-          body: JSON.stringify({ produitId: produit.id, payload }),
+          body: fd,
         },
       );
       setResult({
@@ -550,6 +600,29 @@ export function RegisterScreen({ produit, onCreated, onCancel }: Props) {
               value={form.numeroPiece}
               onChangeText={(v) => setForm({ ...form, numeroPiece: v })}
             />
+            <View style={styles.docBlock}>
+              <Text style={styles.docLabel}>
+                Scan de la pièce d&apos;identité{' '}
+                <Text style={styles.req}>*</Text>
+              </Text>
+              <Pressable
+                style={styles.docBtn}
+                onPress={() => void pickIdDoc()}
+              >
+                <Text style={styles.docBtnText}>
+                  {idDoc ? 'Changer le scan' : 'Joindre une photo / scan'}
+                </Text>
+              </Pressable>
+              {idDoc ? (
+                <Text style={styles.docName} numberOfLines={1}>
+                  {idDoc.name}
+                </Text>
+              ) : (
+                <Text style={styles.docHint}>
+                  Image claire du recto (JPG / PNG), max 10 Mo.
+                </Text>
+              )}
+            </View>
             <SelectField
               label="Genre"
               required
@@ -872,4 +945,38 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   ctaDisabled: { opacity: 0.6 },
+  docBlock: { marginBottom: 14 },
+  docLabel: {
+    fontFamily: fonts.semiBold,
+    fontSize: 13,
+    color: colors.neutral.text,
+    marginBottom: 8,
+  },
+  req: { color: '#b00020' },
+  docBtn: {
+    borderWidth: 1,
+    borderColor: colors.primary.blue,
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    alignItems: 'center',
+    backgroundColor: 'rgba(40, 64, 128, 0.06)',
+  },
+  docBtnText: {
+    fontFamily: fonts.semiBold,
+    fontSize: 14,
+    color: colors.primary.blue,
+  },
+  docName: {
+    marginTop: 8,
+    fontFamily: fonts.regular,
+    fontSize: 12,
+    color: colors.neutral.text,
+  },
+  docHint: {
+    marginTop: 8,
+    fontFamily: fonts.regular,
+    fontSize: 12,
+    color: colors.neutral.textMuted,
+  },
 });

@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -6,11 +7,15 @@ import {
   Patch,
   Post,
   Query,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import {
   ApiBearerAuth,
   ApiBody,
+  ApiConsumes,
   ApiOperation,
   ApiParam,
   ApiProperty,
@@ -19,7 +24,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
-import { IsObject, IsString } from 'class-validator';
+import { IsObject, IsOptional, IsString, ValidateIf } from 'class-validator';
 import { CurrentUser } from '../identity/current-user.decorator';
 import { JwtAuthGuard } from '../identity/jwt-auth.guard';
 import { Roles, RolesGuard } from '../identity/roles.guard';
@@ -57,11 +62,23 @@ class CreateDossierDto {
   produitId!: string;
 
   @ApiProperty({
-    description: 'Données de réception du dossier (identité, prêt, etc.)',
+    description:
+      'Données de réception (objet JSON, ou string JSON en multipart)',
     example: RECEPTION_PAYLOAD_EXAMPLE,
   })
+  @ValidateIf((_, v) => typeof v !== 'string')
   @IsObject()
-  payload!: Record<string, unknown>;
+  @IsOptional()
+  payload!: Record<string, unknown> | string;
+
+  @ApiProperty({
+    required: false,
+    description: 'Kind Cloudinary (multipart), défaut piece_identite',
+    example: 'piece_identite',
+  })
+  @IsOptional()
+  @IsString()
+  kind?: string;
 }
 
 class UpdateDossierDto {
@@ -122,11 +139,16 @@ export class DemandesController {
   }
 
   @Post('dossiers')
+  @UseInterceptors(
+    FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }),
+  )
+  @ApiConsumes('application/json', 'multipart/form-data')
   @ApiOperation({
     summary: 'Créer un dossier',
     description:
-      'Enregistre une demande de crédit (réception). Le dossier passe en ' +
-      'EN_ATTENTE_ATTRIBUTION_AGENT pour le responsable crédit.',
+      'Enregistre une demande de crédit (réception). Multipart recommandé : ' +
+      'produitId + payload (JSON string) + file (scan pièce identité). ' +
+      'Le dossier passe en EN_ATTENTE_ATTRIBUTION_AGENT.',
   })
   @ApiBody({
     type: CreateDossierDto,
@@ -145,8 +167,31 @@ export class DemandesController {
   create(
     @CurrentUser() user: { id: string; role: Role },
     @Body() dto: CreateDossierDto,
+    @UploadedFile()
+    file?: { originalname: string; buffer: Buffer; mimetype?: string },
   ) {
-    return this.demandes.create(user, dto.produitId, dto.payload);
+    let payload: unknown = dto.payload;
+    if (typeof payload === 'string') {
+      try {
+        payload = JSON.parse(payload);
+      } catch {
+        throw new BadRequestException('payload JSON invalide');
+      }
+    }
+    if (!payload || typeof payload !== 'object') {
+      throw new BadRequestException('payload requis');
+    }
+    const files = file?.buffer?.length
+      ? [
+          {
+            kind: (dto.kind || 'piece_identite').trim(),
+            originalname: file.originalname || 'piece_identite',
+            buffer: file.buffer,
+            mimetype: file.mimetype,
+          },
+        ]
+      : [];
+    return this.demandes.create(user, dto.produitId, payload, files);
   }
 
   @Get('dossiers')

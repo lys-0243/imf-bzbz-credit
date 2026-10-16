@@ -12,11 +12,19 @@ import {
 import { ZodError } from 'zod';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { DocumentsService } from '../documents/documents.service';
 
 type AuthUser = {
   id: string;
   role: Role;
   zoneId?: string | null;
+};
+
+type UploadFile = {
+  kind: string;
+  originalname: string;
+  buffer: Buffer;
+  mimetype?: string;
 };
 
 const DOSSIER_INCLUDE = {
@@ -31,6 +39,7 @@ export class DemandesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly documents: DocumentsService,
   ) {}
 
   async listZones() {
@@ -106,7 +115,18 @@ export class DemandesService {
     }
   }
 
-  async create(user: AuthUser, produitId: string, payloadRaw: unknown) {
+  async create(
+    user: AuthUser,
+    produitId: string,
+    payloadRaw: unknown,
+    files: UploadFile[] = [],
+  ) {
+    if (user.role === Role.RECEPTION && !files.length) {
+      throw new BadRequestException(
+        "Scan de la pièce d'identité requis à la création",
+      );
+    }
+
     const produit = await this.resolveProduitActif(produitId);
     const payload = this.validatePayload(payloadRaw, produit);
     const fields = clientFieldsFromPayload(payload);
@@ -169,6 +189,24 @@ export class DemandesService {
       );
       return created;
     });
+
+    for (const f of files) {
+      const piece = await this.documents.savePiece({
+        dossierId: dossier.id,
+        kind: f.kind.trim() || 'piece_identite',
+        originalName: f.originalname || 'upload.bin',
+        buffer: f.buffer,
+        mimeType: f.mimetype,
+      });
+      await this.audit.log({
+        dossierId: dossier.id,
+        actorId: user.id,
+        action: 'PIECE_UPLOADED',
+        entityType: 'DOSSIER',
+        entityId: dossier.id,
+        payload: { kind: piece.kind, pieceId: piece.id, at: 'create' },
+      });
+    }
 
     return this.findOne(user, dossier.id);
   }
