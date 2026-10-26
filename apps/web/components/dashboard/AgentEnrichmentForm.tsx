@@ -65,6 +65,18 @@ const ELIG_FIELDS: Array<{
     key: 'activiteEnregistreeLegalement',
     label: "L'activité est-elle enregistrée légalement?",
   },
+  {
+    key: 'clientListeNoire',
+    label: 'Le client est-il sur la liste noire ?',
+  },
+  {
+    key: 'garantListeNoire',
+    label: 'Le garant est-il sur la liste noire ?',
+  },
+  {
+    key: 'codebiteurListeNoire',
+    label: 'Le codebiteur est-il sur la liste noire ?',
+  },
 ];
 
 function FormSection({

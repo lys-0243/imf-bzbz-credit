@@ -1439,13 +1439,33 @@
   border-radius: 22px;
   padding: 8px 6px;
   box-shadow: 0 8px 20px rgba(20, 30, 60, 0.14);
+  overflow: hidden;
 }
 
 .detailTabsInner {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 2px;
   align-items: center;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  cursor: grab;
+  touch-action: pan-x;
+  user-select: none;
+}
+
+.detailTabsInner::-webkit-scrollbar {
+  display: none;
+}
+
+.detailTabsInnerDragging {
+  cursor: grabbing;
+}
+
+.detailTabsInnerDragging .detailTab {
+  pointer-events: none;
 }
 
 .detailTab {
@@ -1457,7 +1477,7 @@
   font-weight: 500;
   padding: 10px 16px;
   border-radius: 999px;
-  cursor: pointer;
+  cursor: grab;
   white-space: nowrap;
 }
 
@@ -1493,12 +1513,19 @@
   gap: 12px;
 }
 
-/* « Actions à faire » : bouton flottant + tiroir à droite */
-.actionsFab {
+/* Boutons flottants (Historique, Actions à faire, Soumettre) + tiroir à droite */
+.fabStack {
   position: fixed;
   right: 28px;
   bottom: 28px;
   z-index: 70;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.actionsFab {
   display: inline-flex;
   align-items: center;
   gap: 10px;
@@ -1519,6 +1546,14 @@
 .actionsFab:hover {
   background: var(--imf-blue-deep);
   transform: translateY(-1px);
+}
+
+.actionsFabPrimary {
+  background: var(--imf-green);
+}
+
+.actionsFabPrimary:hover {
+  background: #22963f;
 }
 
 .actionsFabBadge {
@@ -1577,6 +1612,10 @@
   to {
     transform: translateX(0);
   }
+}
+
+.detailAsideWide {
+  width: min(760px, 96vw);
 }
 
 .detailAsideHeader {
@@ -2354,7 +2393,7 @@
     border-radius: 0;
   }
 
-  .actionsFab {
+  .fabStack {
     right: 16px;
     bottom: 16px;
   }

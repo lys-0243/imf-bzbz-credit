@@ -11,6 +11,8 @@ import {
 } from 'react';
 import {
   FORMULAIRES,
+  buildDocumentsContexte,
+  conditionsPret,
   normalizeCf2Analyse,
   normalizeParametresImf,
   type Cf2Analyse,
@@ -32,7 +34,13 @@ import { Cf5Fiche } from './Cf5Fiche';
 import { Cf61Fiche } from './Cf61Fiche';
 import { Cf8Fiche } from './Cf8Fiche';
 import { ApproPcaFiche, DecisionComiteFiche } from './ComiteFiches';
-import { DocumentsFiche } from './DocumentsFiche';
+import { docStyles } from '../../documents/DocumentKit';
+import {
+  ContratCaution,
+  ContratGage,
+  ContratPret,
+  LettreOctroi,
+} from '../../documents/Documents';
 import { FormulaireAnalyseView } from './FormulaireAnalyseView';
 import { HistoriqueFiche } from './HistoriqueFiche';
 import { PlanRouteFiche, type PieceRef } from './PlanRouteFiche';
@@ -57,58 +65,60 @@ export type DossierInstruction = {
   nouveauClient: boolean;
 };
 
-export type FicheVue = FormulaireCode | 'FORMULAIRE_ANALYSE' | 'DOCUMENTS';
+type DocumentVue = 'LETTRE' | 'CONTRAT' | 'GAGE' | 'CAUTION';
+export type FicheVue = FormulaireCode | 'FORMULAIRE_ANALYSE' | DocumentVue;
+
+const DOCUMENT_VUES: Record<DocumentVue, string> = {
+  LETTRE: 'lettre',
+  CONTRAT: 'contrat',
+  GAGE: 'gage',
+  CAUTION: 'caution',
+};
 
 /** Préfixe des clés d’onglet des fiches dans DossierDetailView. */
 export const FICHE_TAB_PREFIX = 'fiche:';
-
-const ETATS_APRES_AGENT = [
-  'EN_ATTENTE_VALIDATION_RC',
-  'ANALYSTE',
-  'CONFORMITE',
-  'RETOUR_ANALYSTE',
-  'DIRECTION',
-  'CONSEIL',
-  'A_DECAISSER',
-  'REJETE',
-];
-const ETATS_COMITE = ['DIRECTION', 'CONSEIL', 'A_DECAISSER', 'REJETE'];
 
 const VUE_LABELS: Record<FicheVue, string> = {
   CF3: 'CF3',
   CF4: 'CF4',
   CF5_1_DEMANDEUR: 'CF5.1',
   CF5_1_GARANT: 'CF5.2',
-  PLAN_ROUTE: 'Plan de route',
   CF6_1: 'CF6.1',
-  HISTORIQUE: 'Historique crédit',
-  FORMULAIRE_ANALYSE: 'Formulaire d’analyse',
-  PRE_COMITE: 'Pré-comité',
-  DECISION_COMITE: 'PV comité',
-  APPRO_PCA: 'Mémo PCA',
+  PLAN_ROUTE: 'Plan de route',
   CF8: 'CF8',
-  DOCUMENTS: 'Documents',
+  PRE_COMITE: 'Fiche de visite pré-comité',
+  HISTORIQUE: 'Historique crédit',
+  DECISION_COMITE: 'Décision du comité',
+  APPRO_PCA: 'APPRO PCA',
+  LETTRE: 'Lettre',
+  CONTRAT: 'Contrat',
+  GAGE: 'Gage',
+  CAUTION: 'Caution',
+  FORMULAIRE_ANALYSE: 'Formulaire d’analyse',
 };
 
-/** Feuilles Analyse_AGR affichées en onglets selon le produit et l’étape. */
-export function ficheTabs(opts: {
-  etat: string;
-  agrPack: boolean;
-  hasGarant: boolean;
-}): Array<{ key: string; label: string }> {
-  const apresAgent = ETATS_APRES_AGENT.includes(opts.etat);
-  const comite = ETATS_COMITE.includes(opts.etat);
-  const vues: FicheVue[] = [];
-  if (opts.agrPack) {
-    vues.push('CF3', 'CF4', 'CF5_1_DEMANDEUR');
-    if (opts.hasGarant) vues.push('CF5_1_GARANT');
-    vues.push('PLAN_ROUTE', 'CF6_1', 'FORMULAIRE_ANALYSE', 'HISTORIQUE');
-  }
-  if (apresAgent) vues.push('PRE_COMITE');
-  if (comite) vues.push('DECISION_COMITE');
-  if (['CONSEIL', 'A_DECAISSER', 'REJETE'].includes(opts.etat)) vues.push('APPRO_PCA');
-  if (apresAgent) vues.push('CF8');
-  if (comite) vues.push('DOCUMENTS');
+/**
+ * Feuilles Analyse_AGR en onglets, dans l’ordre du classeur (toujours
+ * visibles ; hors de leur étape elles s’affichent en lecture seule).
+ * Les feuilles d’analyse CF3…CF6.1 ne concernent que le pack AGR.
+ */
+export function ficheTabs(opts: { agrPack: boolean }): Array<{ key: string; label: string }> {
+  const vues: FicheVue[] = [
+    ...(opts.agrPack
+      ? (['CF3', 'CF4', 'CF5_1_DEMANDEUR', 'CF5_1_GARANT', 'CF6_1'] as FicheVue[])
+      : []),
+    'CF8',
+    ...(opts.agrPack ? (['PLAN_ROUTE'] as FicheVue[]) : []),
+    'PRE_COMITE',
+    'HISTORIQUE',
+    'DECISION_COMITE',
+    'APPRO_PCA',
+    'LETTRE',
+    'CONTRAT',
+    'GAGE',
+    'CAUTION',
+    ...(opts.agrPack ? (['FORMULAIRE_ANALYSE'] as FicheVue[]) : []),
+  ];
   return vues.map((v) => ({ key: `${FICHE_TAB_PREFIX}${v}`, label: VUE_LABELS[v] }));
 }
 
@@ -305,11 +315,19 @@ export function FicheTabLabel({ tabKey, label }: { tabKey: string; label: string
   return <>{dirty.has(code) ? `${label} •` : label}</>;
 }
 
-const PRINTABLE: Partial<Record<FicheVue, string>> = {
-  FORMULAIRE_ANALYSE: 'formulaire-analyse',
-  DECISION_COMITE: 'pv-comite',
-  APPRO_PCA: 'memo-pca',
-  CF6_1: 'cf6-1',
+/** Liens d’impression par onglet : [clé de /documents/:id/:doc, libellé]. */
+const PRINTABLE: Partial<Record<FicheVue, Array<[string, string]>>> = {
+  FORMULAIRE_ANALYSE: [['formulaire-analyse', 'Imprimer']],
+  DECISION_COMITE: [
+    ['pv-comite', 'Imprimer le PV'],
+    ['transfert', 'Document de transfert'],
+  ],
+  APPRO_PCA: [['memo-pca', 'Imprimer le mémo']],
+  CF6_1: [['cf6-1', 'Imprimer']],
+  LETTRE: [['lettre', 'Imprimer / PDF']],
+  CONTRAT: [['contrat', 'Imprimer / PDF']],
+  GAGE: [['gage', 'Imprimer / PDF']],
+  CAUTION: [['caution', 'Imprimer / PDF']],
 };
 
 /** Contenu d’un onglet de fiche. */
@@ -359,7 +377,8 @@ export function FicheView({ tabKey }: { tabKey: string }) {
     nouveauClient: data.nouveauClient,
   };
 
-  const code = vue !== 'FORMULAIRE_ANALYSE' && vue !== 'DOCUMENTS' ? vue : null;
+  const docVue = vue in DOCUMENT_VUES ? (vue as DocumentVue) : null;
+  const code = vue !== 'FORMULAIRE_ANALYSE' && !docVue ? (vue as FormulaireCode) : null;
   const editable = Boolean(code && editables.has(code));
   const common = { disabled: !editable || f.busy, ctx, devise };
 
@@ -417,9 +436,28 @@ export function FicheView({ tabKey }: { tabKey: string }) {
     case 'CF8':
       content = <Cf8Fiche {...common} value={forms.CF8} onChange={(v) => f.setForm('CF8', v)} />;
       break;
-    case 'DOCUMENTS':
-      content = <DocumentsFiche ctx={ctx} />;
+    case 'LETTRE':
+    case 'CONTRAT':
+    case 'GAGE':
+    case 'CAUTION': {
+      const doc = buildDocumentsContexte(ctx);
+      const source = conditionsPret(ctx).source;
+      const approuve = source === 'DECISION_COMITE' || source === 'APPRO_PCA';
+      const Doc = { LETTRE: LettreOctroi, CONTRAT: ContratPret, GAGE: ContratGage, CAUTION: ContratCaution }[vue];
+      content = (
+        <>
+          {!approuve ? (
+            <p className={`${styles.badge} ${styles.badgeWarn}`}>
+              Projet : conditions non encore approuvées par le comité (montant et durée provisoires).
+            </p>
+          ) : null}
+          <article className={docStyles.page}>
+            <Doc ctx={ctx} doc={doc} />
+          </article>
+        </>
+      );
       break;
+    }
   }
 
   const printable = PRINTABLE[vue];
@@ -430,17 +468,17 @@ export function FicheView({ tabKey }: { tabKey: string }) {
         <p className={styles.cf2SectionSummary}>
           {code
             ? `Feuille Excel « ${FORMULAIRES[code].feuille} » — ${editable ? 'modifiable' : 'lecture seule'}`
-            : vue === 'DOCUMENTS'
-              ? 'Documents imprimables générés depuis le dossier.'
+            : docVue
+              ? 'Document généré depuis le dossier et les paramètres IMF.'
               : 'Synthèse calculée (lecture seule).'}
-          {printable ? (
-            <>
+          {(printable ?? []).map(([key, label]) => (
+            <span key={key}>
               {' — '}
-              <a href={`/documents/${data.id}/${printable}`} target="_blank" rel="noopener noreferrer">
-                Imprimer
+              <a href={`/documents/${data.id}/${key}`} target="_blank" rel="noopener noreferrer">
+                {label}
               </a>
-            </>
-          ) : null}
+            </span>
+          ))}
         </p>
       </div>
 

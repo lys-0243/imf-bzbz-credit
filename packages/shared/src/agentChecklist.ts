@@ -5,8 +5,7 @@ export type ChecklistStage = 'AGENT' | 'LATER';
 export type ChecklistCategory =
   | 'DOSSIER'
   | 'CLIENT'
-  | 'GARANT'
-  | 'CONTROLES';
+  | 'GARANT';
 export type ChecklistInput = 'upload' | 'check' | 'boolean' | 'text';
 
 export type ChecklistWhen = {
@@ -565,33 +564,6 @@ export const AGENT_CHECKLIST_CATALOG: ChecklistItemDef[] = [
     when: { hasGarant: true },
   },
 
-  // —— CONTRÔLES ——
-  {
-    id: 'liste_noire_client',
-    label: 'Le client est-il sur la liste noire ?',
-    category: 'CONTROLES',
-    stage: 'AGENT',
-    input: 'boolean',
-    required: true,
-  },
-  {
-    id: 'liste_noire_garant',
-    label: 'Le garant est-il sur la liste noire ?',
-    category: 'CONTROLES',
-    stage: 'AGENT',
-    input: 'boolean',
-    required: true,
-    when: { hasGarant: true },
-  },
-  {
-    id: 'liste_noire_codebiteur',
-    label: 'Le codebiteur est-il sur la liste noire ?',
-    category: 'CONTROLES',
-    stage: 'AGENT',
-    input: 'boolean',
-    required: true,
-  },
-
   // —— LATER (catalogue, non exigés à la soumission agent) ——
   {
     id: 'contrat_pret_signe',
@@ -734,5 +706,4 @@ export const CHECKLIST_CATEGORY_LABELS: Record<ChecklistCategory, string> = {
   DOSSIER: 'Dossier',
   CLIENT: 'Documents client',
   GARANT: 'Éléments du garant / caution',
-  CONTROLES: 'Contrôles liste noire',
 };

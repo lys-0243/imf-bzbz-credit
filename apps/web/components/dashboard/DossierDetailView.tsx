@@ -82,6 +82,19 @@ export type PendingAction = {
   label: string;
   reason: string;
   tab?: string;
+  /** Ouvre un volet flottant (clé d’un `DetailDrawer`) au lieu d’un onglet. */
+  drawer?: string;
+};
+
+/** Volet ouvert par un bouton flottant (ex. « Soumettre » côté agent). */
+export type DetailDrawer = {
+  key: string;
+  label: string;
+  title?: string;
+  badge?: number | null;
+  primary?: boolean;
+  wide?: boolean;
+  content: ReactNode;
 };
 
 type TabDef = { key: string; label: string };
@@ -472,6 +485,18 @@ function buildCf1Sections(
         label: "L'activité est-elle enregistrée légalement?",
         value: displayVal(e.activiteEnregistreeLegalement),
       },
+      {
+        label: 'Le client est-il sur la liste noire ?',
+        value: displayVal(e.clientListeNoire),
+      },
+      {
+        label: 'Le garant est-il sur la liste noire ?',
+        value: displayVal(e.garantListeNoire),
+      },
+      {
+        label: 'Le codebiteur est-il sur la liste noire ?',
+        value: displayVal(e.codebiteurListeNoire),
+      },
     ],
     demandeur: demandeurRows,
     business: [
@@ -586,6 +611,41 @@ async function downloadPieceFile(piece: DetailPiece) {
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
+/** Volet latéral droit ouvert par un bouton flottant. */
+function SideDrawer({
+  title,
+  wide = false,
+  onClose,
+  children,
+}: {
+  title: string;
+  wide?: boolean;
+  onClose: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <div className={styles.actionsDrawerRoot} role="dialog" aria-modal="true" aria-label={title}>
+      <button
+        type="button"
+        className={styles.actionsDrawerBackdrop}
+        aria-label="Fermer"
+        onClick={onClose}
+      />
+      <aside className={`${styles.detailAside} ${wide ? styles.detailAsideWide : ''}`}>
+        <div className={styles.detailAsideHeader}>
+          <h2 className={styles.detailAsideTitle}>{title}</h2>
+          <button type="button" className={styles.sheetClose} aria-label="Fermer" onClick={onClose}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+              <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            </svg>
+          </button>
+        </div>
+        {children}
+      </aside>
+    </div>
+  );
+}
+
 export function DossierDetailView({
   data,
   extraTabs,
@@ -601,6 +661,7 @@ export function DossierDetailView({
   onToggleAc,
   tabRequest = null,
   onTabRequestHandled,
+  drawers = [],
 }: {
   data: DossierDetailData;
   backHref?: string;
@@ -618,18 +679,20 @@ export function DossierDetailView({
   onToggleAc?: (itemId: string, checked: boolean) => void | Promise<void>;
   tabRequest?: string | null;
   onTabRequestHandled?: () => void;
+  drawers?: DetailDrawer[];
 }) {
   const [tab, setTab] = useState('historique');
-  const [actionsOpen, setActionsOpen] = useState(false);
+  /** Volet flottant ouvert : 'actions', 'historique' ou la clé d’un `drawers`. */
+  const [openDrawer, setOpenDrawer] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!actionsOpen) return;
+    if (!openDrawer) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setActionsOpen(false);
+      if (e.key === 'Escape') setOpenDrawer(null);
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [actionsOpen]);
+  }, [openDrawer]);
   const [docError, setDocError] = useState<string | null>(null);
   const [downloadBusy, setDownloadBusy] = useState(false);
   const [avisTarget, setAvisTarget] = useState<{
@@ -640,6 +703,13 @@ export function DossierDetailView({
   const [avisBusy, setAvisBusy] = useState(false);
   const replaceInputRef = useRef<HTMLInputElement | null>(null);
   const replaceKindRef = useRef<string | null>(null);
+  const tabsScrollRef = useRef<HTMLDivElement | null>(null);
+  const tabsDragRef = useRef<{
+    pointerId: number;
+    startX: number;
+    scrollLeft: number;
+    moved: boolean;
+  } | null>(null);
   const p = data.payload ?? {};
   const famille: FamilleProduit =
     data.produit?.famille ??
@@ -654,12 +724,7 @@ export function DossierDetailView({
   const pieces = data.pieces ?? [];
   const transitions = data.transitions ?? [];
 
-  const hasGarant = Boolean(
-    (checklistAnswers ?? data.checklistAnswers)?.flags?.hasGarant,
-  );
-
   const baseTabs: TabDef[] = useMemo(() => {
-    const historique: TabDef = { key: 'historique', label: 'Historique' };
     const checklist: TabDef = { key: 'checklist', label: 'Checklist' };
     const cf1: TabDef = { key: 'cf1', label: 'CF1' };
     const cf2: TabDef = { key: 'cf2', label: 'CF2' };
@@ -667,7 +732,7 @@ export function DossierDetailView({
       data.usesAnalyseAgrPack ??
       usesAnalyseAgrPack(data.produit?.code ?? data.type);
     // CF3…CF8, comité et documents (Analyse_AGR.xlsx), un onglet par feuille
-    const fiches: TabDef[] = ficheTabs({ etat: data.etat, agrPack, hasGarant });
+    const fiches: TabDef[] = ficheTabs({ agrPack });
 
     if (famille === 'SALAIRE') {
       const core = agrPack ? [checklist] : [];
@@ -682,7 +747,6 @@ export function DossierDetailView({
           { key: 'identite', label: 'Identité' },
           { key: 'emploi', label: 'Emploi & prêt' },
           { key: 'demande', label: 'Demande' },
-          historique,
         ];
       }
       return [
@@ -691,15 +755,14 @@ export function DossierDetailView({
         ...fiches,
         { key: 'identite', label: 'Identité' },
         { key: 'emploi', label: 'Emploi & prêt' },
-        historique,
       ];
     }
 
     // ACTIVITÉ — CF1 remplace Identité / Éligibilité / Business / Prêt / Demande
     if (!agrPack) {
-      return [...fiches, historique];
+      return [...fiches];
     }
-    return [checklist, cf1, cf2, ...fiches, historique];
+    return [checklist, cf1, cf2, ...fiches];
   }, [
     famille,
     isReception,
@@ -709,8 +772,6 @@ export function DossierDetailView({
     data.usesAnalyseAgrPack,
     data.produit?.code,
     data.type,
-    data.etat,
-    hasGarant,
   ]);
 
   const tabs = useMemo(
@@ -718,7 +779,8 @@ export function DossierDetailView({
     [baseTabs, extraTabs],
   );
 
-  const defaultTab = baseTabs[0]?.key ?? 'historique';
+  // Sans onglet (ex. Dare-Dare en descente), l’historique s’affiche en contenu principal.
+  const defaultTab = tabs[0]?.key ?? 'historique';
 
   useEffect(() => {
     setTab(defaultTab);
@@ -733,8 +795,25 @@ export function DossierDetailView({
   useEffect(() => {
     if (!tabRequest) return;
     setTab(tabRequest);
+    setOpenDrawer(null);
     onTabRequestHandled?.();
   }, [tabRequest, onTabRequestHandled]);
+
+  /** Molette verticale → défilement horizontal des onglets. */
+  useEffect(() => {
+    const el = tabsScrollRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      if (el.scrollWidth <= el.clientWidth) return;
+      const delta =
+        Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+      if (!delta) return;
+      e.preventDefault();
+      el.scrollLeft += delta;
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, []);
 
   const attributionDate = useMemo(() => {
     const affecte = transitions.find((t) => t.toEtat === 'AFFECTE');
@@ -799,6 +878,60 @@ export function DossierDetailView({
   }
 
   const answers = checklistAnswers ?? data.checklistAnswers ?? null;
+
+  const historiqueContent = (
+        <>
+          <FieldsTable
+            rows={[
+              { label: 'Statut', value: etatLabel },
+              { label: 'Date de demande', value: formatDate(data.createdAt) },
+              {
+                label: 'Agent attribué',
+                value: data.agent?.displayName || '—',
+              },
+              {
+                label: 'Date d’attribution',
+                value: formatDate(attributionDate),
+              },
+              {
+                label: 'Dernière mise à jour',
+                value: formatDateTime(data.updatedAt),
+              },
+              {
+                label: 'Montant accordé',
+                value:
+                  data.scoreValue != null ? `Score ${data.scoreValue}` : '—',
+              },
+            ]}
+          />
+          <FieldsTable
+            title="Historique validations"
+            rows={
+              transitions.length === 0
+                ? [{ label: 'Historique', value: 'Aucune transition' }]
+                : transitions.map((t) => ({
+                    label:
+                      DOSSIER_ETAT_LABELS[t.toEtat as DossierEtat] || t.toEtat,
+                    value: [
+                      t.comment || '—',
+                      formatDateTime(t.createdAt),
+                    ].join(' · '),
+                  }))
+            }
+          />
+          {data.visite?.rapportTexte ? (
+            <FieldsTable
+              title="Résumé exécutif agent"
+              rows={[
+                {
+                  label: 'Rapport',
+                  value: data.visite.rapportTexte,
+                },
+              ]}
+            />
+          ) : null}
+        </>
+  );
 
   let tabContent: ReactNode = null;
   switch (tab) {
@@ -984,59 +1117,7 @@ export function DossierDetailView({
       );
       break;
     case 'historique':
-      tabContent = (
-        <>
-          <FieldsTable
-            rows={[
-              { label: 'Statut', value: etatLabel },
-              { label: 'Date de demande', value: formatDate(data.createdAt) },
-              {
-                label: 'Agent attribué',
-                value: data.agent?.displayName || '—',
-              },
-              {
-                label: 'Date d’attribution',
-                value: formatDate(attributionDate),
-              },
-              {
-                label: 'Dernière mise à jour',
-                value: formatDateTime(data.updatedAt),
-              },
-              {
-                label: 'Montant accordé',
-                value:
-                  data.scoreValue != null ? `Score ${data.scoreValue}` : '—',
-              },
-            ]}
-          />
-          <FieldsTable
-            title="Historique validations"
-            rows={
-              transitions.length === 0
-                ? [{ label: 'Historique', value: 'Aucune transition' }]
-                : transitions.map((t) => ({
-                    label:
-                      DOSSIER_ETAT_LABELS[t.toEtat as DossierEtat] || t.toEtat,
-                    value: [
-                      t.comment || '—',
-                      formatDateTime(t.createdAt),
-                    ].join(' · '),
-                  }))
-            }
-          />
-          {data.visite?.rapportTexte ? (
-            <FieldsTable
-              title="Résumé exécutif agent"
-              rows={[
-                {
-                  label: 'Rapport',
-                  value: data.visite.rapportTexte,
-                },
-              ]}
-            />
-          ) : null}
-        </>
-      );
+      tabContent = historiqueContent;
       break;
     case 'identite':
       tabContent = (
@@ -1215,7 +1296,63 @@ export function DossierDetailView({
         </div>
 
         <div className={styles.detailTabs}>
-          <div className={styles.detailTabsInner}>
+          <div
+            ref={tabsScrollRef}
+            className={styles.detailTabsInner}
+            onPointerDown={(e) => {
+              if (e.button !== 0) return;
+              const el = tabsScrollRef.current;
+              if (!el || el.scrollWidth <= el.clientWidth) return;
+              tabsDragRef.current = {
+                pointerId: e.pointerId,
+                startX: e.clientX,
+                scrollLeft: el.scrollLeft,
+                moved: false,
+              };
+            }}
+            onPointerMove={(e) => {
+              const drag = tabsDragRef.current;
+              const el = tabsScrollRef.current;
+              if (!drag || drag.pointerId !== e.pointerId || !el) return;
+              if (!(e.buttons & 1)) return;
+              const dx = e.clientX - drag.startX;
+              if (!drag.moved && Math.abs(dx) > 6) {
+                drag.moved = true;
+                el.setPointerCapture(e.pointerId);
+                el.classList.add(styles.detailTabsInnerDragging);
+              }
+              if (!drag.moved) return;
+              el.scrollLeft = drag.scrollLeft - dx;
+            }}
+            onPointerUp={(e) => {
+              const drag = tabsDragRef.current;
+              const el = tabsScrollRef.current;
+              if (!drag || drag.pointerId !== e.pointerId) return;
+              if (drag.moved && el?.hasPointerCapture(e.pointerId)) {
+                el.releasePointerCapture(e.pointerId);
+              }
+              el?.classList.remove(styles.detailTabsInnerDragging);
+              // Conserve `moved` jusqu’au click capture, puis reset.
+              window.setTimeout(() => {
+                if (tabsDragRef.current === drag) tabsDragRef.current = null;
+              }, 0);
+            }}
+            onPointerCancel={(e) => {
+              const el = tabsScrollRef.current;
+              if (el?.hasPointerCapture(e.pointerId)) {
+                el.releasePointerCapture(e.pointerId);
+              }
+              el?.classList.remove(styles.detailTabsInnerDragging);
+              tabsDragRef.current = null;
+            }}
+            onClickCapture={(e) => {
+              if (tabsDragRef.current?.moved) {
+                e.preventDefault();
+                e.stopPropagation();
+                tabsDragRef.current = null;
+              }
+            }}
+          >
             {tabs.map((t) => {
               const active = tab === t.key;
               return (
@@ -1243,45 +1380,49 @@ export function DossierDetailView({
         <div className={styles.detailScroll}>{tabContent}</div>
       </div>
 
-      <button
-        type="button"
-        className={styles.actionsFab}
-        aria-haspopup="dialog"
-        aria-expanded={actionsOpen}
-        onClick={() => setActionsOpen(true)}
-      >
-        Actions à faire
-        <span
-          className={`${styles.actionsFabBadge} ${
-            pendingActions.length ? styles.actionsFabBadgeWarn : ''
-          }`}
+      <div className={styles.fabStack}>
+        <button
+          type="button"
+          className={styles.actionsFab}
+          aria-haspopup="dialog"
+          aria-expanded={openDrawer === 'historique'}
+          onClick={() => setOpenDrawer('historique')}
         >
-          {pendingActions.length}
-        </span>
-      </button>
-
-      {actionsOpen ? (
-        <div className={styles.actionsDrawerRoot} role="dialog" aria-modal="true" aria-label="Actions à faire">
+          Historique
+        </button>
+        <button
+          type="button"
+          className={styles.actionsFab}
+          aria-haspopup="dialog"
+          aria-expanded={openDrawer === 'actions'}
+          onClick={() => setOpenDrawer('actions')}
+        >
+          Actions à faire
+          <span
+            className={`${styles.actionsFabBadge} ${
+              pendingActions.length ? styles.actionsFabBadgeWarn : ''
+            }`}
+          >
+            {pendingActions.length}
+          </span>
+        </button>
+        {drawers.map((d) => (
           <button
+            key={d.key}
             type="button"
-            className={styles.actionsDrawerBackdrop}
-            aria-label="Fermer"
-            onClick={() => setActionsOpen(false)}
-          />
-        <aside className={styles.detailAside}>
-          <div className={styles.detailAsideHeader}>
-            <h2 className={styles.detailAsideTitle}>Actions à faire</h2>
-            <button
-              type="button"
-              className={styles.sheetClose}
-              aria-label="Fermer"
-              onClick={() => setActionsOpen(false)}
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
-                <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-              </svg>
-            </button>
-          </div>
+            className={`${styles.actionsFab} ${d.primary ? styles.actionsFabPrimary : ''}`}
+            aria-haspopup="dialog"
+            aria-expanded={openDrawer === d.key}
+            onClick={() => setOpenDrawer(d.key)}
+          >
+            {d.label}
+            {d.badge != null ? <span className={styles.actionsFabBadge}>{d.badge}</span> : null}
+          </button>
+        ))}
+      </div>
+
+      {openDrawer === 'actions' ? (
+        <SideDrawer title="Actions à faire" onClose={() => setOpenDrawer(null)}>
           {pendingActions.length === 0 ? (
             <p className={styles.detailAsideEmpty}>
               Aucune action en attente pour ce dossier.
@@ -1295,7 +1436,7 @@ export function DossierDetailView({
                     className={styles.detailAsideItem}
                     onClick={() => {
                       if (action.tab) setTab(action.tab);
-                      setActionsOpen(false);
+                      setOpenDrawer(action.drawer ?? null);
                     }}
                   >
                     <span className={styles.detailAsideItemLabel}>
@@ -1309,9 +1450,27 @@ export function DossierDetailView({
               ))}
             </ul>
           )}
-        </aside>
-        </div>
+        </SideDrawer>
       ) : null}
+
+      {openDrawer === 'historique' ? (
+        <SideDrawer title="Historique" wide onClose={() => setOpenDrawer(null)}>
+          {historiqueContent}
+        </SideDrawer>
+      ) : null}
+
+      {drawers
+        .filter((d) => d.key === openDrawer)
+        .map((d) => (
+          <SideDrawer
+            key={d.key}
+            title={d.title ?? d.label}
+            wide={d.wide}
+            onClose={() => setOpenDrawer(null)}
+          >
+            {d.content}
+          </SideDrawer>
+        ))}
 
       {avisTarget ? (
         <div className={styles.avisModalRoot} role="presentation">

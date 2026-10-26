@@ -20,12 +20,12 @@ export const FORMULAIRE_CODES = [
   'CF5_1_DEMANDEUR',
   'CF5_1_GARANT',
   'CF6_1',
+  'CF8',
   'PLAN_ROUTE',
   'HISTORIQUE',
   'PRE_COMITE',
   'DECISION_COMITE',
   'APPRO_PCA',
-  'CF8',
 ] as const;
 export type FormulaireCode = (typeof FORMULAIRE_CODES)[number];
 
