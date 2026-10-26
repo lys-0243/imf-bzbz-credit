@@ -3277,3 +3277,95 @@
   font-size: 0.9rem;
   background: #fff;
 }
+
+/* Plan de route : deux colonnes (activité, domicile), dépôt de la photo, carte Google */
+.planRouteGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.planRouteCol {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid #ececec;
+  border-radius: 16px;
+  background: #fff;
+}
+
+.planRouteField {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.planRouteLabel {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--imf-muted);
+}
+
+.planRouteDropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 18px 14px;
+  border: 2px dashed #c9d2e6;
+  border-radius: 14px;
+  background: #f7f9fd;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.planRouteDropzone:hover,
+.planRouteDropzone:focus-visible {
+  border-color: var(--imf-blue);
+  outline: none;
+}
+
+.planRouteDropzoneActive {
+  border-color: var(--imf-blue);
+  background: #eef2fb;
+}
+
+.planRouteDropzoneText {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--imf-blue);
+}
+
+@media (max-width: 900px) {
+  .planRouteGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.planRoutePhotoBtn {
+  display: block;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: zoom-in;
+}
+
+.planRoutePhoto {
+  display: block;
+  max-width: 100%;
+  max-height: 360px;
+  border-radius: 12px;
+  border: 1px solid #e8e8e8;
+}
+
+.planRouteMap {
+  display: block;
+  width: 100%;
+  height: 280px;
+  border: 0;
+  border-radius: 12px;
+}

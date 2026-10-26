@@ -28,6 +28,9 @@ import { DocumentsService } from './documents.service';
   Role.AGENT,
   Role.RESPONSABLE_CREDIT,
   Role.ANALYSTE,
+  Role.CONFORMITE,
+  Role.DG,
+  Role.CA,
   Role.ADMIN,
 )
 export class DocumentsController {

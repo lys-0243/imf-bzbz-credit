@@ -11,6 +11,7 @@ import {
 } from 'react';
 import {
   FORMULAIRES,
+  PLAN_ROUTE_PIECE_KIND,
   buildDocumentsContexte,
   conditionsPret,
   normalizeCf2Analyse,
@@ -43,7 +44,7 @@ import {
 } from '../../documents/Documents';
 import { FormulaireAnalyseView } from './FormulaireAnalyseView';
 import { HistoriqueFiche } from './HistoriqueFiche';
-import { PlanRouteFiche, type PieceRef } from './PlanRouteFiche';
+import { PlanRouteFiche, fetchPieceObjectUrl, type PieceRef } from './PlanRouteFiche';
 import { PreComiteFiche } from './PreComiteFiche';
 
 /** Réponse de GET /instruction/dossiers/:id (champs utilisés ici). */
@@ -123,12 +124,7 @@ export function ficheTabs(opts: { agrPack: boolean }): Array<{ key: string; labe
 }
 
 async function openPiece(piece: PieceRef) {
-  const token = getToken();
-  const res = await fetch(`${getApiUrl()}/documents/pieces/${piece.id}`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-  });
-  if (!res.ok) throw new ApiError(res.status, await res.text());
-  const url = URL.createObjectURL(await res.blob());
+  const url = await fetchPieceObjectUrl(piece);
   window.open(url, '_blank', 'noopener');
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
@@ -147,7 +143,7 @@ type FichesState = {
   setForm: <K extends FormulaireCode>(code: K, next: FormulairesData[K]) => void;
   save: (code: FormulaireCode) => Promise<void>;
   applyMbmp: (mbmp: number) => Promise<void>;
-  uploadCroquis: (file: File) => Promise<void>;
+  uploadPlan: (kind: string, file: File) => Promise<void>;
 };
 
 const FichesContext = createContext<FichesState | null>(null);
@@ -261,12 +257,12 @@ export function FichesProvider({ dossierId, children }: { dossierId: string; chi
     }
   }
 
-  async function uploadCroquis(file: File) {
+  async function uploadPlan(kind: string, file: File) {
     setBusy(true);
     try {
       const fd = new FormData();
       fd.append('file', file);
-      fd.append('kind', 'plan_de_route');
+      fd.append('kind', kind);
       const token = getToken();
       const res = await fetch(`${getApiUrl()}/agent/dossiers/${dossierId}/pieces`, {
         method: 'POST',
@@ -276,7 +272,7 @@ export function FichesProvider({ dossierId, children }: { dossierId: string; chi
       if (!res.ok) throw new ApiError(res.status, await res.json().catch(() => null));
       const d = await apiFetch<DossierInstruction>(`/instruction/dossiers/${dossierId}`);
       setData(d);
-      toast.success('Croquis téléversé.');
+      toast.success('Photo du plan téléversée.');
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : 'Échec du téléversement');
     } finally {
@@ -300,7 +296,7 @@ export function FichesProvider({ dossierId, children }: { dossierId: string; chi
         setForm,
         save,
         applyMbmp,
-        uploadCroquis,
+        uploadPlan,
       }}
     >
       {children}
@@ -409,8 +405,11 @@ export function FicheView({ tabKey }: { tabKey: string }) {
           {...common}
           value={forms.PLAN_ROUTE}
           onChange={(v) => f.setForm('PLAN_ROUTE', v)}
-          croquis={data.pieces.filter((p) => p.kind === 'plan_de_route')}
-          onUploadCroquis={user?.role === 'AGENT' && editable ? f.uploadCroquis : undefined}
+          photos={{
+            activite: data.pieces.findLast((p) => p.kind === PLAN_ROUTE_PIECE_KIND.activite),
+            domicile: data.pieces.findLast((p) => p.kind === PLAN_ROUTE_PIECE_KIND.domicile),
+          }}
+          onUploadPlan={user?.role === 'AGENT' && editable ? f.uploadPlan : undefined}
           onOpenPiece={(p) => void openPiece(p).catch(() => toast.error('Ouverture impossible'))}
         />
       );
