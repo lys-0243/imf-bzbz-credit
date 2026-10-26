@@ -730,6 +730,49 @@ export function computeMensualiteAnnuite(
   return (montant * factor * tauxPeriodique) / den;
 }
 
+/**
+ * Montant maximal finançable : principal dont la mensualité (annuité)
+ * vaut `dsrMax` × capacité de paiement — norme DSR CF 2.4 (≤ 40 %).
+ * Inverse de `computeMensualiteAnnuite`.
+ */
+export function montantMaxConseille(
+  capacitePaiement: number,
+  echeanceMois: number,
+  tauxPeriodique: number,
+  dsrMax = 0.4,
+): number | null {
+  if (capacitePaiement <= 0 || echeanceMois <= 0 || tauxPeriodique <= 0) {
+    return null;
+  }
+  const mensualiteMax = capacitePaiement * dsrMax;
+  const factor = Math.pow(1 + tauxPeriodique, echeanceMois);
+  return (mensualiteMax * (factor - 1)) / (tauxPeriodique * factor);
+}
+
+/**
+ * Grille de taux mensuels par tranche (Excel CF 2.5 S26:T30).
+ * Bornes hautes incluses — à confirmer avec l’IMF (500, 1000… sont
+ * ambiguës dans l’Excel). Hors grille : null.
+ */
+export const TAUX_PAR_TRANCHE: ReadonlyArray<{
+  min: number;
+  max: number;
+  tauxMensuel: number;
+}> = [
+  { min: 50, max: 500, tauxMensuel: 0.06 },
+  { min: 500, max: 1000, tauxMensuel: 0.055 },
+  { min: 1000, max: 5000, tauxMensuel: 0.05 },
+  { min: 5000, max: 10000, tauxMensuel: 0.045 },
+  { min: 10000, max: 30000, tauxMensuel: 0.035 },
+];
+
+export function tauxParTranche(montant: number): number | null {
+  const tranche = TAUX_PAR_TRANCHE.find(
+    (t) => montant >= t.min && montant <= t.max,
+  );
+  return tranche?.tauxMensuel ?? null;
+}
+
 /** Mensualité calculée depuis montant, échéance et taux (sinon champ stocké). */
 export function resolveMensualite(cf25: Cf25Data): number {
   const taux = resolveTauxPeriodique(cf25.tauxPeriodique);
@@ -853,16 +896,32 @@ function normalizeDepensesAutres(
   return legacy;
 }
 
+function pad2(n: number): string {
+  return String(n).padStart(2, '0');
+}
+
+/** Valeur pour <input type="datetime-local"> (fuseau local). */
+export function toDatetimeLocalValue(raw: string): string {
+  const t = (raw ?? '').trim();
+  if (!t) return '';
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(t)) return t.slice(0, 16);
+  const parsed = Date.parse(t);
+  if (!Number.isNaN(parsed)) {
+    const d = new Date(parsed);
+    return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+  }
+  // Ancien format fr-FR : 16/10/2026 14:30 ou 16/10/2026, 14:30
+  const m = t.match(
+    /^(\d{2})\/(\d{2})\/(\d{4})(?:[T,\s]+| à | a )?(\d{1,2})[h:](\d{2})/i,
+  );
+  if (m) {
+    return `${m[3]}-${m[2]}-${m[1]}T${pad2(Number(m[4]))}:${m[5]}`;
+  }
+  return '';
+}
+
 function formatVisiteLabel(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '';
-  return d.toLocaleString('fr-FR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  return toDatetimeLocalValue(iso);
 }
 
 function num(s: string): number {
@@ -1356,11 +1415,12 @@ function ratioVal(nume: number, deno: number): number | null {
 }
 
 /**
- * Ratios CF2.4 — formules Excel (liens CF 2.5) :
- * DSR = mensualité / capacité ; garantie = gage / prêt ;
- * liquidité = actif / (3 × mensualité) ; levier = prêt / actif ;
- * rotation = CMV / actif ; endettement = prêt / capitaux propres.
- * Seule la Σ gages reste saisie (source Excel CF5.1 absente).
+ * Ratios CF2.4 — définitions des libellés CF 2.4 / feuille « Histotique » :
+ * DSR = mensualité / capacité ; garantie = gages / (mensualité × échéance) ;
+ * liquidité = actif / (dettes CT + 3 × mensualité) ; levier = prêt / actif ;
+ * rotation = CMV / actif ; endettement = (dettes + prêt) / capitaux propres.
+ * L’Excel calcule garantie, liquidité et endettement sans intérêts ni dettes
+ * existantes : corrigé ici. Seule la Σ gages reste saisie (CF5.1 absente).
  */
 export function computeCf24Ratios(analyse: Cf2Analyse): Cf2RatioRow[] {
   const cr = computeCompteResultat(analyse);
@@ -1373,23 +1433,29 @@ export function computeCf24Ratios(analyse: Cf2Analyse): Cf2RatioRow[] {
   const capacite = cr.capacitePaiement;
   // Excel I8 = CF5.1!W28 (non branché) — saisie manuelle si besoin
   const garanties = num(f24.valeurGaranties);
-  // Excel I9 / I14 / I19 = CF2.5!D38
+  // Excel I14 = CF2.5!D38
   const pret = num(f25.montantPropose);
+  // Excel CF2.5!P39 = L38*H38 (principal + intérêts)
+  const pretAvecInterets = acompte * num(f25.echeanceMois);
   // Excel I11 / I15 / I18 = CF2.5!E16
   const actif = bilan.actifsCirculants;
-  // Excel I12 = CF2.5!L38*3
-  const troisMensualites = 3 * acompte;
+  // Excel I12 = CF2.5!L38*3, + dettes CT (CF2.5!D29) selon le libellé
+  const dettesCtEtTroisMensualites = bilan.dettesCourtTerme + 3 * acompte;
   // Excel I17 = CF2.5!F8
   const cmv = cr.cmv;
+  // Excel I19 = CF2.5!D38, + dettes (CF2.5!E28) selon le libellé
+  const dettesEtPret = bilan.totalDettes + pret;
   // Excel I20 = CF2.5!E31
   const capital = bilan.capitalPropre;
 
-  const dsr = ratioVal(acompte, capacite);
-  const garantie = ratioVal(garanties, pret);
-  const liquidite = ratioVal(actif, troisMensualites);
-  const levier = ratioVal(pret, actif);
+  // Sans mensualité ni prêt proposés, ces ratios ne sont pas calculables
+  // (et non « conformes » à 0).
+  const dsr = acompte > 0 ? ratioVal(acompte, capacite) : null;
+  const garantie = ratioVal(garanties, pretAvecInterets);
+  const liquidite = ratioVal(actif, dettesCtEtTroisMensualites);
+  const levier = pret > 0 ? ratioVal(pret, actif) : null;
   const rotation = ratioVal(cmv, actif);
-  const endettement = ratioVal(pret, capital);
+  const endettement = pret > 0 ? ratioVal(dettesEtPret, capital) : null;
 
   return [
     {
@@ -1412,7 +1478,7 @@ export function computeCf24Ratios(analyse: Cf2Analyse): Cf2RatioRow[] {
       numerateurLabel: 'Σ des valeurs des biens mis en gage',
       denominateurLabel: 'Prêt IMF Bisou Bisou (Principal + intérêt)',
       numerateur: garanties,
-      denominateur: pret,
+      denominateur: pretAvecInterets,
       value: garantie,
       asPercent: true,
       norme: '≥ 120%',
@@ -1425,7 +1491,7 @@ export function computeCf24Ratios(analyse: Cf2Analyse): Cf2RatioRow[] {
       numerateurLabel: 'Actif Circulant',
       denominateurLabel: 'Dettes à Court terme + 3 prochaines mensualités',
       numerateur: actif,
-      denominateur: troisMensualites,
+      denominateur: dettesCtEtTroisMensualites,
       value: liquidite,
       asPercent: false,
       norme: '≥ 1',
@@ -1463,7 +1529,7 @@ export function computeCf24Ratios(analyse: Cf2Analyse): Cf2RatioRow[] {
       label: "Ratio d'endettement",
       numerateurLabel: 'Dettes (y compris le prêt IMF BS-BS)',
       denominateurLabel: 'Capital Propres',
-      numerateur: pret,
+      numerateur: dettesEtPret,
       denominateur: capital,
       value: endettement,
       asPercent: false,

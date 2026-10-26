@@ -1,7 +1,9 @@
 import {
   BadRequestException,
   ForbiddenException,
+  Inject,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { DossierEtat, Prisma, Role } from '@prisma/client';
@@ -29,6 +31,9 @@ import { ZodError } from 'zod';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { DocumentsService } from '../documents/documents.service';
+import { LLM_PROVIDER, type LlmProvider } from '../llm/llm.provider';
+import { redactPii } from '../llm/redact-pii';
+import { ScoringService } from '../scoring/scoring.service';
 import { WorkflowService } from '../workflow/workflow.service';
 
 type AuthUser = {
@@ -45,11 +50,15 @@ const AGENT_ACTIVE_ETATS: DossierEtat[] = [
 
 @Injectable()
 export class TerrainService {
+  private readonly logger = new Logger(TerrainService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly documents: DocumentsService,
     private readonly workflow: WorkflowService,
     private readonly audit: AuditService,
+    private readonly scoring: ScoringService,
+    @Inject(LLM_PROVIDER) private readonly llm: LlmProvider,
   ) {}
 
   private assertAgentOwns(
@@ -330,40 +339,18 @@ export class TerrainService {
   }
 
   private async buildAiResume(context: Record<string, unknown>): Promise<string> {
-    const apiKey = process.env.OPENAI_API_KEY?.trim();
     const fallback = this.buildFallbackResume(context);
-
-    if (!apiKey) return fallback;
+    if (!this.llm.isConfigured()) return fallback;
 
     try {
-      const res = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
-          temperature: 0.3,
-          messages: [
-            {
-              role: 'system',
-              content:
-                "Tu es un agent de crédit IMF en RDC. Rédige un résumé exécutif de descente terrain en français, professionnel, structuré (contexte client, activité/emploi, demande de crédit, points d'attention, recommandation). 180 à 280 mots. Pas de markdown.",
-            },
-            {
-              role: 'user',
-              content: `Analyse ce dossier et génère le résumé exécutif à valider par l'agent :\n${JSON.stringify(context, null, 2)}`,
-            },
-          ],
-        }),
+      const res = await this.llm.complete({
+        temperature: 0.3,
+        system:
+          "Tu es un agent de crédit IMF en RDC. Rédige un résumé exécutif de descente terrain en français, professionnel, structuré (contexte client, activité/emploi, demande de crédit, points d'attention, recommandation). 180 à 280 mots. Pas de markdown. Les données nominatives sont retirées : désigne le demandeur par « le client ».",
+        user: `Analyse ce dossier et génère le résumé exécutif à valider par l'agent :
+${JSON.stringify(redactPii(context), null, 2)}`,
       });
-      if (!res.ok) return fallback;
-      const body = (await res.json()) as {
-        choices?: Array<{ message?: { content?: string } }>;
-      };
-      const text = body.choices?.[0]?.message?.content?.trim();
-      return text || fallback;
+      return res.text;
     } catch {
       return fallback;
     }
@@ -663,7 +650,7 @@ export class TerrainService {
         {
           from: DossierEtat.RAPPORT_AGENT,
           to: DossierEtat.SCORING,
-          comment: 'Scoring automatique (stub)',
+          comment: 'Pronostic automatique (faits CF2 + avis IA)',
         },
         {
           from: DossierEtat.SCORING,
@@ -686,11 +673,6 @@ export class TerrainService {
         data: {
           etat: DossierEtat.EN_ATTENTE_VALIDATION_RC,
           agentValideAt: now,
-          scoreValue: 50,
-          scoreReasons: {
-            stub: true,
-            message: 'Score provisoire — moteur règles à brancher',
-          } as Prisma.InputJsonValue,
         },
       });
       for (const step of chain) {
@@ -717,6 +699,13 @@ export class TerrainService {
           },
         },
         tx,
+      );
+    });
+
+    // Hors transaction et sans bloquer l'agent : le RC peut régénérer l'avis.
+    void this.scoring.generate(id, user.id).catch((e) => {
+      this.logger.error(
+        `Pronostic non généré pour ${id}: ${e instanceof Error ? e.message : e}`,
       );
     });
 

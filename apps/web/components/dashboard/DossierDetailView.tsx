@@ -347,22 +347,26 @@ function buildCf1Sections(
     { label: "N° de la pièce d'identité", value: displayVal(numeroPiece) },
     { label: 'Sexe (M / F)', value: displayVal(sexe) },
     { label: 'État-civil', value: etatCivilLabel(etatCivil) },
-    {
-      label: 'Prénom (conjoint(e))',
-      value: displayVal(conjointPrenom),
-    },
-    {
-      label: 'Post-nom (conjoint(e))',
-      value: displayVal(conjointPostNom),
-    },
-    {
-      label: 'Nom de famille (conjoint(e))',
-      value: displayVal(conjointNom),
-    },
-    {
-      label: 'Date de naissance (conjoint(e))',
-      value: displayVal(conjointDateNaissance),
-    },
+    ...(etatCivil === 'Marie'
+      ? [
+          {
+            label: 'Prénom (conjoint(e))',
+            value: displayVal(conjointPrenom),
+          },
+          {
+            label: 'Nom de famille (conjoint(e))',
+            value: displayVal(conjointNom),
+          },
+          {
+            label: 'Post-nom (conjoint(e))',
+            value: displayVal(conjointPostNom),
+          },
+          {
+            label: 'Date de naissance (conjoint(e))',
+            value: displayVal(conjointDateNaissance),
+          },
+        ]
+      : []),
     { label: 'Adresse du domicile', value: displayVal(adresseDomicile) },
     { label: 'Téléphone(s)', value: displayVal(telephone) },
     { label: 'E-mail', value: displayVal(email) },

@@ -15,6 +15,7 @@ import {
   sumStock,
   sumVentesFromAchats,
   sumVentesHebdo,
+  toDatetimeLocalValue,
   ventesMensuellesFromAchat,
   ventesMensuellesFromHebdo,
   ventesMensuellesFromRecents,
@@ -268,8 +269,9 @@ export function Cf22Section({
         </FormRow>
         <FormRow label="Date / heure de la visite">
           <input
+            type="datetime-local"
             className={styles.cf1FormControl}
-            value={cf22.business.dateHeureVisite}
+            value={toDatetimeLocalValue(cf22.business.dateHeureVisite)}
             disabled={disabled}
             onChange={(e) =>
               patchBusiness({ dateHeureVisite: e.target.value })

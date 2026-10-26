@@ -209,8 +209,12 @@ export function AgentEnrichmentForm({
       (payload as Record<string, any> | null | undefined)?.pret?.devise ||
       'USD',
   );
-  const marie =
-    etatCivil === 'Marie' || activite.demandeur?.etatCivil === 'Marie';
+  /** CF1 demandeur prime sur l’état civil d’inscription. */
+  const etatCivilCourant =
+    (famille === 'ACTIVITE' ? activite.demandeur?.etatCivil : undefined) ||
+    etatCivil ||
+    '';
+  const marie = etatCivilCourant === 'Marie';
 
   return (
     <div className={styles.assignPanel}>
@@ -350,6 +354,18 @@ export function AgentEnrichmentForm({
                 }
               />
             </FormRow>
+            <FormRow label="Nom de famille">
+              <input
+                className={styles.cf1FormControl}
+                value={activite.demandeur.nom}
+                disabled={disabled}
+                onChange={(e) =>
+                  patchActivite({
+                    demandeur: { ...activite.demandeur, nom: e.target.value },
+                  })
+                }
+              />
+            </FormRow>
             <FormRow label="Post-nom">
               <input
                 className={styles.cf1FormControl}
@@ -365,18 +381,7 @@ export function AgentEnrichmentForm({
                 }
               />
             </FormRow>
-            <FormRow label="Nom de famille">
-              <input
-                className={styles.cf1FormControl}
-                value={activite.demandeur.nom}
-                disabled={disabled}
-                onChange={(e) =>
-                  patchActivite({
-                    demandeur: { ...activite.demandeur, nom: e.target.value },
-                  })
-                }
-              />
-            </FormRow>
+            
             <FormRow label="Date de naissance">
               <input
                 type="date"
@@ -454,18 +459,31 @@ export function AgentEnrichmentForm({
                 className={styles.cf1FormControl}
                 value={activite.demandeur.etatCivil}
                 disabled={disabled}
-                onChange={(e) =>
+                onChange={(e) => {
+                  const next = e.target.value;
+                  const keepConjoint = next === 'Marie';
                   patchActivite({
                     demandeur: {
                       ...activite.demandeur,
-                      etatCivil: e.target.value,
+                      etatCivil: next,
+                      ...(keepConjoint
+                        ? {}
+                        : {
+                            conjointPrenom: '',
+                            conjointPostNom: '',
+                            conjointNom: '',
+                            conjointDateNaissance: '',
+                          }),
                     },
-                    conjointNom:
-                      e.target.value === 'Marie'
-                        ? activite.demandeur.conjointNom || activite.conjointNom
-                        : activite.conjointNom,
-                  })
-                }
+                    conjointNom: keepConjoint
+                      ? activite.demandeur.conjointNom || activite.conjointNom
+                      : '',
+                    conjointDateNaissance: keepConjoint
+                      ? activite.demandeur.conjointDateNaissance ||
+                        activite.conjointDateNaissance
+                      : '',
+                  });
+                }}
               >
                 <option value="">—</option>
                 {ETATS_CIVILS.map((c) => (
@@ -534,21 +552,6 @@ export function AgentEnrichmentForm({
                     }
                   />
                 </FormRow>
-                <FormRow label="Post-nom (conjoint(e))">
-                  <input
-                    className={styles.cf1FormControl}
-                    value={activite.demandeur.conjointPostNom || ''}
-                    disabled={disabled}
-                    onChange={(e) =>
-                      patchActivite({
-                        demandeur: {
-                          ...activite.demandeur,
-                          conjointPostNom: e.target.value,
-                        },
-                      })
-                    }
-                  />
-                </FormRow>
                 <FormRow label="Nom de famille (conjoint(e))">
                   <input
                     className={styles.cf1FormControl}
@@ -569,6 +572,22 @@ export function AgentEnrichmentForm({
                     }
                   />
                 </FormRow>
+                <FormRow label="Post-nom (conjoint(e))">
+                  <input
+                    className={styles.cf1FormControl}
+                    value={activite.demandeur.conjointPostNom || ''}
+                    disabled={disabled}
+                    onChange={(e) =>
+                      patchActivite({
+                        demandeur: {
+                          ...activite.demandeur,
+                          conjointPostNom: e.target.value,
+                        },
+                      })
+                    }
+                  />
+                </FormRow>
+                
                 <FormRow label="Date de naissance (conjoint(e))">
                   <input
                     type="date"

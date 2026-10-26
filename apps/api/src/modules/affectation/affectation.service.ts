@@ -7,9 +7,13 @@ import {
 import { DossierEtat, Role } from '@prisma/client';
 import {
   DOSSIER_ETAT_LABELS,
+  PRONOSTIC_RECOMMANDATION_LABELS,
+  decisionDiverge,
   montantSouhaiteFromPayload,
   normalizeCf2Analyse,
   usesAnalyseAgrPack,
+  type PronosticAvis,
+  type PronosticRecommandation,
 } from '@imf/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
@@ -379,7 +383,16 @@ export class AffectationService {
     return { id: dossierId, etat: DossierEtat.RETOUR_AGENT };
   }
 
-  async soumettre(user: AuthUser, dossierId: string) {
+  async soumettre(
+    user: AuthUser,
+    dossierId: string,
+    decision: {
+      recommandation: PronosticRecommandation;
+      montantRetenu?: number;
+      dureeRetenueMois?: number;
+      commentaire?: string;
+    },
+  ) {
     this.assertRc(user);
     const dossier = await this.prisma.dossier.findUnique({
       where: { id: dossierId },
@@ -397,20 +410,72 @@ export class AffectationService {
       user.role,
     );
 
+    const pronostic = await this.prisma.pronostic.findFirst({
+      where: { dossierId },
+      orderBy: { createdAt: 'desc' },
+    });
+    const montantRetenu = decision.montantRetenu ?? null;
+    const commentaire = decision.commentaire?.trim() || null;
+    const accordAvecIa = pronostic
+      ? !decisionDiverge(pronostic.avis as unknown as PronosticAvis, {
+          recommandation: decision.recommandation,
+          montantRetenu,
+        })
+      : null;
+    if (accordAvecIa === false && !commentaire) {
+      throw new BadRequestException(
+        'Commentaire obligatoire : la décision s’écarte de l’avis IA',
+      );
+    }
+
     await this.prisma.$transaction(async (tx) => {
       await tx.dossier.update({
         where: { id: dossierId },
         data: { etat: DossierEtat.CONFORMITE },
+      });
+      const decisionHumaine = await tx.decisionHumaine.create({
+        data: {
+          dossierId,
+          pronosticId: pronostic?.id ?? null,
+          actorId: user.id,
+          role: user.role,
+          recommandation: decision.recommandation,
+          montantRetenu,
+          dureeRetenueMois: decision.dureeRetenueMois ?? null,
+          accordAvecIa,
+          commentaire,
+        },
       });
       await tx.transition.create({
         data: {
           dossierId,
           fromEtat: DossierEtat.EN_ATTENTE_VALIDATION_RC,
           toEtat: DossierEtat.CONFORMITE,
-          comment: 'Validé par le responsable crédit — transmis à la conformité',
+          comment: [
+            `Validé par le responsable crédit (${PRONOSTIC_RECOMMANDATION_LABELS[decision.recommandation]}) — transmis à la conformité`,
+            commentaire,
+          ]
+            .filter(Boolean)
+            .join(' — '),
           actorId: user.id,
         },
       });
+      await this.audit.log(
+        {
+          dossierId,
+          actorId: user.id,
+          action: 'DECISION_HUMAINE',
+          entityType: 'DOSSIER',
+          entityId: dossierId,
+          payload: {
+            decisionId: decisionHumaine.id,
+            pronosticId: pronostic?.id ?? null,
+            recommandation: decision.recommandation,
+            accordAvecIa,
+          },
+        },
+        tx,
+      );
       await this.audit.log(
         {
           dossierId,

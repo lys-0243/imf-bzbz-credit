@@ -1,8 +1,10 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { Role } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   cloudinary,
@@ -144,6 +146,27 @@ export class DocumentsService {
         originalName: params.originalName,
       },
     });
+  }
+
+  /**
+   * Agent : dossiers qui lui sont assignés ; réception : dossiers qu'elle a créés.
+   * Les autres rôles autorisés par le contrôleur voient tous les dossiers.
+   */
+  async assertCanAccessDossier(
+    user: { id: string; role: Role },
+    dossierId: string,
+  ) {
+    const d = await this.prisma.dossier.findUnique({
+      where: { id: dossierId },
+      select: { agentId: true, createdById: true },
+    });
+    if (!d) throw new NotFoundException('Dossier introuvable');
+    if (user.role === Role.AGENT && d.agentId !== user.id) {
+      throw new ForbiddenException('Dossier non assigné à cet agent');
+    }
+    if (user.role === Role.RECEPTION && d.createdById !== user.id) {
+      throw new ForbiddenException('Dossier non créé par cet utilisateur');
+    }
   }
 
   async findPiece(id: string) {

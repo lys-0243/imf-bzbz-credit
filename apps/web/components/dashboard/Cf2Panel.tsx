@@ -9,6 +9,7 @@ import {
   normalizeCf2Analyse,
   resolveMensualite,
   sumDepensesFamiliales,
+  toDatetimeLocalValue,
   totalDepensesPrivees,
   type Cf21Data,
   type Cf22Data,
@@ -441,8 +442,9 @@ export function Cf2Panel({
             </FormRow>
             <FormRow label="Date / heure de la visite">
               <input
+                type="datetime-local"
                 className={styles.cf1FormControl}
-                value={cf21.residence.dateHeureVisite}
+                value={toDatetimeLocalValue(cf21.residence.dateHeureVisite)}
                 disabled={disabled}
                 onChange={(e) =>
                   patchResidence({ dateHeureVisite: e.target.value })

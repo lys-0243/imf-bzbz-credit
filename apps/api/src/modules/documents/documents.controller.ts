@@ -14,6 +14,7 @@ import {
 } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
 import type { Response } from 'express';
+import { CurrentUser } from '../identity/current-user.decorator';
 import { JwtAuthGuard } from '../identity/jwt-auth.guard';
 import { Roles, RolesGuard } from '../identity/roles.guard';
 import { DocumentsService } from './documents.service';
@@ -48,8 +49,13 @@ export class DocumentsController {
       'Proxie le binaire Cloudinary (aperçu iframe / téléchargement disque).',
   })
   @ApiParam({ name: 'id', description: 'ID de la pièce' })
-  async download(@Param('id') id: string, @Res() res: Response) {
+  async download(
+    @CurrentUser() user: { id: string; role: Role },
+    @Param('id') id: string,
+    @Res() res: Response,
+  ) {
     const piece = await this.documents.findPiece(id);
+    await this.documents.assertCanAccessDossier(user, piece.dossierId);
     if (!piece.url) {
       throw new NotFoundException('URL Cloudinary introuvable pour cette pièce');
     }
@@ -78,7 +84,11 @@ export class DocumentsController {
     description: 'Métadonnées des documents liés au dossier (sans binaire).',
   })
   @ApiParam({ name: 'dossierId', description: 'ID du dossier' })
-  async list(@Param('dossierId') dossierId: string) {
+  async list(
+    @CurrentUser() user: { id: string; role: Role },
+    @Param('dossierId') dossierId: string,
+  ) {
+    await this.documents.assertCanAccessDossier(user, dossierId);
     return this.documents.listByDossier(dossierId);
   }
 }

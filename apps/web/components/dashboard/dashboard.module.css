@@ -3071,3 +3071,83 @@
   font-size: 0.9rem;
   color: var(--imf-muted);
 }
+
+/* Avis IA — pronostic */
+.pronosticHead {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.pronosticFigures {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+  margin: 14px 0;
+}
+
+.pronosticFigure {
+  border: 1px solid #ececec;
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: #fafafa;
+}
+
+.pronosticFigureLabel {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--imf-muted);
+}
+
+.pronosticFigureValue {
+  display: block;
+  margin-top: 2px;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.pronosticText {
+  margin: 0 0 12px;
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+.pronosticLists {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.pronosticListTitle {
+  margin: 0 0 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.pronosticList {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.pronosticDecisionGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.pronosticInput {
+  width: 100%;
+  min-height: 40px;
+  border: 1px solid #e8e8e8;
+  border-radius: 12px;
+  padding: 8px 12px;
+  font: inherit;
+  font-size: 0.9rem;
+  background: #fff;
+}

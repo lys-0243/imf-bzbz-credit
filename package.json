@@ -13,6 +13,7 @@
     "dev:web": "npm run dev -w @imf/web",
     "dev:mobile": "npm run start -w @imf/mobile -- --clear",
     "build:shared": "npm run build -w @imf/shared",
+    "test": "npm test -w @imf/shared",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:seed": "prisma db seed"

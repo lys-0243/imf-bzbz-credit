@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { HealthController } from './health.controller';
 import { PrismaModule } from './prisma/prisma.module';
 import { IdentityModule } from './modules/identity/identity.module';
@@ -16,6 +17,8 @@ import { BankingModule } from './modules/banking/banking.module';
 
 @Module({
   imports: [
+    // Limites appliquées route par route (ThrottlerGuard), pas globalement.
+    ThrottlerModule.forRoot([{ ttl: 60_000, limit: 10 }]),
     PrismaModule,
     AuditModule,
     IdentityModule,
