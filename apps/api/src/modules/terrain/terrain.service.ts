@@ -172,7 +172,7 @@ export class TerrainService {
    * Plus de « démarrer la descente » manuel : crée la VisiteTerrain si besoin
    * et passe AFFECTE / RETOUR_AGENT → DESCENTE pour débloquer le travail agent.
    */
-  private async ensureAgentTerrain(
+  async ensureAgentTerrain(
     user: AuthUser,
     id: string,
   ): Promise<void> {

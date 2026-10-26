@@ -21,6 +21,13 @@ import {
 } from '@imf/shared';
 import { getApiUrl, getToken } from '../../lib/api';
 import { Cf2Panel } from './Cf2Panel';
+import {
+  FICHE_TAB_PREFIX,
+  FicheTabLabel,
+  FicheView,
+  FichesProvider,
+  ficheTabs,
+} from './fiches/FichesPanel';
 import { dashStyles as styles } from './DashboardShell';
 
 export type DetailTransition = {
@@ -613,6 +620,16 @@ export function DossierDetailView({
   onTabRequestHandled?: () => void;
 }) {
   const [tab, setTab] = useState('historique');
+  const [actionsOpen, setActionsOpen] = useState(false);
+
+  useEffect(() => {
+    if (!actionsOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setActionsOpen(false);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [actionsOpen]);
   const [docError, setDocError] = useState<string | null>(null);
   const [downloadBusy, setDownloadBusy] = useState(false);
   const [avisTarget, setAvisTarget] = useState<{
@@ -637,6 +654,10 @@ export function DossierDetailView({
   const pieces = data.pieces ?? [];
   const transitions = data.transitions ?? [];
 
+  const hasGarant = Boolean(
+    (checklistAnswers ?? data.checklistAnswers)?.flags?.hasGarant,
+  );
+
   const baseTabs: TabDef[] = useMemo(() => {
     const historique: TabDef = { key: 'historique', label: 'Historique' };
     const checklist: TabDef = { key: 'checklist', label: 'Checklist' };
@@ -645,6 +666,8 @@ export function DossierDetailView({
     const agrPack =
       data.usesAnalyseAgrPack ??
       usesAnalyseAgrPack(data.produit?.code ?? data.type);
+    // CF3…CF8, comité et documents (Analyse_AGR.xlsx), un onglet par feuille
+    const fiches: TabDef[] = ficheTabs({ etat: data.etat, agrPack, hasGarant });
 
     if (famille === 'SALAIRE') {
       const core = agrPack ? [checklist] : [];
@@ -655,6 +678,7 @@ export function DossierDetailView({
         return [
           ...core,
           ...(agrPack ? [cf2] : []),
+          ...fiches,
           { key: 'identite', label: 'Identité' },
           { key: 'emploi', label: 'Emploi & prêt' },
           { key: 'demande', label: 'Demande' },
@@ -664,6 +688,7 @@ export function DossierDetailView({
       return [
         ...core,
         ...(agrPack ? [cf2] : []),
+        ...fiches,
         { key: 'identite', label: 'Identité' },
         { key: 'emploi', label: 'Emploi & prêt' },
         historique,
@@ -672,9 +697,9 @@ export function DossierDetailView({
 
     // ACTIVITÉ — CF1 remplace Identité / Éligibilité / Business / Prêt / Demande
     if (!agrPack) {
-      return [historique];
+      return [...fiches, historique];
     }
-    return [checklist, cf1, cf2, historique];
+    return [checklist, cf1, cf2, ...fiches, historique];
   }, [
     famille,
     isReception,
@@ -684,6 +709,8 @@ export function DossierDetailView({
     data.usesAnalyseAgrPack,
     data.produit?.code,
     data.type,
+    data.etat,
+    hasGarant,
   ]);
 
   const tabs = useMemo(
@@ -1161,10 +1188,15 @@ export function DossierDetailView({
       break;
     }
     default:
-      tabContent = extraTabContent?.[tab] ?? null;
+      tabContent = tab.startsWith(FICHE_TAB_PREFIX) ? (
+        <FicheView tabKey={tab} />
+      ) : (
+        extraTabContent?.[tab] ?? null
+      );
   }
 
   return (
+    <FichesProvider dossierId={data.id}>
     <div className={styles.detailPage}>
       <div className={styles.detailFixed}>
         <div className={styles.detailHero}>
@@ -1195,7 +1227,11 @@ export function DossierDetailView({
                   }`}
                   onClick={() => setTab(t.key)}
                 >
-                  {t.label}
+                  {t.key.startsWith(FICHE_TAB_PREFIX) ? (
+                    <FicheTabLabel tabKey={t.key} label={t.label} />
+                  ) : (
+                    t.label
+                  )}
                 </button>
               );
             })}
@@ -1205,9 +1241,47 @@ export function DossierDetailView({
 
       <div className={styles.detailSplit}>
         <div className={styles.detailScroll}>{tabContent}</div>
+      </div>
 
+      <button
+        type="button"
+        className={styles.actionsFab}
+        aria-haspopup="dialog"
+        aria-expanded={actionsOpen}
+        onClick={() => setActionsOpen(true)}
+      >
+        Actions à faire
+        <span
+          className={`${styles.actionsFabBadge} ${
+            pendingActions.length ? styles.actionsFabBadgeWarn : ''
+          }`}
+        >
+          {pendingActions.length}
+        </span>
+      </button>
+
+      {actionsOpen ? (
+        <div className={styles.actionsDrawerRoot} role="dialog" aria-modal="true" aria-label="Actions à faire">
+          <button
+            type="button"
+            className={styles.actionsDrawerBackdrop}
+            aria-label="Fermer"
+            onClick={() => setActionsOpen(false)}
+          />
         <aside className={styles.detailAside}>
-          <h2 className={styles.detailAsideTitle}>Actions à faire</h2>
+          <div className={styles.detailAsideHeader}>
+            <h2 className={styles.detailAsideTitle}>Actions à faire</h2>
+            <button
+              type="button"
+              className={styles.sheetClose}
+              aria-label="Fermer"
+              onClick={() => setActionsOpen(false)}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+                <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              </svg>
+            </button>
+          </div>
           {pendingActions.length === 0 ? (
             <p className={styles.detailAsideEmpty}>
               Aucune action en attente pour ce dossier.
@@ -1221,6 +1295,7 @@ export function DossierDetailView({
                     className={styles.detailAsideItem}
                     onClick={() => {
                       if (action.tab) setTab(action.tab);
+                      setActionsOpen(false);
                     }}
                   >
                     <span className={styles.detailAsideItemLabel}>
@@ -1235,7 +1310,8 @@ export function DossierDetailView({
             </ul>
           )}
         </aside>
-      </div>
+        </div>
+      ) : null}
 
       {avisTarget ? (
         <div className={styles.avisModalRoot} role="presentation">
@@ -1302,5 +1378,6 @@ export function DossierDetailView({
       ) : null}
 
     </div>
+    </FichesProvider>
   );
 }

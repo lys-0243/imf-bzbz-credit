@@ -9,6 +9,8 @@ import {
   avisParRegles,
   borneAvis,
   buildDossierFacts,
+  computeCf5Totaux,
+  normalizeFormulaire,
   dureeFromPayload,
   dureeUniteFromPayload,
   montantSouhaiteFromPayload,
@@ -25,6 +27,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { BankingService } from '../banking/banking.service';
 import { LLM_PROVIDER, type LlmProvider } from '../llm/llm.provider';
+import { ParametresService } from '../parametres/parametres.service';
 import {
   buildPronosticUserPrompt,
   PRONOSTIC_SYSTEM_PROMPT,
@@ -51,6 +54,7 @@ export class ScoringService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly banking: BankingService,
+    private readonly parametres: ParametresService,
     @Inject(LLM_PROVIDER) private readonly llm: LlmProvider,
   ) {}
 
@@ -88,9 +92,15 @@ export class ScoringService {
   async buildFacts(dossierId: string): Promise<DossierFacts> {
     const d = await this.prisma.dossier.findUnique({
       where: { id: dossierId },
-      include: { produit: true, visite: true, pieces: true },
+      include: {
+        produit: true,
+        visite: true,
+        pieces: true,
+        formulaires: { where: { code: 'CF5_1_DEMANDEUR' } },
+      },
     });
     if (!d) throw new NotFoundException('Dossier introuvable');
+    const parametres = await this.parametres.get();
 
     const payload = (d.payload ?? {}) as Record<string, any>;
     const analyse =
@@ -109,6 +119,14 @@ export class ScoringService {
       d.visite?.rapportTexte,
     );
     const { montantSouhaite, devise } = montantSouhaiteFromPayload(payload);
+    // Excel CF2.4 I8 = CF5.1!W28 (caution financière calculée sur le montant proposé).
+    const garanties = computeCf5Totaux(
+      normalizeFormulaire('CF5_1_DEMANDEUR', d.formulaires[0]?.data),
+      {
+        montantPropose: Number(analyse?.cf25.montantPropose) || 0,
+        cautionPct: parametres.conditions.cautionPct,
+      },
+    ).total;
 
     return buildDossierFacts({
       produit: {
@@ -125,6 +143,8 @@ export class ScoringService {
       analyse,
       checklistIssues,
       banking: await this.lookupBanking(payload, d.produit.code),
+      grilleTaux: parametres.grilleTaux,
+      valeurGaranties: garanties > 0 ? garanties : null,
     });
   }
 

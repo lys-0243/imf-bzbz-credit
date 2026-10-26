@@ -766,8 +766,11 @@ export const TAUX_PAR_TRANCHE: ReadonlyArray<{
   { min: 10000, max: 30000, tauxMensuel: 0.035 },
 ];
 
-export function tauxParTranche(montant: number): number | null {
-  const tranche = TAUX_PAR_TRANCHE.find(
+export function tauxParTranche(
+  montant: number,
+  grille: ReadonlyArray<{ min: number; max: number; tauxMensuel: number }> = TAUX_PAR_TRANCHE,
+): number | null {
+  const tranche = grille.find(
     (t) => montant >= t.min && montant <= t.max,
   );
   return tranche?.tauxMensuel ?? null;
@@ -1420,9 +1423,15 @@ function ratioVal(nume: number, deno: number): number | null {
  * liquidité = actif / (dettes CT + 3 × mensualité) ; levier = prêt / actif ;
  * rotation = CMV / actif ; endettement = (dettes + prêt) / capitaux propres.
  * L’Excel calcule garantie, liquidité et endettement sans intérêts ni dettes
- * existantes : corrigé ici. Seule la Σ gages reste saisie (CF5.1 absente).
+ * existantes : corrigé ici. Σ gages : total CF5.1 du demandeur si fourni.
  */
-export function computeCf24Ratios(analyse: Cf2Analyse): Cf2RatioRow[] {
+export function computeCf24Ratios(
+  analyse: Cf2Analyse,
+  opts: {
+    /** Excel I8 = CF5.1!W28 — total des garanties du demandeur (sinon saisie CF 2.4). */
+    valeurGaranties?: number | null;
+  } = {},
+): Cf2RatioRow[] {
   const cr = computeCompteResultat(analyse);
   const bilan = computeBilan(analyse);
   const f24 = analyse.cf24;
@@ -1431,8 +1440,8 @@ export function computeCf24Ratios(analyse: Cf2Analyse): Cf2RatioRow[] {
   // Excel I5 = CF2.5!L38 ; I6 = CF2.5!F14 ; K5 = (I5/I6)*100
   const acompte = resolveMensualite(f25);
   const capacite = cr.capacitePaiement;
-  // Excel I8 = CF5.1!W28 (non branché) — saisie manuelle si besoin
-  const garanties = num(f24.valeurGaranties);
+  // Excel I8 = CF5.1!W28 ; saisie manuelle CF 2.4 en repli
+  const garanties = opts.valeurGaranties ?? num(f24.valeurGaranties);
   // Excel I14 = CF2.5!D38
   const pret = num(f25.montantPropose);
   // Excel CF2.5!P39 = L38*H38 (principal + intérêts)

@@ -18,6 +18,7 @@ import {
 import { PageError, PageLoading, PageStateBlock } from './PageState';
 import { ProfileView } from './ProfileView';
 import { AdminSheet } from './AdminSheet';
+import { AdminParametres } from './AdminParametres';
 
 export type AdminSection =
   | 'dashboard'
@@ -26,6 +27,7 @@ export type AdminSection =
   | 'utilisateurs'
   | 'zones'
   | 'produits'
+  | 'parametres'
   | 'journal'
   | 'profile';
 
@@ -1941,6 +1943,7 @@ function AdminWorkspace({
       {section === 'utilisateurs' ? <AdminUsers /> : null}
       {section === 'zones' ? <AdminZones /> : null}
       {section === 'produits' ? <AdminProduits /> : null}
+      {section === 'parametres' ? <AdminParametres /> : null}
       {section === 'journal' ? <AdminJournal /> : null}
       {section === 'profile' ? <ProfileView /> : null}
     </DashboardShell>

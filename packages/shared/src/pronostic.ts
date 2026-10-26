@@ -136,6 +136,10 @@ export function buildDossierFacts(input: {
   analyse: Cf2Analyse | null;
   checklistIssues: ChecklistValidationIssue[];
   banking: BankingLookupResult | null;
+  /** Grille des paramètres IMF (sinon grille par défaut). */
+  grilleTaux?: ReadonlyArray<{ min: number; max: number; tauxMensuel: number }>;
+  /** Total CF5.1 du demandeur (sinon saisie CF 2.4). */
+  valeurGaranties?: number | null;
 }): DossierFacts {
   const { analyse, demande } = input;
   const alertes: string[] = [];
@@ -176,7 +180,10 @@ export function buildDossierFacts(input: {
       dettesLongTerme: round(b.dettesLongTerme),
       capitalPropre: round(b.capitalPropre),
     };
-    ratios = computeCf24Ratios(analyse).map((r) => ({
+    ratios = computeCf24Ratios(
+      analyse,
+      input.valeurGaranties ? { valeurGaranties: input.valeurGaranties } : {},
+    ).map((r) => ({
       key: r.key,
       label: r.label,
       valeur: r.value == null ? null : round(r.value, 4),
@@ -192,7 +199,10 @@ export function buildDossierFacts(input: {
     const echeanceReference =
       echeanceMois ??
       (demande.dureeUnite === 'MOIS' ? positiveOrNull(demande.duree ?? 0) : null);
-    const tauxGrille = tauxParTranche(montantPropose ?? demande.montant ?? 0);
+    const tauxGrille = tauxParTranche(
+      montantPropose ?? demande.montant ?? 0,
+      input.grilleTaux,
+    );
     const tauxMensuel = resolveTauxPeriodique(f25.tauxPeriodique) ?? tauxGrille;
     const mensualite = positiveOrNull(resolveMensualite(f25));
     const max =

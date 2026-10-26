@@ -39,6 +39,20 @@ enum PronosticSource {
   REGLES
 }
 
+enum FormulaireCode {
+  CF3
+  CF4
+  CF5_1_DEMANDEUR
+  CF5_1_GARANT
+  CF6_1
+  PLAN_ROUTE
+  HISTORIQUE
+  PRE_COMITE
+  DECISION_COMITE
+  APPRO_PCA
+  CF8
+}
+
 enum DossierEtat {
   ENREGISTRE
   EN_ATTENTE_ATTRIBUTION_AGENT
@@ -131,29 +145,30 @@ model ProduitCredit {
 }
 
 model Dossier {
-  id            String            @id @default(cuid())
-  reference     String            @unique
+  id            String              @id @default(cuid())
+  reference     String              @unique
   produitId     String
-  produit       ProduitCredit     @relation(fields: [produitId], references: [id])
-  etat          DossierEtat       @default(ENREGISTRE)
+  produit       ProduitCredit       @relation(fields: [produitId], references: [id])
+  etat          DossierEtat         @default(ENREGISTRE)
   payload       Json
   clientId      String
-  client        Client            @relation(fields: [clientId], references: [id])
+  client        Client              @relation(fields: [clientId], references: [id])
   createdById   String?
-  createdBy     User?             @relation("CreatedByDossiers", fields: [createdById], references: [id])
+  createdBy     User?               @relation("CreatedByDossiers", fields: [createdById], references: [id])
   agentId       String?
-  agent         User?             @relation("AgentDossiers", fields: [agentId], references: [id])
+  agent         User?               @relation("AgentDossiers", fields: [agentId], references: [id])
   agentValideAt DateTime?
   scoreValue    Int?
   scoreReasons  Json?
-  createdAt     DateTime          @default(now())
-  updatedAt     DateTime          @updatedAt
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
   transitions   Transition[]
   pieces        Piece[]
   auditLogs     AuditLog[]
   visite        VisiteTerrain?
   pronostics    Pronostic[]
   decisions     DecisionHumaine[]
+  formulaires   DossierFormulaire[]
 
   @@index([reference])
   @@index([etat])
@@ -264,4 +279,26 @@ model DecisionHumaine {
 
   @@index([dossierId])
   @@index([pronosticId])
+}
+
+/// Feuilles Analyse_AGR.xlsx hors CF1/CF2 (CF3, CF4, CF5.1, PV comité…), en JSON normalisé par @imf/shared.
+model DossierFormulaire {
+  id          String         @id @default(cuid())
+  dossierId   String
+  dossier     Dossier        @relation(fields: [dossierId], references: [id])
+  code        FormulaireCode
+  data        Json
+  updatedById String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@unique([dossierId, code])
+}
+
+/// Paramètres de l'IMF (une seule ligne, id = "default").
+model ParametresImf {
+  id          String   @id @default("default")
+  data        Json
+  updatedById String?
+  updatedAt   DateTime @updatedAt
 }

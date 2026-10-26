@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   CF2_SECTION_META,
   newCf2DepenseAutre,
@@ -21,6 +21,7 @@ import {
   type Cf2SectionKey,
 } from '@imf/shared';
 import { dashStyles as styles } from './DashboardShell';
+import { AmountField, FormBlock, FormRow, formatMoney } from './FormKit';
 import { Cf22Section } from './Cf22Section';
 import { Cf23Section } from './Cf23Section';
 import { Cf24Section } from './Cf24Section';
@@ -36,78 +37,6 @@ type Props = {
   busy?: boolean;
   onSave?: (analyse: Partial<Cf2Analyse>) => void | Promise<void>;
 };
-
-function FormBlock({
-  title,
-  children,
-}: {
-  title: string;
-  children: ReactNode;
-}) {
-  return (
-    <div className={styles.detailTableBlock}>
-      <h3 className={styles.detailTableTitle}>{title}</h3>
-      <div className={styles.tableWrap}>
-        <table className={`${styles.detailDataTable} ${styles.cf1FormTable}`}>
-          <thead>
-            <tr>
-              <th>Champ</th>
-              <th>Valeur</th>
-            </tr>
-          </thead>
-          <tbody>{children}</tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
-function FormRow({
-  label,
-  children,
-}: {
-  label: string;
-  children: ReactNode;
-}) {
-  return (
-    <tr>
-      <td className={styles.cf1FormLabel}>{label}</td>
-      <td className={styles.cf1FormValue}>{children}</td>
-    </tr>
-  );
-}
-
-function AmountField({
-  value,
-  devise,
-  disabled,
-  onChange,
-}: {
-  value: string;
-  devise: string;
-  disabled?: boolean;
-  onChange: (raw: string) => void;
-}) {
-  return (
-    <div className={styles.cf1AmountField}>
-      <span className={styles.cf1DeviseBadge}>{devise}</span>
-      <input
-        type="number"
-        className={styles.cf1FormControl}
-        value={value}
-        disabled={disabled}
-        onChange={(e) => onChange(e.target.value)}
-      />
-    </div>
-  );
-}
-
-function formatMoney(n: number, devise: string): string {
-  return `${n.toLocaleString('fr-FR', {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  })} ${devise}`;
-}
 
 const DEPENSE_ROWS: Array<{
   key: keyof Cf2DepensesFamiliales;

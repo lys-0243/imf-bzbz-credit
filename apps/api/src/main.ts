@@ -50,6 +50,7 @@ async function bootstrap() {
     .addTag('Affectation', 'File responsable crédit')
     .addTag('Terrain', 'Visites, checklist, rapport, pièces')
     .addTag('Workflow', 'Transitions d’état')
+    .addTag('Dossiers', 'Lecture générique, formulaires Analyse_AGR (CF3…CF8, comité)')
     .addTag('Documents', 'Téléchargement des pièces')
     .addTag('Banking', 'Lookup compte core banking (mock)')
     .addTag('Admin', 'Utilisateurs, zones, produits, audit')

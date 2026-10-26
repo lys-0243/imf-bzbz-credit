@@ -1,0 +1,173 @@
+.screen {
+  min-height: 100vh;
+  padding: 24px 16px 48px;
+  background: #e9e7e2;
+}
+
+.toolbar {
+  max-width: 210mm;
+  margin: 0 auto 16px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.toolbarTitle {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.printBtn {
+  height: 40px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 5px;
+  background: var(--imf-blue);
+  color: #fff;
+  font: inherit;
+  cursor: pointer;
+}
+
+.page {
+  box-sizing: border-box;
+  max-width: 210mm;
+  min-height: 297mm;
+  margin: 0 auto 16px;
+  padding: 16mm 15mm;
+  background: #fff;
+  color: #111;
+  font-size: 10.5pt;
+  line-height: 1.45;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 2px solid var(--imf-blue);
+  padding-bottom: 8px;
+  margin-bottom: 16px;
+  font-size: 8.5pt;
+}
+
+.headerName {
+  font-weight: 700;
+  font-size: 11pt;
+  color: var(--imf-blue);
+}
+
+.title {
+  text-align: center;
+  font-size: 14pt;
+  margin: 8px 0 16px;
+  text-transform: uppercase;
+}
+
+.subtitle {
+  font-size: 11pt;
+  margin: 18px 0 6px;
+}
+
+.columns {
+  column-count: 2;
+  column-gap: 8mm;
+  text-align: justify;
+}
+
+.columns h3 {
+  break-after: avoid;
+}
+
+.article {
+  break-inside: avoid-column;
+  margin: 0 0 8px;
+}
+
+.articleTitle {
+  font-weight: 700;
+  font-size: 10pt;
+  margin: 10px 0 4px;
+}
+
+.p {
+  margin: 0 0 6px;
+}
+
+.list {
+  margin: 0 0 6px;
+  padding-left: 16px;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 6px 0 12px;
+  font-size: 9pt;
+}
+
+.table th,
+.table td {
+  border: 1px solid #999;
+  padding: 4px 6px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.table th {
+  background: #f1f1f1;
+}
+
+.num {
+  text-align: right !important;
+  white-space: nowrap;
+}
+
+.signatures {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 18px 24px;
+  margin-top: 24px;
+  break-inside: avoid;
+}
+
+.signature {
+  min-height: 70px;
+  border-top: 1px solid #555;
+  padding-top: 4px;
+  font-size: 9pt;
+}
+
+.muted {
+  color: #555;
+  font-size: 8.5pt;
+}
+
+.pageBreak {
+  break-before: page;
+}
+
+@media print {
+  .screen {
+    padding: 0;
+    background: #fff;
+  }
+
+  .noPrint {
+    display: none !important;
+  }
+
+  .page {
+    margin: 0;
+    max-width: none;
+    min-height: auto;
+    padding: 0;
+    box-shadow: none;
+  }
+
+  @page {
+    size: A4;
+    margin: 14mm 13mm;
+  }
+}
