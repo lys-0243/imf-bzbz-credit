@@ -46,6 +46,8 @@ type IdDocAsset = {
   uri: string;
   name: string;
   mimeType: string;
+  /** Web uniquement : fichier choisi dans le navigateur. */
+  file?: Blob;
 };
 
 type Props = {
@@ -254,6 +256,7 @@ export function RegisterScreen({ produit, onCreated, onCancel }: Props) {
       uri,
       name: asset.fileName || `piece_identite.${ext}`,
       mimeType,
+      file: asset.file ?? undefined,
     });
   }
 
@@ -358,11 +361,16 @@ export function RegisterScreen({ produit, onCreated, onCancel }: Props) {
       fd.append('produitId', produit.id);
       fd.append('payload', JSON.stringify(payload));
       fd.append('kind', 'piece_identite');
-      fd.append('file', {
-        uri: idDoc.uri,
-        name: idDoc.name,
-        type: idDoc.mimeType,
-      } as any);
+      if (Platform.OS === 'web') {
+        const blob = idDoc.file ?? (await (await fetch(idDoc.uri)).blob());
+        fd.append('file', blob, idDoc.name);
+      } else {
+        fd.append('file', {
+          uri: idDoc.uri,
+          name: idDoc.name,
+          type: idDoc.mimeType,
+        } as any);
+      }
       const created = await api<{ id: string; reference?: string }>(
         '/dossiers',
         {

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Put, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Put, Res, UseGuards } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiBody,
@@ -8,11 +8,13 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
-import { FORMULAIRE_CODES } from '@imf/shared';
-import { IsObject } from 'class-validator';
+import { DOCUMENTS_EDITABLES, FORMULAIRE_CODES } from '@imf/shared';
+import { IsInt, IsObject, IsString, Min } from 'class-validator';
+import type { Response } from 'express';
 import { CurrentUser } from '../identity/current-user.decorator';
 import { JwtAuthGuard } from '../identity/jwt-auth.guard';
 import { Roles, RolesGuard } from '../identity/roles.guard';
+import { DocumentsEditesService } from './documents-edites.service';
 import { DossiersService } from './dossiers.service';
 
 class FormulaireDto {
@@ -23,6 +25,19 @@ class FormulaireDto {
   @IsObject()
   data!: Record<string, unknown>;
 }
+
+class DocumentEditeDto {
+  @ApiProperty({ description: 'HTML de l’éditeur (nettoyé côté serveur)' })
+  @IsString()
+  contenuHtml!: string;
+
+  @ApiProperty({ description: 'Version lue (0 si jamais enregistré) — 409 si obsolète', example: 0 })
+  @IsInt()
+  @Min(0)
+  version!: number;
+}
+
+const ROLES_DOCUMENTS = [Role.RESPONSABLE_CREDIT, Role.DG, Role.ADMIN];
 
 const TOUS_ROLES = [
   Role.RECEPTION,
@@ -40,7 +55,10 @@ const TOUS_ROLES = [
 @Controller('instruction/dossiers')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class DossiersController {
-  constructor(private readonly dossiers: DossiersService) {}
+  constructor(
+    private readonly dossiers: DossiersService,
+    private readonly documentsEdites: DocumentsEditesService,
+  ) {}
 
   @Get()
   @Roles(Role.CONFORMITE, Role.DG, Role.CA, Role.ADMIN)
@@ -95,5 +113,73 @@ export class DossiersController {
   @ApiParam({ name: 'id', description: 'ID du dossier' })
   cycles(@CurrentUser() user: { id: string; role: Role }, @Param('id') id: string) {
     return this.dossiers.cyclesPrecedents(user, id);
+  }
+
+  @Get(':id/documents/:doc')
+  @Roles(...TOUS_ROLES)
+  @ApiOperation({
+    summary: 'Document éditable (lettre, contrat, gage, caution)',
+    description: '`contenuHtml: null` = jamais modifié (le web génère le document depuis le dossier).',
+  })
+  @ApiParam({ name: 'id', description: 'ID du dossier' })
+  @ApiParam({ name: 'doc', enum: DOCUMENTS_EDITABLES })
+  getDocument(
+    @CurrentUser() user: { id: string; role: Role },
+    @Param('id') id: string,
+    @Param('doc') doc: string,
+  ) {
+    return this.documentsEdites.get(user, id, doc);
+  }
+
+  @Put(':id/documents/:doc')
+  @Roles(...ROLES_DOCUMENTS)
+  @ApiOperation({
+    summary: 'Enregistrer un document retouché',
+    description: 'RC, DG, admin aux états DIRECTION, CONSEIL, A_DECAISSER. HTML nettoyé ; 409 si la version est obsolète.',
+  })
+  @ApiParam({ name: 'id', description: 'ID du dossier' })
+  @ApiParam({ name: 'doc', enum: DOCUMENTS_EDITABLES })
+  @ApiBody({ type: DocumentEditeDto })
+  saveDocument(
+    @CurrentUser() user: { id: string; role: Role },
+    @Param('id') id: string,
+    @Param('doc') doc: string,
+    @Body() dto: DocumentEditeDto,
+  ) {
+    return this.documentsEdites.save(user, id, doc, dto.contenuHtml, dto.version);
+  }
+
+  @Delete(':id/documents/:doc')
+  @Roles(...ROLES_DOCUMENTS)
+  @ApiOperation({ summary: 'Revenir au document généré depuis le dossier' })
+  @ApiParam({ name: 'id', description: 'ID du dossier' })
+  @ApiParam({ name: 'doc', enum: DOCUMENTS_EDITABLES })
+  resetDocument(
+    @CurrentUser() user: { id: string; role: Role },
+    @Param('id') id: string,
+    @Param('doc') doc: string,
+  ) {
+    return this.documentsEdites.reinitialiser(user, id, doc);
+  }
+
+  @Get(':id/documents/:doc/docx')
+  @Roles(...TOUS_ROLES)
+  @ApiOperation({ summary: 'Exporter le document en Word (.docx)' })
+  @ApiParam({ name: 'id', description: 'ID du dossier' })
+  @ApiParam({ name: 'doc', enum: DOCUMENTS_EDITABLES })
+  async exportDocx(
+    @CurrentUser() user: { id: string; role: Role },
+    @Param('id') id: string,
+    @Param('doc') doc: string,
+    @Res() res: Response,
+  ) {
+    const { buffer, nomFichier } = await this.documentsEdites.docx(user, id, doc);
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    );
+    res.setHeader('Content-Length', String(buffer.length));
+    res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(nomFichier)}`);
+    res.send(buffer);
   }
 }

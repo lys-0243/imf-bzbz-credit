@@ -14,6 +14,7 @@ import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fonts } from '@imf/assets';
+import { webSheet } from '../webLayout';
 
 const SHEET_SLIDE = Math.round(Dimensions.get('window').height * 0.65);
 
@@ -121,6 +122,7 @@ export function OptionsSheet({
         <Animated.View
           style={[
             styles.sheet,
+            webSheet,
             {
               paddingBottom: Math.max(insets.bottom, 16) + 8,
               maxHeight: Dimensions.get('window').height * 0.78,

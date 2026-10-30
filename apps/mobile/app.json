@@ -7,7 +7,8 @@
     "icon": "./assets/icon.png",
     "platforms": [
       "android",
-      "ios"
+      "ios",
+      "web"
     ],
     "android": {
       "package": "cd.imf.credit",
@@ -16,6 +17,12 @@
         "backgroundColor": "#f6f4ef",
         "translucent": false
       }
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "single",
+      "favicon": "./assets/icon.png",
+      "name": "IMF Bisou Bisou — Réception"
     },
     "extra": {
       "apiUrl": "http://10.0.2.2:3001"

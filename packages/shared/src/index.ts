@@ -913,3 +913,4 @@ export * from './cf8Suivi';
 export * from './formulaires';
 export * from './documents';
 export * from './dossierSynthese';
+export * from './documentsHtml';

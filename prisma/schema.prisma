@@ -53,6 +53,13 @@ enum FormulaireCode {
   CF8
 }
 
+enum DocumentEditable {
+  LETTRE
+  CONTRAT
+  GAGE
+  CAUTION
+}
+
 enum DossierEtat {
   ENREGISTRE
   EN_ATTENTE_ATTRIBUTION_AGENT
@@ -169,6 +176,7 @@ model Dossier {
   pronostics    Pronostic[]
   decisions     DecisionHumaine[]
   formulaires   DossierFormulaire[]
+  documents     DocumentEdite[]
 
   @@index([reference])
   @@index([etat])
@@ -301,4 +309,19 @@ model ParametresImf {
   data        Json
   updatedById String?
   updatedAt   DateTime @updatedAt
+}
+
+/// Document juridique retouché dans l'éditeur web (HTML nettoyé) ; absent = généré depuis le dossier.
+model DocumentEdite {
+  id          String           @id @default(cuid())
+  dossierId   String
+  dossier     Dossier          @relation(fields: [dossierId], references: [id])
+  doc         DocumentEditable
+  contenuHtml String           @db.Text
+  version     Int              @default(1)
+  updatedById String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@unique([dossierId, doc])
 }

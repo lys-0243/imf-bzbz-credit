@@ -12,7 +12,6 @@ import {
 import {
   FORMULAIRES,
   PLAN_ROUTE_PIECE_KIND,
-  buildDocumentsContexte,
   conditionsPret,
   normalizeCf2Analyse,
   normalizeParametresImf,
@@ -35,13 +34,7 @@ import { Cf5Fiche } from './Cf5Fiche';
 import { Cf61Fiche } from './Cf61Fiche';
 import { Cf8Fiche } from './Cf8Fiche';
 import { ApproPcaFiche, DecisionComiteFiche } from './ComiteFiches';
-import { docStyles } from '../../documents/DocumentKit';
-import {
-  ContratCaution,
-  ContratGage,
-  ContratPret,
-  LettreOctroi,
-} from '../../documents/Documents';
+import { DocumentEditor } from '../../documents/DocumentEditor';
 import { FormulaireAnalyseView } from './FormulaireAnalyseView';
 import { HistoriqueFiche } from './HistoriqueFiche';
 import { PlanRouteFiche, fetchPieceObjectUrl, type PieceRef } from './PlanRouteFiche';
@@ -144,6 +137,9 @@ type FichesState = {
   save: (code: FormulaireCode) => Promise<void>;
   applyMbmp: (mbmp: number) => Promise<void>;
   uploadPlan: (kind: string, file: File) => Promise<void>;
+  /** HTML non enregistré des documents éditables (conservé entre onglets). */
+  brouillons: Partial<Record<DocumentVue, string>>;
+  setBrouillon: (doc: DocumentVue, html: string | undefined) => void;
 };
 
 const FichesContext = createContext<FichesState | null>(null);
@@ -165,6 +161,7 @@ export function FichesProvider({ dossierId, children }: { dossierId: string; chi
   const [forms, setForms] = useState<FormulairesData | null>(null);
   const [dirty, setDirty] = useState<Set<FormulaireCode>>(new Set());
   const [cycles, setCycles] = useState<CyclePrecedent[] | null>(null);
+  const [brouillons, setBrouillons] = useState<Partial<Record<DocumentVue, string>>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const requested = useRef(false);
@@ -191,6 +188,7 @@ export function FichesProvider({ dossierId, children }: { dossierId: string; chi
     setData(null);
     setForms(null);
     setCycles(null);
+    setBrouillons({});
     setError(null);
   }, [dossierId]);
 
@@ -207,6 +205,16 @@ export function FichesProvider({ dossierId, children }: { dossierId: string; chi
       .then(setCycles)
       .catch(() => setCycles([]));
   }, [cycles, dossierId]);
+
+  const setBrouillon = useCallback((doc: DocumentVue, html: string | undefined) => {
+    setBrouillons((prev) => {
+      if (prev[doc] === html) return prev;
+      const next = { ...prev };
+      if (html === undefined) delete next[doc];
+      else next[doc] = html;
+      return next;
+    });
+  }, []);
 
   const setForm = useCallback(<K extends FormulaireCode>(code: K, next: FormulairesData[K]) => {
     setForms((prev) => (prev ? { ...prev, [code]: next } : prev));
@@ -297,6 +305,8 @@ export function FichesProvider({ dossierId, children }: { dossierId: string; chi
         save,
         applyMbmp,
         uploadPlan,
+        brouillons,
+        setBrouillon,
       }}
     >
       {children}
@@ -306,9 +316,10 @@ export function FichesProvider({ dossierId, children }: { dossierId: string; chi
 
 /** Libellé d’onglet avec repère « • » si la fiche a des modifications non enregistrées. */
 export function FicheTabLabel({ tabKey, label }: { tabKey: string; label: string }) {
-  const { dirty } = useFiches();
-  const code = tabKey.slice(FICHE_TAB_PREFIX.length) as FormulaireCode;
-  return <>{dirty.has(code) ? `${label} •` : label}</>;
+  const { dirty, brouillons } = useFiches();
+  const vue = tabKey.slice(FICHE_TAB_PREFIX.length);
+  const modifie = dirty.has(vue as FormulaireCode) || brouillons[vue as DocumentVue] !== undefined;
+  return <>{modifie ? `${label} •` : label}</>;
 }
 
 /** Liens d’impression par onglet : [clé de /documents/:id/:doc, libellé]. */
@@ -320,10 +331,6 @@ const PRINTABLE: Partial<Record<FicheVue, Array<[string, string]>>> = {
   ],
   APPRO_PCA: [['memo-pca', 'Imprimer le mémo']],
   CF6_1: [['cf6-1', 'Imprimer']],
-  LETTRE: [['lettre', 'Imprimer / PDF']],
-  CONTRAT: [['contrat', 'Imprimer / PDF']],
-  GAGE: [['gage', 'Imprimer / PDF']],
-  CAUTION: [['caution', 'Imprimer / PDF']],
 };
 
 /** Contenu d’un onglet de fiche. */
@@ -439,10 +446,8 @@ export function FicheView({ tabKey }: { tabKey: string }) {
     case 'CONTRAT':
     case 'GAGE':
     case 'CAUTION': {
-      const doc = buildDocumentsContexte(ctx);
       const source = conditionsPret(ctx).source;
       const approuve = source === 'DECISION_COMITE' || source === 'APPRO_PCA';
-      const Doc = { LETTRE: LettreOctroi, CONTRAT: ContratPret, GAGE: ContratGage, CAUTION: ContratCaution }[vue];
       content = (
         <>
           {!approuve ? (
@@ -450,9 +455,13 @@ export function FicheView({ tabKey }: { tabKey: string }) {
               Projet : conditions non encore approuvées par le comité (montant et durée provisoires).
             </p>
           ) : null}
-          <article className={docStyles.page}>
-            <Doc ctx={ctx} doc={doc} />
-          </article>
+          <DocumentEditor
+            dossierId={data.id}
+            doc={vue}
+            ctx={ctx}
+            brouillon={f.brouillons[vue]}
+            onBrouillon={(html) => f.setBrouillon(vue, html)}
+          />
         </>
       );
       break;

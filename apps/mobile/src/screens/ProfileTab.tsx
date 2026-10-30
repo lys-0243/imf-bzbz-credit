@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Modal,
   Pressable,
   ScrollView,
@@ -15,8 +14,10 @@ import { colors, fonts } from '@imf/assets';
 import type { DossierEtat } from '@imf/shared';
 import { api } from '../api';
 import { useAuth } from '../auth';
+import { confirmAction, showInfo } from '../dialog';
 import { TAB_BAR_BASE_HEIGHT } from '../components/BottomTabBar';
 import { UserAvatar } from '../components/UserAvatar';
+import { webSheet } from '../webLayout';
 
 const APP_VERSION = '1.0.0';
 
@@ -110,7 +111,7 @@ export function ProfileTab({ onNavigate }: Props) {
       label: 'Aide',
       icon: 'help-circle-outline',
       onPress: () =>
-        Alert.alert(
+        showInfo(
           'Aide',
           'Pour toute assistance, contactez le support IMF via votre responsable d’agence.',
         ),
@@ -120,7 +121,7 @@ export function ProfileTab({ onNavigate }: Props) {
       label: 'À propos',
       icon: 'information-circle-outline',
       onPress: () =>
-        Alert.alert('À propos', `Application mobile IMF\nVersion ${APP_VERSION}`),
+        showInfo('À propos', `Application mobile IMF\nVersion ${APP_VERSION}`),
     },
     {
       key: 'logout',
@@ -128,10 +129,12 @@ export function ProfileTab({ onNavigate }: Props) {
       icon: 'log-out-outline',
       destructive: true,
       onPress: () => {
-        Alert.alert('Déconnexion', 'Voulez-vous vous déconnecter ?', [
-          { text: 'Annuler', style: 'cancel' },
-          { text: 'Déconnexion', style: 'destructive', onPress: () => logout() },
-        ]);
+        confirmAction(
+          'Déconnexion',
+          'Voulez-vous vous déconnecter ?',
+          'Déconnexion',
+          () => logout(),
+        );
       },
     },
   ];
@@ -177,7 +180,7 @@ export function ProfileTab({ onNavigate }: Props) {
         onRequestClose={() => setInfoOpen(false)}
       >
         <Pressable style={styles.modalBackdrop} onPress={() => setInfoOpen(false)}>
-          <Pressable style={styles.modalSheet} onPress={(e) => e.stopPropagation()}>
+          <Pressable style={[styles.modalSheet, webSheet]} onPress={(e) => e.stopPropagation()}>
             <View style={styles.modalHandle} />
             <Text style={styles.modalTitle}>Mes informations</Text>
             <InfoRow label="Nom" value={user.displayName} />

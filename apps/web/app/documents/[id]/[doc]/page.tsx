@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import {
   buildDocumentsContexte,
+  genererDocumentHtml,
+  isDocumentEditable,
   normalizeCf2Analyse,
   normalizeParametresImf,
   type DossierContexte,
@@ -16,31 +18,30 @@ import { DOCUMENTS_IMPRIMABLES, type DocumentKey } from '../../../../components/
 import type { DossierInstruction } from '../../../../components/dashboard/fiches/FichesPanel';
 import { FormulaireAnalyseView } from '../../../../components/dashboard/fiches/FormulaireAnalyseView';
 import { DocHeader, docStyles as styles } from '../../../../components/documents/DocumentKit';
-import {
-  ContratCaution,
-  ContratGage,
-  ContratPret,
-  DocumentTransfert,
-  LettreOctroi,
-  MemoPca,
-  PvComite,
-} from '../../../../components/documents/Documents';
+import { DocumentTransfert, MemoPca, PvComite } from '../../../../components/documents/Documents';
 import { ApiError, apiFetch } from '../../../../lib/api';
 
 const ROLES = ['AGENT', 'RESPONSABLE_CREDIT', 'ANALYSTE', 'CONFORMITE', 'DG', 'CA', 'ADMIN'];
 
 function DocumentLoader({ id, docKey }: { id: string; docKey: string }) {
   const [ctx, setCtx] = useState<DossierContexte | null>(null);
+  /** Version retouchée dans l’éditeur (lettre, contrat, gage, caution) ; null = générée. */
+  const [htmlEdite, setHtmlEdite] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const docEditable = docKey.toUpperCase();
 
   useEffect(() => {
     let cancelled = false;
     Promise.all([
       apiFetch<DossierInstruction>(`/instruction/dossiers/${id}`),
       apiFetch<ParametresImf>('/parametres'),
+      isDocumentEditable(docEditable)
+        ? apiFetch<{ contenuHtml: string | null }>(`/instruction/dossiers/${id}/documents/${docKey}`)
+        : Promise.resolve(null),
     ])
-      .then(([d, p]) => {
+      .then(([d, p, edite]) => {
         if (cancelled) return;
+        setHtmlEdite(edite?.contenuHtml ?? null);
         setCtx({
           id: d.id,
           reference: d.reference,
@@ -62,7 +63,7 @@ function DocumentLoader({ id, docKey }: { id: string; docKey: string }) {
     return () => {
       cancelled = true;
     };
-  }, [id]);
+  }, [id, docKey, docEditable]);
 
   const meta = DOCUMENTS_IMPRIMABLES.find((d) => d.key === docKey);
   if (!meta) {
@@ -90,11 +91,8 @@ function DocumentLoader({ id, docKey }: { id: string; docKey: string }) {
   const doc = buildDocumentsContexte(ctx);
   const props = { ctx, doc };
   const devise = doc.devise;
-  const contenu: Record<DocumentKey, React.ReactNode> = {
-    lettre: <LettreOctroi {...props} />,
-    contrat: <ContratPret {...props} />,
-    gage: <ContratGage {...props} />,
-    caution: <ContratCaution {...props} />,
+  // Lettre, contrat, gage et caution : HTML éditable (voir plus bas).
+  const contenu: Partial<Record<DocumentKey, React.ReactNode>> = {
     transfert: <DocumentTransfert {...props} />,
     'pv-comite': <PvComite {...props} />,
     'memo-pca': <MemoPca {...props} />,
@@ -124,7 +122,17 @@ function DocumentLoader({ id, docKey }: { id: string; docKey: string }) {
           Imprimer / PDF
         </button>
       </div>
-      <article className={styles.page}>{contenu[meta.key]}</article>
+      <article className={styles.page}>
+        {isDocumentEditable(docEditable) ? (
+          // HTML nettoyé par l’API à l’enregistrement, ou généré avec échappement.
+          <div
+            className={styles.docContent}
+            dangerouslySetInnerHTML={{ __html: htmlEdite ?? genererDocumentHtml(docEditable, ctx) }}
+          />
+        ) : (
+          contenu[meta.key]
+        )}
+      </article>
     </div>
   );
 }

@@ -1,5 +1,11 @@
 import React, { useEffect } from 'react';
-import { ActivityIndicator, Image, StyleSheet, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Image,
+  Platform,
+  StyleSheet,
+  View,
+} from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
@@ -8,6 +14,7 @@ import { colors, fontSources, images } from '@imf/assets';
 import { AuthProvider, useAuth } from './src/auth';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { LoginScreen } from './src/screens/LoginScreen';
+import { WEB_MAX_WIDTH } from './src/webLayout';
 
 SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
@@ -47,6 +54,16 @@ function Root() {
   );
 }
 
+/** Sur le web, l'UI mobile est centrée dans une colonne au lieu de s'étirer. */
+function WebColumn({ children }: { children: React.ReactNode }) {
+  if (Platform.OS !== 'web') return <>{children}</>;
+  return (
+    <View style={styles.webPage}>
+      <View style={styles.webColumn}>{children}</View>
+    </View>
+  );
+}
+
 export default function App() {
   const [fontsLoaded] = useFonts(fontSources);
 
@@ -66,7 +83,9 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <AuthProvider>
-        <Root />
+        <WebColumn>
+          <Root />
+        </WebColumn>
       </AuthProvider>
     </SafeAreaProvider>
   );
@@ -96,5 +115,16 @@ const styles = StyleSheet.create({
   appFill: {
     flex: 1,
     backgroundColor: colors.neutral.background,
+  },
+  webPage: {
+    flex: 1,
+    backgroundColor: colors.neutral.background,
+  },
+  webColumn: {
+    flex: 1,
+    width: '100%',
+    maxWidth: WEB_MAX_WIDTH,
+    alignSelf: 'center',
+    overflow: 'hidden',
   },
 });

@@ -70,27 +70,6 @@
   margin: 18px 0 6px;
 }
 
-.columns {
-  column-count: 2;
-  column-gap: 8mm;
-  text-align: justify;
-}
-
-.columns h3 {
-  break-after: avoid;
-}
-
-.article {
-  break-inside: avoid-column;
-  margin: 0 0 8px;
-}
-
-.articleTitle {
-  font-weight: 700;
-  font-size: 10pt;
-  margin: 10px 0 4px;
-}
-
 .p {
   margin: 0 0 6px;
 }
@@ -144,8 +123,187 @@
   font-size: 8.5pt;
 }
 
-.pageBreak {
-  break-before: page;
+/* Contenu des documents éditables (éditeur TipTap et impression) */
+.docContent {
+  font-size: 10.5pt;
+  line-height: 1.5;
+  color: #111;
+  outline: none;
+  min-height: 120mm;
+}
+
+.docContent h1 {
+  font-size: 14pt;
+  text-transform: uppercase;
+  margin: 10px 0 14px;
+}
+
+.docContent h2 {
+  font-size: 10.5pt;
+  margin: 12px 0 4px;
+}
+
+.docContent h3 {
+  font-size: 10pt;
+  margin: 10px 0 4px;
+}
+
+.docContent p {
+  margin: 0 0 6px;
+}
+
+.docContent ul,
+.docContent ol {
+  margin: 0 0 6px;
+  padding-left: 20px;
+}
+
+.docContent li p {
+  margin: 0;
+}
+
+.docContent hr {
+  border: 0;
+  border-top: 2px solid var(--imf-blue);
+  margin: 8px 0 14px;
+}
+
+.docContent table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  margin: 6px 0 12px;
+  font-size: 9.5pt;
+}
+
+.docContent th,
+.docContent td {
+  position: relative;
+  border: 1px solid #999;
+  padding: 4px 6px;
+  vertical-align: top;
+}
+
+.docContent th {
+  background: #f1f1f1;
+  text-align: left;
+}
+
+.docContent th p,
+.docContent td p {
+  margin: 0;
+}
+
+.docContent :global(.selectedCell)::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(40, 64, 128, 0.12);
+  pointer-events: none;
+}
+
+.docContent :global(.column-resize-handle) {
+  position: absolute;
+  top: 0;
+  right: -2px;
+  bottom: 0;
+  width: 4px;
+  background: var(--imf-blue);
+  pointer-events: none;
+}
+
+.docContent :global(.tableWrapper) {
+  overflow-x: auto;
+}
+
+/* Éditeur : actions et barre d’outils façon Word */
+.editorShell {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.editorActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.editorActionsBtns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.editorToolbar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  max-width: 210mm;
+  width: 100%;
+  margin: 0 auto;
+  padding: 6px 8px;
+  border: 1px solid #dcdcdc;
+  border-radius: 10px;
+  background: #fafafa;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+}
+
+.toolBtn {
+  min-width: 32px;
+  height: 32px;
+  padding: 0 9px;
+  border: 1px solid #d6d6d6;
+  border-radius: 6px;
+  background: #fff;
+  color: #222;
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.toolBtn:hover:not(:disabled) {
+  border-color: var(--imf-blue);
+}
+
+.toolBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.toolBtnActive {
+  background: #e3e9f7;
+  border-color: var(--imf-blue);
+  color: var(--imf-blue);
+}
+
+.toolBtnPrimary {
+  background: var(--imf-blue);
+  border-color: var(--imf-blue);
+  color: #fff;
+}
+
+.toolSelect {
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid #d6d6d6;
+  border-radius: 6px;
+  background: #fff;
+  font: inherit;
+  font-size: 0.85rem;
+}
+
+.toolSep {
+  width: 1px;
+  height: 22px;
+  margin: 0 4px;
+  background: #d6d6d6;
 }
 
 @media print {
