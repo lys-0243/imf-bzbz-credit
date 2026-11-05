@@ -1,16 +1,17 @@
 import {
   BadRequestException,
   ForbiddenException,
+  Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Role } from '@prisma/client';
+import { Piece, Role } from '@prisma/client';
+import { randomBytes } from 'node:crypto';
+import { extname } from 'node:path';
+import type { Readable } from 'node:stream';
 import { PrismaService } from '../../prisma/prisma.service';
-import {
-  cloudinary,
-  cloudinaryFolder,
-  configureCloudinary,
-} from './cloudinary';
+import { destroyLegacyCloudinary } from './cloudinary';
+import { FILE_STORAGE, type FileStorage } from './storage/file-storage';
 
 const ALLOWED_MIME = new Set([
   'image/jpeg',
@@ -22,11 +23,26 @@ const ALLOWED_MIME = new Set([
   'application/pdf',
 ]);
 
+const EXT_BY_MIME: Record<string, string> = {
+  'image/jpeg': '.jpg',
+  'image/jpg': '.jpg',
+  'image/png': '.png',
+  'image/webp': '.webp',
+  'image/heic': '.heic',
+  'image/heif': '.heif',
+  'application/pdf': '.pdf',
+};
+
 const MAX_BYTES = 10 * 1024 * 1024;
+
+const safeSegment = (v: string) => v.replace(/[^a-zA-Z0-9_-]/g, '_');
 
 @Injectable()
 export class DocumentsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Inject(FILE_STORAGE) private readonly storage: FileStorage,
+  ) {}
 
   private assertFile(params: {
     buffer: Buffer;
@@ -47,52 +63,27 @@ export class DocumentsService {
     }
   }
 
-  private uploadBuffer(
-    buffer: Buffer,
-    opts: {
-      folder: string;
-      publicId: string;
-      mimeType?: string;
-      originalName: string;
-    },
-  ): Promise<{
-    public_id: string;
-    secure_url: string;
-    bytes: number;
-    format?: string;
-    resource_type: string;
-  }> {
-    configureCloudinary();
-    return new Promise((resolve, reject) => {
-      const stream = cloudinary.uploader.upload_stream(
-        {
-          folder: opts.folder,
-          public_id: opts.publicId,
-          resource_type: 'auto',
-          overwrite: true,
-          invalidate: true,
-        },
-        (err, result) => {
-          if (err || !result) {
-            reject(
-              err ||
-                new BadRequestException('Échec upload Cloudinary'),
-            );
-            return;
-          }
-          resolve({
-            public_id: result.public_id,
-            secure_url: result.secure_url,
-            bytes: result.bytes ?? buffer.length,
-            format: result.format,
-            resource_type: result.resource_type,
-          });
-        },
-      );
-      stream.end(buffer);
-    });
+  /** `dossiers/<dossierId>/<kind>_<horodatage>_<aléa><ext>` */
+  private buildKey(dossierId: string, kind: string, originalName: string, mimeType?: string) {
+    const fromName = extname(originalName || '').toLowerCase();
+    const ext = /^\.[a-z0-9]{1,8}$/.test(fromName)
+      ? fromName
+      : EXT_BY_MIME[(mimeType || '').toLowerCase()] || '';
+    const unique = `${Date.now()}_${randomBytes(4).toString('hex')}`;
+    return `dossiers/${safeSegment(dossierId)}/${safeSegment(kind)}_${unique}${ext}`;
   }
 
+  /** Les pièces avec `url` sont d'anciens envois Cloudinary ; les autres sont dans `storage`. */
+  private async deleteBinary(piece: Pick<Piece, 'blobPath' | 'url'>) {
+    try {
+      if (piece.url) await destroyLegacyCloudinary(piece.blobPath);
+      else await this.storage.delete(piece.blobPath);
+    } catch {
+      /* best-effort : un fichier orphelin ne doit pas bloquer le remplacement */
+    }
+  }
+
+  /** Enregistre une pièce ; remplace la précédente du même `kind` sur le dossier. */
   async savePiece(params: {
     dossierId: string;
     kind: string;
@@ -101,51 +92,64 @@ export class DocumentsService {
     mimeType?: string;
   }) {
     this.assertFile(params);
-    const safeKind = params.kind.replace(/[^a-zA-Z0-9_-]/g, '_');
-    const folder = cloudinaryFolder(params.dossierId);
-    const publicId = `${safeKind}_${Date.now()}`;
+    const key = this.buildKey(
+      params.dossierId,
+      params.kind,
+      params.originalName,
+      params.mimeType,
+    );
 
     const existing = await this.prisma.piece.findFirst({
       where: { dossierId: params.dossierId, kind: params.kind },
       orderBy: { createdAt: 'desc' },
     });
 
-    const uploaded = await this.uploadBuffer(params.buffer, {
-      folder,
-      publicId,
-      mimeType: params.mimeType,
-      originalName: params.originalName,
-    });
+    const { bytes } = await this.storage.put(key, params.buffer, params.mimeType);
 
-    if (existing?.blobPath) {
-      try {
-        configureCloudinary();
-        await cloudinary.uploader.destroy(existing.blobPath, {
-          resource_type: 'image',
+    let piece: Piece;
+    try {
+      piece = await this.prisma.$transaction(async (tx) => {
+        if (existing) await tx.piece.delete({ where: { id: existing.id } });
+        return tx.piece.create({
+          data: {
+            dossierId: params.dossierId,
+            kind: params.kind,
+            blobPath: key,
+            url: null,
+            mimeType: params.mimeType || null,
+            bytes,
+            originalName: params.originalName,
+          },
         });
-      } catch {
-        try {
-          await cloudinary.uploader.destroy(existing.blobPath, {
-            resource_type: 'raw',
-          });
-        } catch {
-          /* best-effort cleanup */
-        }
-      }
-      await this.prisma.piece.delete({ where: { id: existing.id } });
+      });
+    } catch (err) {
+      await this.storage.delete(key).catch(() => undefined);
+      throw err;
     }
 
-    return this.prisma.piece.create({
-      data: {
-        dossierId: params.dossierId,
-        kind: params.kind,
-        blobPath: uploaded.public_id,
-        url: uploaded.secure_url,
-        mimeType: params.mimeType || null,
-        bytes: uploaded.bytes,
-        originalName: params.originalName,
-      },
-    });
+    if (existing) await this.deleteBinary(existing);
+    return piece;
+  }
+
+  /** Contenu binaire d'une pièce (stockage courant, ou URL Cloudinary pour l'historique). */
+  async openPiece(
+    piece: Piece,
+  ): Promise<{ body: Readable | Buffer; bytes: number; contentType: string }> {
+    const fallbackType = piece.mimeType || 'application/octet-stream';
+    if (piece.url) {
+      const upstream = await fetch(piece.url);
+      if (!upstream.ok) {
+        throw new NotFoundException('Fichier introuvable sur Cloudinary');
+      }
+      const body = Buffer.from(await upstream.arrayBuffer());
+      return {
+        body,
+        bytes: body.length,
+        contentType: piece.mimeType || upstream.headers.get('content-type') || fallbackType,
+      };
+    }
+    const { stream, bytes } = await this.storage.get(piece.blobPath);
+    return { body: stream, bytes, contentType: fallbackType };
   }
 
   /**
@@ -173,13 +177,6 @@ export class DocumentsService {
     const piece = await this.prisma.piece.findUnique({ where: { id } });
     if (!piece) throw new NotFoundException('Pièce introuvable');
     return piece;
-  }
-
-  /** @deprecated local disk — kept for legacy pieces without url */
-  async resolveAbsolutePath(_blobPath: string): Promise<string> {
-    throw new NotFoundException(
-      'Fichier local indisponible — utiliser Cloudinary (url)',
-    );
   }
 
   async listByDossier(dossierId: string) {

@@ -279,7 +279,9 @@ export class TerrainController {
 
   @Post('agent/dossiers/:id/pieces')
   @Roles(Role.AGENT)
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(
+    FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }),
+  )
   @ApiConsumes('multipart/form-data')
   @ApiOperation({
     summary: 'Uploader une pièce',

@@ -1,7 +1,6 @@
 import {
   Controller,
   Get,
-  NotFoundException,
   Param,
   Res,
   UseGuards,
@@ -14,6 +13,7 @@ import {
 } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
 import type { Response } from 'express';
+import { pipeline } from 'node:stream/promises';
 import { CurrentUser } from '../identity/current-user.decorator';
 import { JwtAuthGuard } from '../identity/jwt-auth.guard';
 import { Roles, RolesGuard } from '../identity/roles.guard';
@@ -49,7 +49,7 @@ export class DocumentsController {
   @ApiOperation({
     summary: 'Ouvrir / télécharger une pièce',
     description:
-      'Proxie le binaire Cloudinary (aperçu iframe / téléchargement disque).',
+      'Renvoie le binaire de la pièce depuis le stockage serveur (aperçu iframe / téléchargement).',
   })
   @ApiParam({ name: 'id', description: 'ID de la pièce' })
   async download(
@@ -59,26 +59,24 @@ export class DocumentsController {
   ) {
     const piece = await this.documents.findPiece(id);
     await this.documents.assertCanAccessDossier(user, piece.dossierId);
-    if (!piece.url) {
-      throw new NotFoundException('URL Cloudinary introuvable pour cette pièce');
-    }
-    const upstream = await fetch(piece.url);
-    if (!upstream.ok) {
-      throw new NotFoundException('Fichier introuvable sur Cloudinary');
-    }
-    const buffer = Buffer.from(await upstream.arrayBuffer());
-    const mime =
-      piece.mimeType ||
-      upstream.headers.get('content-type') ||
-      'application/octet-stream';
+    const file = await this.documents.openPiece(piece);
     const filename = piece.originalName || `piece-${piece.id}`;
-    res.setHeader('Content-Type', mime);
-    res.setHeader('Content-Length', String(buffer.length));
+    res.setHeader('Content-Type', file.contentType);
+    res.setHeader('Content-Length', String(file.bytes));
+    res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader(
       'Content-Disposition',
       `inline; filename*=UTF-8''${encodeURIComponent(filename)}`,
     );
-    return res.send(buffer);
+    if (Buffer.isBuffer(file.body)) {
+      res.send(file.body);
+      return;
+    }
+    try {
+      await pipeline(file.body, res);
+    } catch {
+      res.destroy();
+    }
   }
 
   @Get('dossiers/:dossierId')

@@ -73,7 +73,7 @@ class CreateDossierDto {
 
   @ApiProperty({
     required: false,
-    description: 'Kind Cloudinary (multipart), défaut piece_identite',
+    description: 'Type de pièce (multipart), défaut piece_identite',
     example: 'piece_identite',
   })
   @IsOptional()
