@@ -25,6 +25,7 @@ import type { ChecklistAnswers, Cf2Analyse } from '@imf/shared';
 import { CurrentUser } from '../identity/current-user.decorator';
 import { JwtAuthGuard } from '../identity/jwt-auth.guard';
 import { Roles, RolesGuard } from '../identity/roles.guard';
+import { DecisionPronosticDto } from '../scoring/decision-pronostic.dto';
 import { TerrainService } from './terrain.service';
 
 class ChecklistDto {
@@ -317,19 +318,51 @@ export class TerrainController {
     return this.terrain.uploadPiece(user, id, meta.kind, file as any);
   }
 
-  @Post('agent/dossiers/:id/soumettre')
+  @Get('agent/dossiers/:id/pronostic')
   @Roles(Role.AGENT)
   @ApiOperation({
-    summary: 'Soumettre au RC',
+    summary: 'Dernier pronostic (agent)',
     description:
-      'Soumet le dossier après visite/rapport pour validation responsable crédit.',
+      'Avis et montant proposés par l’IA, ratios recalculés sur ce montant. `null` si aucun pronostic.',
   })
   @ApiParam({ name: 'id', description: 'ID du dossier' })
-  soumettre(
+  getPronostic(
     @CurrentUser() user: { id: string; role: Role },
     @Param('id') id: string,
   ) {
-    return this.terrain.soumettre(user, id);
+    return this.terrain.getPronostic(user, id);
+  }
+
+  @Post('agent/dossiers/:id/pronostic')
+  @Roles(Role.AGENT)
+  @ApiOperation({
+    summary: 'Générer le pronostic (agent)',
+    description:
+      'Calcule les faits (CF1, CF2, checklist, CBS) et demande à l’IA un avis et un montant, à valider avant soumission.',
+  })
+  @ApiParam({ name: 'id', description: 'ID du dossier' })
+  generatePronostic(
+    @CurrentUser() user: { id: string; role: Role },
+    @Param('id') id: string,
+  ) {
+    return this.terrain.generatePronostic(user, id);
+  }
+
+  @Post('agent/dossiers/:id/soumettre')
+  @Roles(Role.AGENT)
+  @ApiOperation({
+    summary: 'Valider le pronostic et soumettre au RC',
+    description:
+      'L’agent valide (ou ajuste) l’avis et le montant de l’IA, puis soumet le dossier au responsable crédit. Exige un pronostic généré sur les données actuelles (409 sinon).',
+  })
+  @ApiParam({ name: 'id', description: 'ID du dossier' })
+  @ApiBody({ type: DecisionPronosticDto })
+  soumettre(
+    @CurrentUser() user: { id: string; role: Role },
+    @Param('id') id: string,
+    @Body() dto: DecisionPronosticDto,
+  ) {
+    return this.terrain.soumettre(user, id, dto);
   }
 
   @Get('analyste/dossiers')

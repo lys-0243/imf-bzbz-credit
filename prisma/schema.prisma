@@ -259,6 +259,8 @@ model Pronostic {
   avis           Json
   recommandation PronosticRecommandation
   montantSuggere Float?
+  /// Ratios CF 2.4 recalculés sur le montant proposé par l'IA (EvaluationProposition).
+  evaluation     Json?
   ajuste         Boolean                 @default(false)
   erreurIa       String?
   createdById    String?

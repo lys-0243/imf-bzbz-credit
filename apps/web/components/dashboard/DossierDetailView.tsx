@@ -662,6 +662,7 @@ export function DossierDetailView({
   tabRequest = null,
   onTabRequestHandled,
   drawers = [],
+  montantProposeIa,
 }: {
   data: DossierDetailData;
   backHref?: string;
@@ -680,6 +681,11 @@ export function DossierDetailView({
   tabRequest?: string | null;
   onTabRequestHandled?: () => void;
   drawers?: DetailDrawer[];
+  /**
+   * Montant proposé par l'IA (dernier pronostic), affiché en haut à droite du
+   * bandeau ; `null` = pas de montant (« — ») ; `undefined` = non affiché.
+   */
+  montantProposeIa?: number | null;
 }) {
   const [tab, setTab] = useState('historique');
   /** Volet flottant ouvert : 'actions', 'historique' ou la clé d’un `drawers`. */
@@ -1281,8 +1287,22 @@ export function DossierDetailView({
     <div className={styles.detailPage}>
       <div className={styles.detailFixed}>
         <div className={styles.detailHero}>
-          <p className={styles.detailHeroName}>{data.client.fullName}</p>
-          <p className={styles.detailHeroAmount}>{montantLabel}</p>
+          <div className={styles.detailHeroTop}>
+            <div>
+              <p className={styles.detailHeroName}>{data.client.fullName}</p>
+              <p className={styles.detailHeroAmount}>{montantLabel}</p>
+            </div>
+            {montantProposeIa !== undefined ? (
+              <div className={styles.detailHeroAside}>
+                <p className={styles.detailHeroAsideLabel}>Proposé (IA)</p>
+                <p className={styles.detailHeroAsideAmount}>
+                  {montantProposeIa == null
+                    ? '—'
+                    : formatMontantSouhaite(montantProposeIa, devise)}
+                </p>
+              </div>
+            ) : null}
+          </div>
           {salaireNet ? (
             <p className={styles.detailHeroSub}>Salaire net : {salaireNet}</p>
           ) : null}

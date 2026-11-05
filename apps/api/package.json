@@ -8,6 +8,7 @@
     "start": "node dist/main.js"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^1.5.0",
     "@imf/shared": "*",
     "@nestjs/common": "^11.1.5",
     "@nestjs/core": "^11.1.5",

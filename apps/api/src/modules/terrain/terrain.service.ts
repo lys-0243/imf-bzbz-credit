@@ -1,9 +1,9 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Inject,
   Injectable,
-  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { DossierEtat, Prisma, Role } from '@prisma/client';
@@ -11,6 +11,7 @@ import {
   ChecklistAnswers,
   DOSSIER_ETAT_LABELS,
   clientFieldsFromPayload,
+  decisionDiverge,
   getApplicableChecklistItems,
   getChecklistAc,
   mergeAgentChecklistAnswers,
@@ -26,6 +27,8 @@ import {
   type AgentSalaireEnrichment,
   type Cf2Analyse,
   type FamilleProduit,
+  type PronosticAvis,
+  type PronosticRecommandation,
 } from '@imf/shared';
 import { ZodError } from 'zod';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -50,7 +53,6 @@ const AGENT_ACTIVE_ETATS: DossierEtat[] = [
 
 @Injectable()
 export class TerrainService {
-  private readonly logger = new Logger(TerrainService.name);
 
   constructor(
     private readonly prisma: PrismaService,
@@ -344,7 +346,6 @@ export class TerrainService {
 
     try {
       const res = await this.llm.complete({
-        temperature: 0.3,
         system:
           "Tu es un agent de crédit IMF en RDC. Rédige un résumé exécutif de descente terrain en français, professionnel, structuré (contexte client, activité/emploi, demande de crédit, points d'attention, recommandation). 180 à 280 mots. Pas de markdown. Les données nominatives sont retirées : désigne le demandeur par « le client ».",
         user: `Analyse ce dossier et génère le résumé exécutif à valider par l'agent :
@@ -598,7 +599,33 @@ ${JSON.stringify(redactPii(context), null, 2)}`,
     return piece;
   }
 
-  async soumettre(user: AuthUser, id: string) {
+  /** Dernier pronostic d'un dossier assigné à l'agent. */
+  async getPronostic(user: AuthUser, id: string) {
+    const d = await this.prisma.dossier.findUnique({
+      where: { id },
+      select: { agentId: true },
+    });
+    if (!d) throw new NotFoundException('Dossier introuvable');
+    this.assertAgentOwns(d, user);
+    return this.scoring.latest(id);
+  }
+
+  /** Génère le pronostic (avis et montant IA) avant la soumission de l'agent. */
+  async generatePronostic(user: AuthUser, id: string) {
+    await this.ensureAgentTerrain(user, id);
+    return this.scoring.generate(id, user.id);
+  }
+
+  async soumettre(
+    user: AuthUser,
+    id: string,
+    decision: {
+      recommandation: PronosticRecommandation;
+      montantRetenu?: number;
+      dureeRetenueMois?: number;
+      commentaire?: string;
+    },
+  ) {
     await this.ensureAgentTerrain(user, id);
 
     const d = await this.prisma.dossier.findUnique({
@@ -639,6 +666,35 @@ ${JSON.stringify(redactPii(context), null, 2)}`,
       });
     }
 
+    // L'agent valide le montant proposé par l'IA, sur des données à jour.
+    const courant = await this.scoring.latestWithFreshness(id);
+    if (!courant) {
+      throw new BadRequestException(
+        'Générez le pronostic et validez le montant proposé avant de soumettre',
+      );
+    }
+    if (!courant.aJour) {
+      throw new ConflictException(
+        'Les données du dossier ont changé depuis le pronostic : régénérez-le avant de soumettre',
+      );
+    }
+    const pronostic = courant.pronostic;
+    const montantRetenu =
+      decision.recommandation === 'REFUS' ? null : (decision.montantRetenu ?? null);
+    if (decision.recommandation !== 'REFUS' && montantRetenu == null) {
+      throw new BadRequestException('Montant retenu requis');
+    }
+    const commentaire = decision.commentaire?.trim() || null;
+    const accordAvecIa = !decisionDiverge(pronostic.avis as unknown as PronosticAvis, {
+      recommandation: decision.recommandation,
+      montantRetenu,
+    });
+    if (!accordAvecIa && !commentaire) {
+      throw new BadRequestException(
+        'Commentaire obligatoire : la décision s’écarte de l’avis IA',
+      );
+    }
+
     const now = new Date();
     const chain: Array<{ from: DossierEtat; to: DossierEtat; comment: string }> =
       [
@@ -650,7 +706,7 @@ ${JSON.stringify(redactPii(context), null, 2)}`,
         {
           from: DossierEtat.RAPPORT_AGENT,
           to: DossierEtat.SCORING,
-          comment: 'Pronostic automatique (faits CF2 + avis IA)',
+          comment: 'Pronostic IA validé par l’agent',
         },
         {
           from: DossierEtat.SCORING,
@@ -675,6 +731,37 @@ ${JSON.stringify(redactPii(context), null, 2)}`,
           agentValideAt: now,
         },
       });
+      const decisionHumaine = await tx.decisionHumaine.create({
+        data: {
+          dossierId: id,
+          pronosticId: pronostic.id,
+          actorId: user.id,
+          role: user.role,
+          recommandation: decision.recommandation,
+          montantRetenu,
+          dureeRetenueMois: decision.dureeRetenueMois ?? null,
+          accordAvecIa,
+          commentaire,
+        },
+      });
+      await this.audit.log(
+        {
+          dossierId: id,
+          actorId: user.id,
+          action: 'PRONOSTIC_VALIDE_AGENT',
+          entityType: 'DOSSIER',
+          entityId: id,
+          payload: {
+            pronosticId: pronostic.id,
+            decisionId: decisionHumaine.id,
+            recommandation: decision.recommandation,
+            montantSuggere: pronostic.montantSuggere,
+            montantRetenu,
+            accordAvecIa,
+          },
+        },
+        tx,
+      );
       for (const step of chain) {
         await tx.transition.create({
           data: {
@@ -699,13 +786,6 @@ ${JSON.stringify(redactPii(context), null, 2)}`,
           },
         },
         tx,
-      );
-    });
-
-    // Hors transaction et sans bloquer l'agent : le RC peut régénérer l'avis.
-    void this.scoring.generate(id, user.id).catch((e) => {
-      this.logger.error(
-        `Pronostic non généré pour ${id}: ${e instanceof Error ? e.message : e}`,
       );
     });
 

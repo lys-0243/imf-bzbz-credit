@@ -5,8 +5,10 @@ import {
   PRONOSTIC_RECOMMANDATION_LABELS,
   formatMontantSouhaite,
   type DossierFacts,
+  type EvaluationProposition,
   type PronosticAvis,
   type PronosticRecommandation,
+  type RatioFait,
 } from '@imf/shared';
 import { ApiError, apiFetch } from '../../lib/api';
 import { dashStyles as styles } from './DashboardShell';
@@ -17,9 +19,20 @@ export type PronosticView = {
   modele: string | null;
   avis: PronosticAvis;
   facts: DossierFacts;
+  /** Ratios recalculés sur le montant proposé (absent sur les anciens pronostics). */
+  evaluation?: EvaluationProposition | null;
   ajuste: boolean;
   erreurIa: string | null;
   createdAt: string;
+  validationAgent?: {
+    pronosticId: string | null;
+    recommandation: PronosticRecommandation;
+    montantRetenu: number | null;
+    dureeRetenueMois: number | null;
+    accordAvecIa: boolean | null;
+    commentaire: string | null;
+    createdAt: string;
+  } | null;
 };
 
 const CONFIANCE_LABELS: Record<PronosticAvis['confiance'], string> = {
@@ -55,16 +68,59 @@ function List({ title, items }: { title: string; items: string[] }) {
   );
 }
 
+function RatioTable({ title, ratios }: { title: string; ratios: RatioFait[] }) {
+  if (!ratios.length) return null;
+  return (
+    <table className={styles.detailDataTable}>
+      <thead>
+        <tr>
+          <th>{title}</th>
+          <th>Valeur</th>
+          <th>Norme</th>
+          <th>Statut</th>
+        </tr>
+      </thead>
+      <tbody>
+        {ratios.map((r) => (
+          <tr key={r.key}>
+            <td>{r.label}</td>
+            <td>{formatRatio(r.valeur, r.enPourcentage)}</td>
+            <td>{r.norme}</td>
+            <td>
+              {r.respecte == null ? (
+                '—'
+              ) : r.respecte ? (
+                <span className={styles.badgeOk}>Conforme</span>
+              ) : (
+                <span className={`${styles.badge} ${styles.badgeWarn}`}>
+                  Hors norme
+                </span>
+              )}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
 /** Avis IA consultatif : la décision reste humaine. */
 export function PronosticPanel({
   dossierId,
   canRegenerate = false,
   onChange,
+  endpoint,
+  beforeGenerate,
 }: {
   dossierId: string;
   canRegenerate?: boolean;
   onChange?: (pronostic: PronosticView | null) => void;
+  /** Défaut : `/scoring/dossiers/:id/pronostic` (agent : `/agent/dossiers/:id/pronostic`). */
+  endpoint?: string;
+  /** Exécuté avant la génération (ex. enregistrer la checklist et le rapport). */
+  beforeGenerate?: () => Promise<void>;
 }) {
+  const url = endpoint ?? `/scoring/dossiers/${dossierId}/pronostic`;
   const [pronostic, setPronostic] = useState<PronosticView | null | undefined>(
     undefined,
   );
@@ -81,9 +137,7 @@ export function PronosticPanel({
     setPronostic(undefined);
     (async () => {
       try {
-        const p = await apiFetch<PronosticView | null>(
-          `/scoring/dossiers/${dossierId}/pronostic`,
-        );
+        const p = await apiFetch<PronosticView | null>(url);
         if (!cancelled) update(p ?? null);
       } catch (e) {
         if (!cancelled) {
@@ -95,16 +149,14 @@ export function PronosticPanel({
     return () => {
       cancelled = true;
     };
-  }, [dossierId]);
+  }, [url]);
 
   async function regenerate() {
     setBusy(true);
     setError(null);
     try {
-      const p = await apiFetch<PronosticView>(
-        `/scoring/dossiers/${dossierId}/pronostic`,
-        { method: 'POST' },
-      );
+      await beforeGenerate?.();
+      const p = await apiFetch<PronosticView>(url, { method: 'POST' });
       update(p);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Génération impossible');
@@ -147,7 +199,13 @@ export function PronosticPanel({
   }
 
   const { avis, facts } = pronostic;
+  const evaluation = pronostic.evaluation ?? null;
   const devise = facts.demande.devise;
+  const montantMax =
+    evaluation?.montantMax ??
+    facts.referenceIa?.montantMaxConseille ??
+    facts.proposition.montantMaxConseille;
+  const validation = pronostic.validationAgent ?? null;
 
   return (
     <div className={styles.assignPanel}>
@@ -188,9 +246,17 @@ export function PronosticPanel({
             Maximum conseillé (DSR 40 %)
           </span>
           <span className={styles.pronosticFigureValue}>
-            {formatMontantSouhaite(facts.proposition.montantMaxConseille, devise)}
+            {formatMontantSouhaite(montantMax, devise)}
           </span>
         </div>
+        {evaluation?.mensualite != null ? (
+          <div className={styles.pronosticFigure}>
+            <span className={styles.pronosticFigureLabel}>Mensualité</span>
+            <span className={styles.pronosticFigureValue}>
+              {formatMontantSouhaite(evaluation.mensualite, devise)}
+            </span>
+          </div>
+        ) : null}
         <div className={styles.pronosticFigure}>
           <span className={styles.pronosticFigureLabel}>Montant demandé</span>
           <span className={styles.pronosticFigureValue}>
@@ -207,37 +273,44 @@ export function PronosticPanel({
         <List title="Points de vigilance" items={avis.pointsVigilance} />
       </div>
 
-      {facts.ratios.length ? (
-        <table className={styles.detailDataTable}>
-          <thead>
-            <tr>
-              <th>Ratio CF 2.4</th>
-              <th>Valeur</th>
-              <th>Norme</th>
-              <th>Statut</th>
-            </tr>
-          </thead>
-          <tbody>
-            {facts.ratios.map((r) => (
-              <tr key={r.key}>
-                <td>{r.label}</td>
-                <td>{formatRatio(r.valeur, r.enPourcentage)}</td>
-                <td>{r.norme}</td>
-                <td>
-                  {r.respecte == null ? (
-                    '—'
-                  ) : r.respecte ? (
-                    <span className={styles.badgeOk}>Conforme</span>
-                  ) : (
-                    <span className={`${styles.badge} ${styles.badgeWarn}`}>
-                      Hors norme
-                    </span>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      {evaluation ? (
+        <RatioTable
+          title="Ratios sur le montant proposé (IA)"
+          ratios={evaluation.ratios}
+        />
+      ) : null}
+      <RatioTable
+        title={
+          evaluation
+            ? 'Ratios sur la proposition de l’agent (CF 2.5)'
+            : 'Ratio CF 2.4'
+        }
+        ratios={facts.ratios}
+      />
+
+      {validation ? (
+        <div>
+          <h3 className={styles.pronosticListTitle}>Validation de l’agent</h3>
+          <p className={styles.assignMeta}>
+            {PRONOSTIC_RECOMMANDATION_LABELS[validation.recommandation]}
+            {validation.montantRetenu != null
+              ? ` · ${formatMontantSouhaite(validation.montantRetenu, devise)}`
+              : ''}
+            {validation.dureeRetenueMois ? ` · ${validation.dureeRetenueMois} mois` : ''}
+            {validation.accordAvecIa === false
+              ? ' · s’écarte de l’avis IA'
+              : validation.accordAvecIa
+                ? ' · conforme à l’avis IA'
+                : ''}
+            {` · ${new Date(validation.createdAt).toLocaleString('fr-FR')}`}
+            {validation.pronosticId && validation.pronosticId !== pronostic.id
+              ? ' · validée sur un avis antérieur'
+              : ''}
+          </p>
+          {validation.commentaire ? (
+            <p className={styles.pronosticText}>{validation.commentaire}</p>
+          ) : null}
+        </div>
       ) : null}
 
       {error ? <p className={styles.listError}>{error}</p> : null}

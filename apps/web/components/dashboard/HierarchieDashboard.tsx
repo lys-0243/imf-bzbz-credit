@@ -72,6 +72,8 @@ function HierarchieDetail({ id, onDone }: { id: string; onDone: () => void }) {
   const { user } = useAuth();
   const [data, setData] = useState<(DossierDetailData & { etat: string }) | null>(null);
   const [comment, setComment] = useState('');
+  /** Montant proposé par l'IA, pour le bandeau (undefined : avis non chargé). */
+  const [montantIa, setMontantIa] = useState<number | null | undefined>(undefined);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -128,7 +130,10 @@ function HierarchieDetail({ id, onDone }: { id: string; onDone: () => void }) {
   const { actions, aide } = actionsPour(user.role, data.etat);
   return (
     <div>
-      <PronosticPanel dossierId={data.id} />
+      <PronosticPanel
+        dossierId={data.id}
+        onChange={(p) => setMontantIa(p ? p.avis.montantSuggere : null)}
+      />
       <div className={styles.assignPanel}>
         <h2 className={styles.assignTitle}>Décision</h2>
         <p className={styles.assignHint}>{aide}</p>
@@ -162,7 +167,12 @@ function HierarchieDetail({ id, onDone }: { id: string; onDone: () => void }) {
         ) : null}
         {error ? <p className={styles.listError}>{error}</p> : null}
       </div>
-      <DossierDetailView data={data} canManageDocs={false} pendingActions={[]} />
+      <DossierDetailView
+        data={data}
+        canManageDocs={false}
+        pendingActions={[]}
+        montantProposeIa={montantIa}
+      />
     </div>
   );
 }

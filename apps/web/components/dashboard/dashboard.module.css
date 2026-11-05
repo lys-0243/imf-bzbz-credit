@@ -1387,6 +1387,37 @@
   line-height: 1.1;
 }
 
+.detailHeroTop {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px 20px;
+}
+
+.detailHeroAside {
+  margin-left: auto;
+  text-align: right;
+}
+
+.detailHeroAsideLabel {
+  margin: 0 0 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.detailHeroAsideAmount {
+  margin: 0 0 8px;
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  color: #f4df3c;
+}
+
 .detailHeroSub {
   margin: 0 0 10px;
   font-size: 0.9rem;
