@@ -6,6 +6,7 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { Role } from '@prisma/client';
 import { AuthService } from './auth.service';
 import { CurrentUser } from './current-user.decorator';
@@ -60,6 +61,9 @@ export class IdentityController {
     },
   })
   @ApiResponse({ status: 401, description: 'Identifiants invalides ou compte désactivé' })
+  @ApiResponse({ status: 429, description: 'Trop de tentatives — réessayer dans une minute' })
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   login(@Body() dto: LoginDto) {
     return this.auth.login(dto.email, dto.password);
   }

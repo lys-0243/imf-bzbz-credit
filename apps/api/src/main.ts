@@ -1,14 +1,20 @@
+import './env';
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
+import { corsOrigins, isProduction } from './config';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   app.enableCors({
-    origin: true,
+    origin: corsOrigins(),
     credentials: true,
   });
+  if (isProduction) {
+    // Derrière le reverse proxy : IP client réelle pour le rate-limit du login.
+    app.getHttpAdapter().getInstance().set('trust proxy', 1);
+  }
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -44,11 +50,12 @@ async function bootstrap() {
     .addTag('Affectation', 'File responsable crédit')
     .addTag('Terrain', 'Visites, checklist, rapport, pièces')
     .addTag('Workflow', 'Transitions d’état')
+    .addTag('Dossiers', 'Lecture générique, formulaires Analyse_AGR (CF3…CF8, comité)')
     .addTag('Documents', 'Téléchargement des pièces')
     .addTag('Banking', 'Lookup compte core banking (mock)')
     .addTag('Admin', 'Utilisateurs, zones, produits, audit')
     .addTag('Audit', 'Point d’entrée journal')
-    .addTag('Scoring', 'Module scoring (stub)')
+    .addTag('Scoring', 'Pronostic : faits CF2 + avis IA validé par l’humain')
     .addTag('Conformite', 'Module conformité (stub)')
     .addTag('Clients', 'Module clients (stub)')
     .build();

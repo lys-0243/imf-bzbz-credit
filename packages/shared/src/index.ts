@@ -279,6 +279,9 @@ export const agentActiviteEnrichmentSchema = z.object({
     activiteZoneOperationnelle: boolOuiNon,
     activite6MoisConsecutifs: boolOuiNon,
     activiteEnregistreeLegalement: boolOuiNon,
+    clientListeNoire: boolOuiNon,
+    garantListeNoire: boolOuiNon,
+    codebiteurListeNoire: boolOuiNon,
   }),
   demandeur: z.object({
     prenom: optionalText,
@@ -573,6 +576,9 @@ export function enrichmentFromPayload(
       activiteZoneOperationnelle: Boolean(e.activiteZoneOperationnelle),
       activite6MoisConsecutifs: Boolean(e.activite6MoisConsecutifs),
       activiteEnregistreeLegalement: Boolean(e.activiteEnregistreeLegalement),
+      clientListeNoire: Boolean(e.clientListeNoire),
+      garantListeNoire: Boolean(e.garantListeNoire),
+      codebiteurListeNoire: Boolean(e.codebiteurListeNoire),
     },
     demandeur: {
       prenom: String(dem.prenom ?? p.prenom ?? ''),
@@ -893,3 +899,18 @@ export type BankingNotifyResult = {
 export * from './agentChecklist';
 export * from './analyseAgrPack';
 export * from './cf2Analyse';
+export * from './pronostic';
+export * from './parametresImf';
+export * from './cf3';
+export * from './cf4';
+export * from './cf5Garanties';
+export * from './cf6Decision';
+export * from './planRoute';
+export * from './historique';
+export * from './preComite';
+export * from './decisionComite';
+export * from './cf8Suivi';
+export * from './formulaires';
+export * from './documents';
+export * from './dossierSynthese';
+export * from './documentsHtml';

@@ -16,6 +16,7 @@ npm run db:seed
 npm run dev:api
 npm run dev:web
 npm run dev:mobile
+npm run dev:mobile-web   # même app, dans le navigateur
 ```
 
 Comptes seed :
@@ -42,6 +43,15 @@ Comptes seed :
 - Swagger : http://localhost:3001/api  
 - Web : http://localhost:3000 (login agent → `/agent`, analyste → `/analyste`, admin → `/admin`)
 - Mobile : Expo (émulateur Android → API `http://10.0.2.2:3001` ; appareil → IP LAN via `EXPO_PUBLIC_API_URL`)
+- Réception web : http://localhost:8081 (app mobile compilée pour le navigateur ; API sur le même hôte que la page, port 3001, ou `EXPO_PUBLIC_WEB_API_URL`). L'origine doit figurer dans `WEB_ORIGIN`.
+
+## Réception web (production)
+
+```bash
+EXPO_PUBLIC_WEB_API_URL=https://api.example.com npm run build:web -w @imf/mobile
+```
+
+Servir `apps/mobile/dist` en statique (fallback SPA vers `index.html`), ajouter son domaine à `WEB_ORIGIN` côté API et renseigner `NEXT_PUBLIC_RECEPTION_URL` pour le lien depuis le back-office.
 
 ## Flux agent (web)
 

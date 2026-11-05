@@ -458,6 +458,9 @@ export function DetailScreen({ id, onBack, bottomInset = 24 }: Props) {
       ['activiteZoneOperationnelle', 'Zone opérationnelle'],
       ['activite6MoisConsecutifs', '6 mois consécutifs'],
       ['activiteEnregistreeLegalement', 'Enregistrée légalement'],
+      ['clientListeNoire', 'Client liste noire'],
+      ['garantListeNoire', 'Garant liste noire'],
+      ['codebiteurListeNoire', 'Codébiteur liste noire'],
     ];
     return (
       <InfoCard>

@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { HealthController } from './health.controller';
 import { PrismaModule } from './prisma/prisma.module';
 import { IdentityModule } from './modules/identity/identity.module';
@@ -13,11 +14,16 @@ import { AuditModule } from './modules/audit/audit.module';
 import { ClientsModule } from './modules/clients/clients.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { BankingModule } from './modules/banking/banking.module';
+import { DossiersModule } from './modules/dossiers/dossiers.module';
+import { ParametresModule } from './modules/parametres/parametres.module';
 
 @Module({
   imports: [
+    // Limites appliquées route par route (ThrottlerGuard), pas globalement.
+    ThrottlerModule.forRoot([{ ttl: 60_000, limit: 10 }]),
     PrismaModule,
     AuditModule,
+    ParametresModule,
     IdentityModule,
     DemandesModule,
     ClientsModule,
@@ -29,6 +35,7 @@ import { BankingModule } from './modules/banking/banking.module';
     DocumentsModule,
     AdminModule,
     BankingModule,
+    DossiersModule,
   ],
   controllers: [HealthController],
 })

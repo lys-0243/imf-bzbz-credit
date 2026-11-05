@@ -45,6 +45,7 @@ export type NavKey =
   | 'utilisateurs'
   | 'zones'
   | 'produits'
+  | 'parametres'
   | 'journal'
   | 'profile'
   | 'logout';
@@ -128,6 +129,7 @@ const ADMIN_NAV: NavItem[] = [
   { key: 'utilisateurs', label: 'Utilisateurs', href: '/admin/utilisateurs' },
   { key: 'zones', label: 'Zones', href: '/admin/zones' },
   { key: 'produits', label: 'Produits', href: '/admin/produits' },
+  { key: 'parametres', label: 'Paramètres IMF', href: '/admin/parametres' },
   { key: 'journal', label: 'Journal d’activité', href: '/admin/journal' },
 ];
 
@@ -174,15 +176,31 @@ const RESPONSABLE_CREDIT_NAV: NavItem[] = [
   },
 ];
 
-type ShellBase = 'agent' | 'analyste' | 'admin' | 'responsable-credit';
+const CONFORMITE_NAV: NavItem[] = [
+  { key: 'dashboard', label: 'Dossiers à contrôler', href: '/conformite' },
+];
+
+const DIRECTION_NAV: NavItem[] = [
+  { key: 'dashboard', label: 'Dossiers', href: '/direction' },
+];
+
+type ShellBase =
+  | 'agent'
+  | 'analyste'
+  | 'admin'
+  | 'responsable-credit'
+  | 'conformite'
+  | 'direction';
 
 function activeKey(pathname: string, base: ShellBase): NavKey {
   if (pathname.startsWith(`/${base}/profile`)) return 'profile';
+  if (base === 'conformite' || base === 'direction') return 'dashboard';
   if (base === 'admin') {
     if (pathname.startsWith('/admin/dossiers')) return 'dossiers';
     if (pathname.startsWith('/admin/utilisateurs')) return 'utilisateurs';
     if (pathname.startsWith('/admin/zones')) return 'zones';
     if (pathname.startsWith('/admin/produits')) return 'produits';
+    if (pathname.startsWith('/admin/parametres')) return 'parametres';
     if (pathname.startsWith('/admin/journal')) return 'journal';
     return 'dashboard';
   }
@@ -230,7 +248,11 @@ export function DashboardShell({
         ? ANALYSTE_NAV
         : base === 'responsable-credit'
           ? RESPONSABLE_CREDIT_NAV
-          : ADMIN_NAV;
+          : base === 'conformite'
+            ? CONFORMITE_NAV
+            : base === 'direction'
+              ? DIRECTION_NAV
+              : ADMIN_NAV;
   const current = activeKey(pathname, base);
   const profileHref = `/${base}/profile`;
   const photoUrl =
@@ -448,6 +470,13 @@ function NavIcon({ name }: { name: NavKey }) {
         <svg {...props}>
           <path d="M12 21s7-4.5 7-11a7 7 0 10-14 0c0 6.5 7 11 7 11z" />
           <circle cx="12" cy="10" r="2.5" />
+        </svg>
+      );
+    case 'parametres':
+      return (
+        <svg {...props}>
+          <circle cx="12" cy="12" r="3" />
+          <path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z" />
         </svg>
       );
     case 'produits':

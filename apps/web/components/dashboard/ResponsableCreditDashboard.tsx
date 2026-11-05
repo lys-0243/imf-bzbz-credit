@@ -2,6 +2,12 @@
 
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
+import {
+  PRONOSTIC_RECOMMANDATIONS,
+  PRONOSTIC_RECOMMANDATION_LABELS,
+  decisionDiverge,
+  type PronosticRecommandation,
+} from '@imf/shared';
 import AuthGate from '../AuthGate';
 import { ApiError, apiFetch } from '../../lib/api';
 import { BoardHome } from './BoardHome';
@@ -14,6 +20,7 @@ import { DossierDetailView, type DossierDetailData } from './DossierDetailView';
 import { DossierListView, matchesDossierQuery } from './DossierViews';
 import { PageError, PageLoading, PageStateBlock } from './PageState';
 import { ProfileView } from './ProfileView';
+import { PronosticPanel, type PronosticView } from './PronosticPanel';
 
 export type ResponsableCreditSection =
   | 'dashboard'
@@ -403,12 +410,44 @@ function ResponsableCreditDetail({
   const [renvoiComment, setRenvoiComment] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [pronostic, setPronostic] = useState<PronosticView | null>(null);
+  const [recommandation, setRecommandation] =
+    useState<PronosticRecommandation>('ACCORD_CONDITIONNEL');
+  const [montantRetenu, setMontantRetenu] = useState('');
+  const [dureeRetenue, setDureeRetenue] = useState('');
+  const [decisionComment, setDecisionComment] = useState('');
+
+  /** Pré-remplit la décision avec l'avis IA (modifiable par le RC). */
+  function onPronostic(p: PronosticView | null) {
+    setPronostic(p);
+    if (!p) return;
+    setRecommandation(p.avis.recommandation);
+    setMontantRetenu(
+      p.avis.montantSuggere != null ? String(p.avis.montantSuggere) : '',
+    );
+    setDureeRetenue(
+      p.avis.dureeSuggereeMois != null ? String(p.avis.dureeSuggereeMois) : '',
+    );
+  }
+
+  const montantRetenuNum =
+    recommandation === 'REFUS' || montantRetenu.trim() === ''
+      ? null
+      : Number(montantRetenu.replace(',', '.'));
+  const diverge = pronostic
+    ? decisionDiverge(pronostic.avis, {
+        recommandation,
+        montantRetenu: Number.isFinite(montantRetenuNum) ? montantRetenuNum : null,
+      })
+    : false;
 
   useEffect(() => {
     let cancelled = false;
     setData(null);
     setAgentId('');
     setRenvoiComment('');
+    setPronostic(null);
+    setDecisionComment('');
     (async () => {
       try {
         const d = await apiFetch<RcDetail>(`/affectation/dossiers/${id}`);
@@ -466,10 +505,29 @@ function ResponsableCreditDetail({
   }
 
   async function soumettre() {
+    if (montantRetenuNum != null && !Number.isFinite(montantRetenuNum)) {
+      setError('Montant retenu invalide');
+      return;
+    }
+    if (diverge && !decisionComment.trim()) {
+      setError('Expliquez pourquoi votre décision s’écarte de l’avis IA');
+      return;
+    }
+    const duree = Number.parseInt(dureeRetenue, 10);
     setBusy(true);
     try {
       await apiFetch(`/affectation/dossiers/${id}/soumettre`, {
         method: 'POST',
+        body: JSON.stringify({
+          recommandation,
+          ...(montantRetenuNum != null ? { montantRetenu: montantRetenuNum } : {}),
+          ...(Number.isFinite(duree) && duree > 0
+            ? { dureeRetenueMois: duree }
+            : {}),
+          ...(decisionComment.trim()
+            ? { commentaire: decisionComment.trim() }
+            : {}),
+        }),
       });
       onDone('soumis');
     } catch (e) {
@@ -548,13 +606,74 @@ function ResponsableCreditDetail({
         </div>
       ) : null}
 
+      {data.canValidate || data.agentValideAt ? (
+        <PronosticPanel
+          dossierId={data.id}
+          canRegenerate={Boolean(data.canValidate)}
+          onChange={onPronostic}
+        />
+      ) : null}
+
       {data.canValidate ? (
         <div className={styles.assignPanel}>
           <h2 className={styles.assignTitle}>Validation responsable crédit</h2>
           <p className={styles.assignHint}>
             Analysez le dossier, renvoyez-le à l’agent en cas d’erreur, ou
-            validez et soumettez-le à la hiérarchie.
+            validez et soumettez-le à la hiérarchie avec votre décision.
           </p>
+          <div className={styles.pronosticDecisionGrid}>
+            <label className={styles.assignMeta}>
+              Votre décision
+              <select
+                className={styles.pronosticInput}
+                value={recommandation}
+                onChange={(e) =>
+                  setRecommandation(e.target.value as PronosticRecommandation)
+                }
+                disabled={busy}
+              >
+                {PRONOSTIC_RECOMMANDATIONS.map((r) => (
+                  <option key={r} value={r}>
+                    {PRONOSTIC_RECOMMANDATION_LABELS[r]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className={styles.assignMeta}>
+              Montant retenu
+              <input
+                className={styles.pronosticInput}
+                inputMode="decimal"
+                value={montantRetenu}
+                onChange={(e) => setMontantRetenu(e.target.value)}
+                disabled={busy || recommandation === 'REFUS'}
+              />
+            </label>
+            <label className={styles.assignMeta}>
+              Durée retenue (mois)
+              <input
+                className={styles.pronosticInput}
+                inputMode="numeric"
+                value={dureeRetenue}
+                onChange={(e) => setDureeRetenue(e.target.value)}
+                disabled={busy || recommandation === 'REFUS'}
+              />
+            </label>
+          </div>
+          <label className={styles.assignMeta} htmlFor="decision-commentaire">
+            {diverge
+              ? 'Commentaire (obligatoire : votre décision s’écarte de l’avis IA)'
+              : 'Commentaire de décision (facultatif)'}
+          </label>
+          <textarea
+            id="decision-commentaire"
+            className={styles.assignTextarea}
+            rows={2}
+            value={decisionComment}
+            onChange={(e) => setDecisionComment(e.target.value)}
+            disabled={busy}
+            placeholder="Justification, conditions retenues…"
+          />
           <label className={styles.assignMeta} htmlFor="renvoi-motif">
             Motif de renvoi (si applicable)
           </label>

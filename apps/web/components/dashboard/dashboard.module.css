@@ -1439,13 +1439,33 @@
   border-radius: 22px;
   padding: 8px 6px;
   box-shadow: 0 8px 20px rgba(20, 30, 60, 0.14);
+  overflow: hidden;
 }
 
 .detailTabsInner {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 2px;
   align-items: center;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  cursor: grab;
+  touch-action: pan-x;
+  user-select: none;
+}
+
+.detailTabsInner::-webkit-scrollbar {
+  display: none;
+}
+
+.detailTabsInnerDragging {
+  cursor: grabbing;
+}
+
+.detailTabsInnerDragging .detailTab {
+  pointer-events: none;
 }
 
 .detailTab {
@@ -1457,7 +1477,7 @@
   font-weight: 500;
   padding: 10px 16px;
   border-radius: 999px;
-  cursor: pointer;
+  cursor: grab;
   white-space: nowrap;
 }
 
@@ -1479,7 +1499,7 @@
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(0, 70%) minmax(0, 30%);
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px;
   align-items: stretch;
 }
@@ -1493,17 +1513,121 @@
   gap: 12px;
 }
 
+/* Boutons flottants (Historique, Actions à faire, Soumettre) + tiroir à droite */
+.fabStack {
+  position: fixed;
+  right: 28px;
+  bottom: 28px;
+  z-index: 70;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.actionsFab {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  height: 48px;
+  padding: 0 18px 0 16px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--imf-blue);
+  color: #fff;
+  font-family: inherit;
+  font-size: 0.92rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 10px 28px rgba(20, 30, 60, 0.28);
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.actionsFab:hover {
+  background: var(--imf-blue-deep);
+  transform: translateY(-1px);
+}
+
+.actionsFabPrimary {
+  background: var(--imf-green);
+}
+
+.actionsFabPrimary:hover {
+  background: #22963f;
+}
+
+.actionsFabBadge {
+  min-width: 24px;
+  height: 24px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: #fff;
+  color: var(--imf-blue);
+  font-size: 0.8rem;
+  font-weight: 700;
+  display: inline-grid;
+  place-items: center;
+}
+
+.actionsFabBadgeWarn {
+  background: var(--imf-red);
+  color: #fff;
+}
+
+.actionsDrawerRoot {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+}
+
+.actionsDrawerBackdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  background: rgba(10, 20, 50, 0.22);
+  animation: sheetFadeIn 0.2s ease;
+}
+
 .detailAside {
-  min-height: 0;
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(400px, 92vw);
   overflow: auto;
-  border: 1px solid #ececec;
-  border-radius: 16px;
+  border-left: 1px solid #ececec;
+  border-radius: 20px 0 0 20px;
   background: #fafafa;
-  padding: 16px 14px;
+  padding: 18px 16px 24px;
+  box-shadow: -18px 0 48px rgba(10, 20, 50, 0.18);
+  animation: actionsDrawerIn 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes actionsDrawerIn {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.detailAsideWide {
+  width: min(760px, 96vw);
+}
+
+.detailAsideHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
 }
 
 .detailAsideTitle {
-  margin: 0 0 12px;
+  margin: 0;
   font-size: 0.95rem;
   font-weight: 700;
 }
@@ -2264,12 +2388,14 @@
     grid-template-columns: 1fr;
   }
 
-  .detailScroll {
-    max-height: 55vh;
+  .detailAside {
+    width: 100%;
+    border-radius: 0;
   }
 
-  .detailAside {
-    max-height: none;
+  .fabStack {
+    right: 16px;
+    bottom: 16px;
   }
 
   .sheetRoot {
@@ -2891,6 +3017,161 @@
   margin-bottom: 8px;
 }
 
+/* CF2.4 — ratios en forme de fonction (comme Excel) */
+.cf2RatioTable {
+  width: 100%;
+}
+
+.cf2RatioTable td {
+  vertical-align: middle;
+  padding: 10px 8px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.cf2RatioIndex {
+  width: 2rem;
+  font-weight: 700;
+  color: var(--imf-muted);
+}
+
+.cf2RatioLabel {
+  font-weight: 700;
+  white-space: nowrap;
+  min-width: 8rem;
+}
+
+.cf2RatioEq {
+  width: 1.25rem;
+  text-align: center;
+  color: var(--imf-muted);
+  font-weight: 600;
+}
+
+.cf2RatioFraction {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 4.5rem;
+  line-height: 1.25;
+  font-size: 0.82rem;
+}
+
+.cf2RatioFracNum {
+  padding: 0 6px 3px;
+  border-bottom: 1px solid var(--imf-text);
+  text-align: center;
+  max-width: 14rem;
+}
+
+.cf2RatioFracDen {
+  padding: 3px 6px 0;
+  text-align: center;
+  max-width: 14rem;
+}
+
+.cf2RatioResult {
+  text-align: right;
+  white-space: nowrap;
+  min-width: 4.5rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.cf2RatioNormeHeader {
+  display: inline-block;
+  padding: 4px 10px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-weight: 700;
+  font-style: italic;
+  font-size: 0.9rem;
+}
+
+.cf2RatioNorme {
+  text-align: center;
+  white-space: nowrap;
+  font-weight: 600;
+  min-width: 4.5rem;
+}
+
+.cf2RatioNormeWarn {
+  color: var(--imf-red, #c62828);
+}
+
+/* Totaux bilan CF2.5 — ligne hachurée verte (charte / Excel #99FFCC) */
+.cf2TotalRow td {
+  background-color: color-mix(in srgb, var(--imf-green, #2ab24b) 22%, #fff);
+  background-image: repeating-linear-gradient(
+    -45deg,
+    transparent,
+    transparent 4px,
+    color-mix(in srgb, var(--imf-green, #2ab24b) 14%, transparent) 4px,
+    color-mix(in srgb, var(--imf-green, #2ab24b) 14%, transparent) 8px
+  );
+  font-weight: 700;
+  border-bottom-color: color-mix(in srgb, var(--imf-green, #2ab24b) 28%, #e8e8e8);
+}
+
+.cf2TotalRow .cf1FormLabel {
+  font-weight: 700;
+  color: var(--imf-text);
+}
+
+/* 12 mois côte à côte — cellules étroites, contrôles compacts */
+.cf2SaisonTable {
+  width: max-content;
+  min-width: 100%;
+  table-layout: fixed;
+  font-size: 0.82rem;
+}
+
+.cf2SaisonTable th,
+.cf2SaisonTable td {
+  padding: 6px 4px;
+  text-align: center;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.cf2SaisonTable th:first-child,
+.cf2SaisonTable td:first-child {
+  width: 5.5rem;
+  text-align: left;
+  padding-left: 8px;
+  padding-right: 6px;
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: #fff;
+}
+
+.cf2SaisonTable thead th:first-child {
+  background: #fafafa;
+  z-index: 3;
+}
+
+.cf2SaisonTable th:not(:first-child),
+.cf2SaisonTable td:not(:first-child) {
+  width: 3.4rem;
+}
+
+.cf2SaisonTable .cf1FormControl {
+  width: 3rem;
+  min-width: 0;
+  max-width: 3rem;
+  margin: 0 auto;
+  padding: 4px 2px;
+  font-size: 0.8rem;
+  border-radius: 6px;
+  text-align: center;
+}
+
+.cf2SaisonTable select.cf1FormControl {
+  width: 2.6rem;
+  max-width: 2.6rem;
+  padding-left: 0;
+  padding-right: 0;
+}
+
 .cf2TableHeader .detailTableTitle {
   margin: 0;
 }
@@ -2915,4 +3196,176 @@
   margin: 0;
   font-size: 0.9rem;
   color: var(--imf-muted);
+}
+
+/* Avis IA — pronostic */
+.pronosticHead {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.pronosticFigures {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+  margin: 14px 0;
+}
+
+.pronosticFigure {
+  border: 1px solid #ececec;
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: #fafafa;
+}
+
+.pronosticFigureLabel {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--imf-muted);
+}
+
+.pronosticFigureValue {
+  display: block;
+  margin-top: 2px;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.pronosticText {
+  margin: 0 0 12px;
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+.pronosticLists {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.pronosticListTitle {
+  margin: 0 0 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.pronosticList {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.pronosticDecisionGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.pronosticInput {
+  width: 100%;
+  min-height: 40px;
+  border: 1px solid #e8e8e8;
+  border-radius: 12px;
+  padding: 8px 12px;
+  font: inherit;
+  font-size: 0.9rem;
+  background: #fff;
+}
+
+/* Plan de route : deux colonnes (activité, domicile), dépôt de la photo, carte Google */
+.planRouteGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.planRouteCol {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid #ececec;
+  border-radius: 16px;
+  background: #fff;
+}
+
+.planRouteField {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.planRouteLabel {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--imf-muted);
+}
+
+.planRouteDropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 18px 14px;
+  border: 2px dashed #c9d2e6;
+  border-radius: 14px;
+  background: #f7f9fd;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.planRouteDropzone:hover,
+.planRouteDropzone:focus-visible {
+  border-color: var(--imf-blue);
+  outline: none;
+}
+
+.planRouteDropzoneActive {
+  border-color: var(--imf-blue);
+  background: #eef2fb;
+}
+
+.planRouteDropzoneText {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--imf-blue);
+}
+
+@media (max-width: 900px) {
+  .planRouteGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.planRoutePhotoBtn {
+  display: block;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: zoom-in;
+}
+
+.planRoutePhoto {
+  display: block;
+  max-width: 100%;
+  max-height: 360px;
+  border-radius: 12px;
+  border: 1px solid #e8e8e8;
+}
+
+.planRouteMap {
+  display: block;
+  width: 100%;
+  height: 280px;
+  border: 0;
+  border-radius: 12px;
 }
