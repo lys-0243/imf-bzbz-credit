@@ -52,6 +52,7 @@ export type NavKey =
   | 'manuels'
   | 'cbs'
   | 'profile'
+  | 'alertes'
   | 'logout';
 
 export type NavCounts = {
@@ -135,8 +136,15 @@ const DIRECTION_NAV: NavItem[] = [
   { key: 'file', label: 'Dossiers à décider', href: '/direction/file', countKey: 'aTraiter' },
 ];
 
+const RECEPTION_NAV: NavItem[] = [
+  { key: 'dashboard', label: 'Accueil', href: '/reception' },
+  { key: 'dossiers', label: 'Dossiers', href: '/reception/dossiers' },
+  { key: 'alertes', label: 'Alertes', href: '/reception/alertes' },
+];
+
 type ShellBase =
   | 'agent'
+  | 'reception'
   | 'analyste'
   | 'admin'
   | 'responsable-credit'
@@ -145,6 +153,12 @@ type ShellBase =
 
 function activeKey(pathname: string, base: ShellBase): NavKey {
   if (pathname.startsWith(`/${base}/profile`)) return 'profile';
+  if (base === 'reception') {
+    if (pathname.startsWith('/reception/nouveau')) return 'dashboard';
+    if (pathname.startsWith('/reception/alertes')) return 'alertes';
+    if (pathname === '/reception' || pathname === '/reception/') return 'dashboard';
+    return 'dossiers';
+  }
   if (base !== 'agent' && base !== 'admin') {
     if (pathname.startsWith(`/${base}/manuels`)) return 'manuels';
     if (pathname.startsWith(`/${base}/agents`)) return 'agents';
@@ -185,13 +199,15 @@ export function DashboardShell({
   const { user, logout } = useAuth();
   const router = useRouter();
   const pathname = usePathname() || `/${base}`;
-  const posteBase = base !== 'agent' && base !== 'admin';
+  const posteBase = base !== 'agent' && base !== 'admin' && base !== 'reception';
   const file = useFile(posteBase);
   const navCounts: NavCounts | undefined = posteBase ? { ...counts, aTraiter: file.data?.aTraiter } : counts;
   const nav =
     base === 'agent'
       ? AGENT_NAV
-      : base === 'analyste'
+      : base === 'reception'
+        ? RECEPTION_NAV
+        : base === 'analyste'
         ? ANALYSTE_NAV
         : base === 'responsable-credit'
           ? RESPONSABLE_CREDIT_NAV
@@ -295,10 +311,13 @@ export function DashboardShell({
       </aside>
 
       <div className={styles.main}>{children}</div>
-      <CommandPalette
-        base={base === 'admin' ? 'admin/dossiers' : base}
-        navigation={nav.filter((n) => n.href).map((n) => ({ label: n.label, href: n.href!, groupe: 'Navigation' }))}
-      />
+      {/* La palette lit /workflow/file, réservé aux rôles du circuit interne. */}
+      {base !== 'reception' ? (
+        <CommandPalette
+          base={base === 'admin' ? 'admin/dossiers' : base}
+          navigation={nav.filter((n) => n.href).map((n) => ({ label: n.label, href: n.href!, groupe: 'Navigation' }))}
+        />
+      ) : null}
     </div>
   );
 }
@@ -364,6 +383,13 @@ function NavIcon({ name }: { name: NavKey }) {
         <svg {...props}>
           <path d="M8 6h13M8 12h13M8 18h13" />
           <path d="M3 6h.01M3 12h.01M3 18h.01" />
+        </svg>
+      );
+    case 'alertes':
+      return (
+        <svg {...props}>
+          <path d="M6 16V11a6 6 0 0112 0v5l1.5 2h-15L6 16z" />
+          <path d="M10 20a2 2 0 004 0" />
         </svg>
       );
     case 'a_valider':

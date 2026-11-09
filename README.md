@@ -44,7 +44,7 @@ Comptes seed :
 
 - API : http://localhost:3001/health  
 - Swagger : http://localhost:3001/api  
-- Web : http://localhost:3000 (agent → `/agent`, RC → `/responsable-credit`, analyste → `/analyste`, conformité → `/conformite`, DG / DGA / CA → `/direction`, admin → `/admin`)
+- Web : http://localhost:3000 (réception → `/reception`, agent → `/agent`, RC → `/responsable-credit`, analyste → `/analyste`, conformité → `/conformite`, DG / DGA / CA → `/direction`, admin → `/admin`)
 - Mobile : Expo (émulateur Android → API `http://10.0.2.2:3001` ; appareil → IP LAN via `EXPO_PUBLIC_API_URL`)
 - Réception web : http://localhost:8081 (app mobile compilée pour le navigateur ; API sur le même hôte que la page, port 3001, ou `EXPO_PUBLIC_WEB_API_URL`). L'origine doit figurer dans `WEB_ORIGIN`.
 
@@ -54,7 +54,7 @@ Comptes seed :
 EXPO_PUBLIC_WEB_API_URL=https://api.example.com npm run build:web -w @imf/mobile
 ```
 
-Servir `apps/mobile/dist` en statique (fallback SPA vers `index.html`), ajouter son domaine à `WEB_ORIGIN` côté API et renseigner `NEXT_PUBLIC_RECEPTION_URL` pour le lien depuis le back-office.
+Servir `apps/mobile/dist` en statique (fallback SPA vers `index.html`), ajouter son domaine à `WEB_ORIGIN` côté API (la réception dispose aussi de son espace dans le back-office web, `/reception`).
 
 ## Circuit du crédit
 

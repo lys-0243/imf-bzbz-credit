@@ -122,10 +122,6 @@ export function LoginScreen() {
           )}
         </Pressable>
 
-        <Text style={styles.hint}>
-          Démo : reception@imf.local / Reception1!{'\n'}
-          agent.a@imf.local / Agent1!
-        </Text>
       </KeyboardAwareScrollView>
     </View>
   );

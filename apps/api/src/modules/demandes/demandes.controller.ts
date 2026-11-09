@@ -46,7 +46,8 @@ const RECEPTION_PAYLOAD_EXAMPLE = {
   adresseDomicile: 'Av. de la Paix, Kinshasa',
   devise: 'USD',
   montantSollicite: 500,
-  dureeSemaines: 12,
+  // Unité du produit : dureeMois (produit en MOIS) ou dureeSemaines (produit en SEMAINES).
+  dureeMois: 12,
   motifCredit: 'Fonds de roulement commerce',
   capaciteMensuelle: 150,
   pretAutreInstitution: 'Non',

@@ -3400,3 +3400,17 @@
   border: 0;
   border-radius: 12px;
 }
+
+/* Nom d’une pièce reçue : ouvre l’aperçu. */
+.checklistDocNameBtn {
+  border: 0;
+  padding: 0;
+  background: none;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.checklistDocNameBtn:hover {
+  text-decoration: underline;
+}
