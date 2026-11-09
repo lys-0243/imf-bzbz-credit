@@ -8,7 +8,9 @@ import { AffectationModule } from './modules/affectation/affectation.module';
 import { TerrainModule } from './modules/terrain/terrain.module';
 import { WorkflowModule } from './modules/workflow/workflow.module';
 import { ScoringModule } from './modules/scoring/scoring.module';
-import { ConformiteModule } from './modules/conformite/conformite.module';
+import { AnalyseModule } from './modules/analyse/analyse.module';
+import { AssistantModule } from './modules/assistant/assistant.module';
+import { ManuelsModule } from './modules/manuels/manuels.module';
 import { DocumentsModule } from './modules/documents/documents.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { ClientsModule } from './modules/clients/clients.module';
@@ -31,7 +33,9 @@ import { ParametresModule } from './modules/parametres/parametres.module';
     TerrainModule,
     WorkflowModule,
     ScoringModule,
-    ConformiteModule,
+    ManuelsModule,
+    AssistantModule,
+    AnalyseModule,
     DocumentsModule,
     AdminModule,
     BankingModule,

@@ -21,6 +21,7 @@ export class ParametresController {
     Role.ANALYSTE,
     Role.CONFORMITE,
     Role.DG,
+    Role.DGA,
     Role.CA,
     Role.ADMIN,
   )

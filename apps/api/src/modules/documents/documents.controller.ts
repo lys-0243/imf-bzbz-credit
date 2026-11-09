@@ -30,6 +30,7 @@ import { DocumentsService } from './documents.service';
   Role.ANALYSTE,
   Role.CONFORMITE,
   Role.DG,
+  Role.DGA,
   Role.CA,
   Role.ADMIN,
 )

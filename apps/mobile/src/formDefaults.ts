@@ -31,7 +31,8 @@ export function defaultReceptionPayload(communeId: string) {
     adresseDomicile: '',
     devise: DEVISES[0] as (typeof DEVISES)[number],
     montantSollicite: 0,
-    dureeSemaines: 1,
+    /** Dans l’unité du produit (semaines ou mois). */
+    duree: 1,
     motifCredit: '',
     capaciteMensuelle: 0,
     pretAutreInstitution:

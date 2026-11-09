@@ -3,6 +3,10 @@
 import { useEffect, useState } from 'react';
 import {
   DEFAULT_PARAMETRES_IMF,
+  ETAPE_WORKFLOW_LABELS,
+  ETAPES_WORKFLOW,
+  PILIER_SCORE_LABELS,
+  PILIERS_SCORE,
   normalizeParametresImf,
   type ParametresImf,
 } from '@imf/shared';
@@ -149,6 +153,80 @@ export function AdminParametres() {
             type="number"
             value={String(params.seuilApprobationCa)}
             onChange={(v) => update({ ...params, seuilApprobationCa: toNum(v) })}
+          />
+        </FormRow>
+        <FormRow label="Taux de change (CDF pour 1 USD) — dossiers en francs face au seuil">
+          <TextInput
+            type="number"
+            value={String(params.tauxChangeCdfUsd)}
+            onChange={(v) => update({ ...params, tauxChangeCdfUsd: toNum(v) })}
+          />
+        </FormRow>
+      </FormBlock>
+
+      <FormBlock title="Délais cibles par étape (jours) — au-delà, le dossier est signalé en retard">
+        {ETAPES_WORKFLOW.map((e) => (
+          <FormRow key={e} label={ETAPE_WORKFLOW_LABELS[e]}>
+            <TextInput
+              type="number"
+              value={String(params.delaisCiblesJours[e])}
+              onChange={(v) => update({ ...params, delaisCiblesJours: { ...params.delaisCiblesJours, [e]: toNum(v) } })}
+            />
+          </FormRow>
+        ))}
+      </FormBlock>
+
+      <FormBlock title="Grille du score de crédit">
+        {PILIERS_SCORE.map((p) => (
+          <FormRow key={p} label={`Poids — ${PILIER_SCORE_LABELS[p]} (%)`}>
+            <TextInput
+              type="number"
+              value={toPct(params.grilleScore.poids[p])}
+              onChange={(v) =>
+                update({ ...params, grilleScore: { ...params.grilleScore, poids: { ...params.grilleScore.poids, [p]: fromPct(v) } } })
+              }
+            />
+          </FormRow>
+        ))}
+        {(['A', 'B', 'C', 'D'] as const).map((c) => (
+          <FormRow key={c} label={`Seuil de la classe ${c} (score ≥)`}>
+            <TextInput
+              type="number"
+              value={String(params.grilleScore.seuilsClasses[c])}
+              onChange={(v) =>
+                update({
+                  ...params,
+                  grilleScore: { ...params.grilleScore, seuilsClasses: { ...params.grilleScore.seuilsClasses, [c]: toNum(v) } },
+                })
+              }
+            />
+          </FormRow>
+        ))}
+        <FormRow label="Plafond en cas de critère éliminatoire">
+          <TextInput
+            type="number"
+            value={String(params.grilleScore.plafondEliminatoire)}
+            onChange={(v) => update({ ...params, grilleScore: { ...params.grilleScore, plafondEliminatoire: toNum(v) } })}
+          />
+        </FormRow>
+        <FormRow label="Ajustement maximal de l’IA par pilier (points)">
+          <TextInput
+            type="number"
+            value={String(params.grilleScore.margeIaParPilier)}
+            onChange={(v) => update({ ...params, grilleScore: { ...params.grilleScore, margeIaParPilier: toNum(v) } })}
+          />
+        </FormRow>
+        <FormRow label="Écart avec l’IA imposant une justification (points)">
+          <TextInput
+            type="number"
+            value={String(params.grilleScore.ecartCommentaire)}
+            onChange={(v) => update({ ...params, grilleScore: { ...params.grilleScore, ecartCommentaire: toNum(v) } })}
+          />
+        </FormRow>
+        <FormRow label="Version de la grille (à changer à chaque modification)">
+          <TextInput
+            value={params.grilleScore.version}
+            onChange={(v) => update({ ...params, grilleScore: { ...params.grilleScore, version: v } })}
           />
         </FormRow>
       </FormBlock>

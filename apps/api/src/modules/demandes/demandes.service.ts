@@ -12,6 +12,7 @@ import {
 import { ZodError } from 'zod';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { BankingService } from '../banking/banking.service';
 import { DocumentsService } from '../documents/documents.service';
 
 type AuthUser = {
@@ -40,7 +41,29 @@ export class DemandesService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly documents: DocumentsService,
+    private readonly banking: BankingService,
   ) {}
+
+  /**
+   * Réception : une demande n’est recevable que pour un compte existant au core banking.
+   * Le contrôle est refait côté serveur (le lookup envoyé par le client n’est pas fiable)
+   * et l’instantané stocké dans le payload est celui du serveur.
+   */
+  private async verifierCompteCbs(numeroCompte: string, produitCode: string) {
+    const res = await this.banking.lookup(numeroCompte, produitCode);
+    if (!res.found) {
+      throw new BadRequestException(
+        'Compte introuvable dans le core banking : la demande ne peut pas être enregistrée.',
+      );
+    }
+    return {
+      found: res.found,
+      creditEnCours: res.creditEnCours,
+      score: res.score,
+      historiqueCount: res.historique.length,
+      checkedAt: new Date().toISOString(),
+    };
+  }
 
   async listZones() {
     return this.prisma.zone.findMany({ orderBy: { code: 'asc' } });
@@ -129,6 +152,9 @@ export class DemandesService {
 
     const produit = await this.resolveProduitActif(produitId);
     const payload = this.validatePayload(payloadRaw, produit);
+    if (user.role === Role.RECEPTION) {
+      payload.bankingLookup = await this.verifierCompteCbs(payload.numeroCompte, produit.code);
+    }
     const fields = clientFieldsFromPayload(payload);
     const commune = await this.resolveCommune(fields.communeId);
     const zoneId = commune.zoneId;
@@ -280,6 +306,9 @@ export class DemandesService {
       );
     }
     const payload = this.validatePayload(payloadRaw, existing.produit);
+    if (user.role === Role.RECEPTION) {
+      payload.bankingLookup = await this.verifierCompteCbs(payload.numeroCompte, existing.produit.code);
+    }
     const fields = clientFieldsFromPayload(payload);
     const commune = await this.resolveCommune(fields.communeId);
 

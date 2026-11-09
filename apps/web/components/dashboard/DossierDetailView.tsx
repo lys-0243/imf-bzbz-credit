@@ -20,6 +20,7 @@ import {
   type ProduitCreditDto,
 } from '@imf/shared';
 import { getApiUrl, getToken } from '../../lib/api';
+import { PiecePreview, type PreviewPiece } from '../documents/PiecePreview';
 import { Cf2Panel } from './Cf2Panel';
 import {
   FICHE_TAB_PREFIX,
@@ -212,8 +213,21 @@ function DocTypeIcon({ ext }: { ext: string }) {
 function ChecklistActionIcon({
   name,
 }: {
-  name: 'upload' | 'replace' | 'download' | 'avis';
+  name: 'upload' | 'replace' | 'download' | 'avis' | 'voir';
 }) {
+  if (name === 'voir') {
+    return (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+        <path
+          d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinejoin="round"
+        />
+        <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="2" />
+      </svg>
+    );
+  }
   if (name === 'upload') {
     return (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
@@ -662,7 +676,23 @@ export function DossierDetailView({
   tabRequest = null,
   onTabRequestHandled,
   drawers = [],
+  montantProposeIa,
+  header,
+  leadingTabs,
+  initialTab,
+  bottomInset = 0,
+  sansBoutonsFlottants = false,
 }: {
+  /** Bloc affiché au-dessus du bandeau (ex. frise du parcours). */
+  header?: ReactNode;
+  /** Onglets placés avant les onglets du dossier (contenu via `extraTabContent`). */
+  leadingTabs?: TabDef[];
+  /** Onglet ouvert à l'affichage du dossier. */
+  initialTab?: string;
+  /** Hauteur réservée en bas (barre de décision fixe). */
+  bottomInset?: number;
+  /** Masque les boutons flottants Historique / Actions (poste de décision). */
+  sansBoutonsFlottants?: boolean;
   data: DossierDetailData;
   backHref?: string;
   extraTabs?: TabDef[];
@@ -680,6 +710,11 @@ export function DossierDetailView({
   tabRequest?: string | null;
   onTabRequestHandled?: () => void;
   drawers?: DetailDrawer[];
+  /**
+   * Montant proposé par l'IA (dernier pronostic), affiché en haut à droite du
+   * bandeau ; `null` = pas de montant (« — ») ; `undefined` = non affiché.
+   */
+  montantProposeIa?: number | null;
 }) {
   const [tab, setTab] = useState('historique');
   /** Volet flottant ouvert : 'actions', 'historique' ou la clé d’un `drawers`. */
@@ -695,6 +730,7 @@ export function DossierDetailView({
   }, [openDrawer]);
   const [docError, setDocError] = useState<string | null>(null);
   const [downloadBusy, setDownloadBusy] = useState(false);
+  const [apercu, setApercu] = useState<PreviewPiece | null>(null);
   const [avisTarget, setAvisTarget] = useState<{
     id: string;
     label: string;
@@ -775,12 +811,13 @@ export function DossierDetailView({
   ]);
 
   const tabs = useMemo(
-    () => [...baseTabs, ...(extraTabs ?? [])],
-    [baseTabs, extraTabs],
+    () => [...(leadingTabs ?? []), ...baseTabs, ...(extraTabs ?? [])],
+    [leadingTabs, baseTabs, extraTabs],
   );
 
   // Sans onglet (ex. Dare-Dare en descente), l’historique s’affiche en contenu principal.
-  const defaultTab = tabs[0]?.key ?? 'historique';
+  const defaultTab =
+    (initialTab && tabs.some((t) => t.key === initialTab) ? initialTab : tabs[0]?.key) ?? 'historique';
 
   useEffect(() => {
     setTab(defaultTab);
@@ -979,9 +1016,27 @@ export function DossierDetailView({
                   <li key={row.id} className={styles.checklistRow}>
                     <DocTypeIcon ext={ext} />
                     <div className={styles.checklistDocMain}>
-                      <span className={styles.checklistDocName}>
-                        {row.label}
-                      </span>
+                      {row.piece ? (
+                        <button
+                          type="button"
+                          className={`${styles.checklistDocName} ${styles.checklistDocNameBtn}`}
+                          title="Voir le document"
+                          onClick={() =>
+                            row.piece &&
+                            setApercu({
+                              id: row.piece.id,
+                              label: row.label,
+                              originalName: row.piece.originalName,
+                            })
+                          }
+                        >
+                          {row.label}
+                        </button>
+                      ) : (
+                        <span className={styles.checklistDocName}>
+                          {row.label}
+                        </span>
+                      )}
                       {avis ? (
                         <span className={styles.checklistDocAvis}>
                           Avis : {avis}
@@ -1006,6 +1061,23 @@ export function DossierDetailView({
                           />
                         </button>
                       ) : null}
+                      <button
+                        type="button"
+                        className={styles.checklistIconBtn}
+                        disabled={!row.piece}
+                        title="Voir"
+                        aria-label="Voir"
+                        onClick={() =>
+                          row.piece &&
+                          setApercu({
+                            id: row.piece.id,
+                            label: row.label,
+                            originalName: row.piece.originalName,
+                          })
+                        }
+                      >
+                        <ChecklistActionIcon name="voir" />
+                      </button>
                       <button
                         type="button"
                         className={styles.checklistIconBtn}
@@ -1278,11 +1350,29 @@ export function DossierDetailView({
 
   return (
     <FichesProvider dossierId={data.id}>
-    <div className={styles.detailPage}>
+    <div
+      className={styles.detailPage}
+      style={bottomInset ? { height: `calc(100vh - ${68 + bottomInset}px)` } : undefined}
+    >
       <div className={styles.detailFixed}>
+        {header}
         <div className={styles.detailHero}>
-          <p className={styles.detailHeroName}>{data.client.fullName}</p>
-          <p className={styles.detailHeroAmount}>{montantLabel}</p>
+          <div className={styles.detailHeroTop}>
+            <div>
+              <p className={styles.detailHeroName}>{data.client.fullName}</p>
+              <p className={styles.detailHeroAmount}>{montantLabel}</p>
+            </div>
+            {montantProposeIa !== undefined ? (
+              <div className={styles.detailHeroAside}>
+                <p className={styles.detailHeroAsideLabel}>Proposé (IA)</p>
+                <p className={styles.detailHeroAsideAmount}>
+                  {montantProposeIa == null
+                    ? '—'
+                    : formatMontantSouhaite(montantProposeIa, devise)}
+                </p>
+              </div>
+            ) : null}
+          </div>
           {salaireNet ? (
             <p className={styles.detailHeroSub}>Salaire net : {salaireNet}</p>
           ) : null}
@@ -1380,7 +1470,7 @@ export function DossierDetailView({
         <div className={styles.detailScroll}>{tabContent}</div>
       </div>
 
-      <div className={styles.fabStack}>
+      <div className={styles.fabStack} style={sansBoutonsFlottants ? { display: 'none' } : undefined}>
         <button
           type="button"
           className={styles.actionsFab}
@@ -1536,6 +1626,7 @@ export function DossierDetailView({
         </div>
       ) : null}
 
+      {apercu ? <PiecePreview piece={apercu} onClose={() => setApercu(null)} /> : null}
     </div>
     </FichesProvider>
   );

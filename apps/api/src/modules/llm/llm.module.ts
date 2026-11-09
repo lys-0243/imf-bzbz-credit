@@ -1,12 +1,11 @@
 import { Module } from '@nestjs/common';
+import { AnthropicLlmProvider } from './anthropic-llm.provider';
 import { LLM_PROVIDER } from './llm.provider';
-import { OpenAiLlmProvider } from './openai-llm.provider';
 
-/** Autre fournisseur : implémenter `LlmProvider` et le brancher ici. */
 @Module({
   providers: [
-    OpenAiLlmProvider,
-    { provide: LLM_PROVIDER, useExisting: OpenAiLlmProvider },
+    AnthropicLlmProvider,
+    { provide: LLM_PROVIDER, useExisting: AnthropicLlmProvider },
   ],
   exports: [LLM_PROVIDER],
 })

@@ -29,6 +29,7 @@ export const ROLES = [
   'ANALYSTE',
   'CONFORMITE',
   'DG',
+  'DGA',
   'CA',
   'ADMIN',
 ] as const;
@@ -152,8 +153,13 @@ export const receptionPayloadSchema = z
     adresseDomicile: z.string().min(1),
     devise: z.enum(DEVISES).default('USD'),
     montantSollicite: z.number().positive(),
-    /** Durée saisie en semaines (tous produits). */
-    dureeSemaines: z.number().int().positive(),
+    /**
+     * Durée dans l’unité du produit (`ProduitCredit.dureeUnite`) :
+     * `dureeSemaines` pour un produit en SEMAINES, `dureeMois` pour un produit en MOIS.
+     * Exactement l’un des deux — contrôlé par `parseReceptionPayloadAgainstProduit`.
+     */
+    dureeSemaines: z.number().int().positive().optional(),
+    dureeMois: z.number().int().positive().optional(),
     motifCredit: z.string().min(1),
     capaciteMensuelle: z.number().positive(),
     pretAutreInstitution: z.enum(PRET_AUTRE_INSTITUTION),
@@ -177,6 +183,13 @@ export const receptionPayloadSchema = z
       .optional(),
   })
   .superRefine((data, ctx) => {
+    if ((data.dureeSemaines == null) === (data.dureeMois == null)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Durée requise : dureeSemaines ou dureeMois selon le produit',
+        path: ['dureeSemaines'],
+      });
+    }
     if (
       data.pretAutreInstitution !== 'Non' &&
       !data.autreInstitutionNom?.trim()
@@ -199,7 +212,17 @@ export type ProduitBornes = {
   dureeUnite: DureeUnite;
 };
 
-/** Convertit les bornes produit en semaines pour la saisie réception. */
+/** Libellé pluriel de l’unité de durée d’un produit. */
+export function dureeUniteLabel(unite: DureeUnite): string {
+  return unite === 'SEMAINES' ? 'semaines' : 'mois';
+}
+
+/** Champ du payload réception qui porte la durée pour ce produit. */
+export function champDureeProduit(produit: Pick<ProduitBornes, 'dureeUnite'>): 'dureeSemaines' | 'dureeMois' {
+  return produit.dureeUnite === 'SEMAINES' ? 'dureeSemaines' : 'dureeMois';
+}
+
+/** Convertit les bornes produit en semaines (approximation 1 mois = 4 semaines). */
 export function produitDureeBornesEnSemaines(produit: ProduitBornes): {
   min: number;
   max: number;
@@ -232,13 +255,26 @@ export function parseReceptionPayloadAgainstProduit(
       },
     ]);
   }
-  const bornes = produitDureeBornesEnSemaines(produit);
-  if (data.dureeSemaines < bornes.min || data.dureeSemaines > bornes.max) {
+  // La durée est saisie dans l’unité du produit, sans conversion.
+  const champ = produit.dureeUnite === 'SEMAINES' ? 'dureeSemaines' : 'dureeMois';
+  const autre = champ === 'dureeSemaines' ? 'dureeMois' : 'dureeSemaines';
+  const duree = data[champ];
+  const unite = dureeUniteLabel(produit.dureeUnite);
+  if (data[autre] != null || duree == null) {
     throw new z.ZodError([
       {
         code: z.ZodIssueCode.custom,
-        message: `Durée hors bornes (${bornes.min} – ${bornes.max} semaines)`,
-        path: ['dureeSemaines'],
+        message: `Ce produit se rembourse en ${unite} : renseignez ${champ}`,
+        path: [champ],
+      },
+    ]);
+  }
+  if (duree < produit.dureeMin || duree > produit.dureeMax) {
+    throw new z.ZodError([
+      {
+        code: z.ZodIssueCode.custom,
+        message: `Durée hors bornes (${produit.dureeMin} – ${produit.dureeMax} ${unite})`,
+        path: [champ],
       },
     ]);
   }
@@ -764,6 +800,7 @@ export function dureeUniteFromPayload(
 ): DureeUnite {
   const p = payload ?? {};
   if (typeof p.dureeSemaines === 'number') return 'SEMAINES';
+  if (typeof p.dureeMois === 'number') return 'MOIS';
   if (produitUnite === 'SEMAINES' || produitUnite === 'MOIS') return produitUnite;
   return 'MOIS';
 }
@@ -793,11 +830,11 @@ export function formatDureeLabel(
 
 export function formatProduitBornesHint(p: ProduitBornes): string {
   const montant = `${p.montantMin.toLocaleString('fr-FR')} – ${p.montantMax.toLocaleString('fr-FR')} USD`;
-  const weeks = produitDureeBornesEnSemaines(p);
+  const u = p.dureeUnite === 'SEMAINES' ? 'sem.' : 'mois';
   const d =
-    weeks.min === weeks.max
-      ? `${weeks.min} sem.`
-      : `${weeks.min}–${weeks.max} sem.`;
+    p.dureeMin === p.dureeMax
+      ? `${p.dureeMin} ${u}`
+      : `${p.dureeMin}–${p.dureeMax} ${u}`;
   return `${montant} · ${d}`;
 }
 
@@ -808,14 +845,14 @@ export const DOSSIER_ETAT_LABELS: Record<DossierEtat, string> = {
   DESCENTE: 'Descente terrain',
   RAPPORT_AGENT: 'Rapport agent',
   SCORING: 'Scoring',
-  EN_ATTENTE_VALIDATION_RC: 'En attente de validation responsable crédit',
+  EN_ATTENTE_VALIDATION_RC: 'Validation finale responsable crédit',
   ANALYSTE: 'Analyste crédit',
   RETOUR_AGENT: 'Retour agent',
   CONFORMITE: 'Conformité',
   RETOUR_ANALYSTE: 'Retour analyste',
   DIRECTION: 'Direction générale',
   CONSEIL: "Conseil d'administration",
-  A_DECAISSER: 'À décaisser',
+  A_DECAISSER: 'Crédit accordé — clôturé',
   REJETE: 'Rejeté',
 };
 
@@ -888,6 +925,20 @@ export type BankingDecisionNotify = {
     phone: string;
   };
   decidedAt: string;
+  /** Champs enrichis (circuit complet) — optionnels pour compatibilité. */
+  dureeMois?: number | null;
+  tauxMensuel?: number | null;
+  frais?: {
+    fraisDossier: number;
+    fraisDecaissement: number;
+    tva: number;
+    caution: number;
+    totalFrais: number;
+  } | null;
+  garanties?: Array<{ libelle: string; valeur: number }>;
+  score?: { total: number; classe: string } | null;
+  approbations?: Array<{ role: string; nom: string; date: string; recommandation: string }>;
+  conditions?: string[];
 };
 
 export type BankingNotifyResult = {
@@ -914,3 +965,8 @@ export * from './formulaires';
 export * from './documents';
 export * from './dossierSynthese';
 export * from './documentsHtml';
+export * from './workflow';
+export * from './scoreCredit';
+export * from './rapportAnalyse';
+export * from './assistant';
+export * from './manuels';

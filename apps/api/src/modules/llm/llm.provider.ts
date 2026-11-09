@@ -5,7 +5,6 @@ export type LlmCompletionInput = {
   model?: string;
   /** Demande une réponse JSON (objet unique). */
   json?: boolean;
-  temperature?: number;
   timeoutMs?: number;
 };
 
@@ -14,7 +13,7 @@ export type LlmCompletion = {
   model: string;
 };
 
-/** Contrat fournisseur LLM — l'implémentation est choisie dans `llm.module.ts`. */
+/** Contrat fournisseur LLM — implémentation : Claude (`anthropic-llm.provider.ts`). */
 export interface LlmProvider {
   readonly name: string;
   isConfigured(): boolean;

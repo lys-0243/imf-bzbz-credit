@@ -1,7 +1,7 @@
 'use client';
 
-import HierarchieDashboard from '../../components/dashboard/HierarchieDashboard';
+import PosteDashboard from '../../components/poste/PosteDashboard';
 
 export default function Page() {
-  return <HierarchieDashboard base="conformite" section="list" />;
+  return <PosteDashboard base="conformite" section="dashboard" />;
 }

@@ -36,12 +36,15 @@ Comptes seed :
 | CONFORMITE | Esther Kabeya | `e.kabeya@imf.local` | `Kabeya1!` | — |
 | CONFORMITE | André Ntumba | `a.ntumba@imf.local` | `Ntumba1!` | — |
 | CONFORMITE | Clarisse Mpiana | `c.mpiana@imf.local` | `Mpiana1!` | — |
+| RESPONSABLE_CREDIT | Ruth Mukeba | `r.mukeba@imf.local` | `Mukeba1!` | — |
 | DG | Dieudonné Kabila | `d.kabila@imf.local` | `Kabila1!` | — |
+| DGA | Bernadette Lumbala | `b.lumbala@imf.local` | `Lumbala1!` | — |
+| CA | François Kalonji | `f.kalonji@imf.local` | `Kalonji1!` | — |
 | ADMIN | Véronique Mbombo | `v.mbombo@imf.local` | `Mbombo1!` | — |
 
 - API : http://localhost:3001/health  
 - Swagger : http://localhost:3001/api  
-- Web : http://localhost:3000 (login agent → `/agent`, analyste → `/analyste`, admin → `/admin`)
+- Web : http://localhost:3000 (réception → `/reception`, agent → `/agent`, RC → `/responsable-credit`, analyste → `/analyste`, conformité → `/conformite`, DG / DGA / CA → `/direction`, admin → `/admin`)
 - Mobile : Expo (émulateur Android → API `http://10.0.2.2:3001` ; appareil → IP LAN via `EXPO_PUBLIC_API_URL`)
 - Réception web : http://localhost:8081 (app mobile compilée pour le navigateur ; API sur le même hôte que la page, port 3001, ou `EXPO_PUBLIC_WEB_API_URL`). L'origine doit figurer dans `WEB_ORIGIN`.
 
@@ -51,12 +54,35 @@ Comptes seed :
 EXPO_PUBLIC_WEB_API_URL=https://api.example.com npm run build:web -w @imf/mobile
 ```
 
-Servir `apps/mobile/dist` en statique (fallback SPA vers `index.html`), ajouter son domaine à `WEB_ORIGIN` côté API et renseigner `NEXT_PUBLIC_RECEPTION_URL` pour le lien depuis le back-office.
+Servir `apps/mobile/dist` en statique (fallback SPA vers `index.html`), ajouter son domaine à `WEB_ORIGIN` côté API (la réception dispose aussi de son espace dans le back-office web, `/reception`).
+
+## Circuit du crédit
+
+Chaque étape est assistée par l’IA (Claude) et **validée par un humain** : aucune transition n’est déclenchée par l’IA, chaque écart avec son avis est justifié et tracé (`DecisionHumaine.accordAvecIa`).
+
+| Étape | Qui | Assistance IA | Décision humaine |
+|---|---|---|---|
+| Réception | Réception (app mobile / web) | — | Enregistre la demande |
+| Attribution | Responsable crédit | Agents classés (zone, commune, charge, retours, délais) | Choisit l’agent |
+| Terrain | Agent de crédit | Résumé, pronostic et montant, pré-contrôle | Remplit, ajuste, soumet à l’analyste |
+| Analyse | Analyste (file commune + prise en charge) | Contre-vérification, score proposé, brouillon de rapport | Valide le score et le rapport, ou renvoie à l’agent |
+| Conformité | Agent de conformité | Évaluation RAG sur les manuels IMF / BCC avec citations | Conforme → RC, ou retour à l’analyste |
+| Validation finale | Responsable crédit | Synthèse du parcours et contrôles | Transmet à la DG, renvoie à n’importe quelle étape, ou rejette |
+| Décision | DG ou DGA | Note de décision, pré-remplissage du PV | Approuve (≤ 500 $ : clôturé ; > 500 $ : Conseil), renvoie au RC, rejette |
+| Conseil | Conseil d’administration | Note pour le Conseil | Approuve ou rejette |
+| Core banking | Plateforme | — | Envoi automatique avec reprise (Admin › Envois CBS) |
+
+- Machine d’états : `packages/shared/src/workflow.ts` (source unique API + web).
+- Score de crédit : `packages/shared/src/scoreCredit.ts` (piliers pondérés, critères éliminatoires, grille dans Admin › Paramètres).
+- Avis IA : préparés en arrière-plan dès l’entrée d’un dossier dans une étape (`apps/api/src/modules/assistant`). Sans `ANTHROPIC_API_KEY`, des avis par règles prennent le relais.
+- Manuels (RAG) : Admin › Manuels (PDF texte, DOCX, TXT), recherche plein texte Postgres (`french`, accents retirés par l’application, sans extension).
+- Seuil du Conseil et taux de change CDF/USD : Admin › Paramètres.
+
+Raccourcis du poste de décision : `Ctrl K` (palette), `/` (recherche), `j` / `k` / `Entrée` (file).
 
 ## Flux agent (web)
 
 1. Connexion agent (`jp.mukendi@imf.local`)
-2. Inbox `/agent` — dossiers `AFFECTE` / `DESCENTE` / `RETOUR_AGENT`
-3. Démarrer la descente, renseigner checklist + uploads, résumé exécutif
-4. Soumettre → dossier passe `RAPPORT_AGENT` → `SCORING` (stub) → `ANALYSTE`
-5. Connexion analyste → inbox `/analyste` (lecture seule)
+2. Inbox `/agent` — dossiers `AFFECTE` / `DESCENTE` / `RETOUR_AGENT` (les points à corriger d’un retour s’affichent dans « ↺ Points à corriger »)
+3. Renseigner checklist, CF1 / CF2, pièces, résumé exécutif ; lancer le « ✦ Pré-contrôle IA »
+4. Générer le pronostic, valider le montant, soumettre → le dossier passe à l’analyse

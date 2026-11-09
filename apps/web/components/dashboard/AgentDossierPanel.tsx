@@ -16,10 +16,15 @@ import { Cf2Panel } from './Cf2Panel';
 import { dashStyles as styles } from './DashboardShell';
 import {
   DossierDetailView,
+  type DetailTransition,
   type DossierDetailData,
   type PendingAction,
 } from './DossierDetailView';
 import { PageError, PageLoading, PageStateBlock } from './PageState';
+import { PronosticDecisionFields, usePronosticDecision } from './PronosticDecisionForm';
+import { PronosticPanel, type PronosticView } from './PronosticPanel';
+import { PrecontroleAgent } from '../poste/DossierWorkspace';
+import { PointsRetour } from '../poste/ParcoursChronologie';
 
 type Piece = {
   id: string;
@@ -65,10 +70,18 @@ export default function AgentDossierPanel({
   const [generating, setGenerating] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const toast = useToast();
+  /** Avis et montant proposés par l'IA, à valider avant soumission. */
+  const decision = usePronosticDecision();
 
   const load = useCallback(async () => {
-    const d = await apiFetch<DossierDetail>(`/agent/dossiers/${id}`);
+    const [d, p] = await Promise.all([
+      apiFetch<DossierDetail>(`/agent/dossiers/${id}`),
+      apiFetch<PronosticView | null>(`/agent/dossiers/${id}/pronostic`).catch(
+        () => null,
+      ),
+    ]);
     setData(d);
+    decision.onPronostic(p ?? null);
     setAnswers(
       d.checklistAnswers ?? {
         flags: { hasGarant: true, dat: false, hypotheque: false },
@@ -85,6 +98,7 @@ export default function AgentDossierPanel({
     let cancelled = false;
     setData(null);
     setError(null);
+    decision.reset();
     (async () => {
       try {
         await load();
@@ -170,7 +184,7 @@ export default function AgentDossierPanel({
         actions.push({
           id: 'soumettre',
           label: 'Soumettre le dossier',
-          reason: 'Checklist complète — transmission au responsable crédit',
+          reason: 'Checklist complète — transmission à l’analyste',
           drawer: 'soumettre',
         });
       }
@@ -316,21 +330,39 @@ export default function AgentDossierPanel({
     }
   }
 
+  /** Enregistre checklist et résumé : le pronostic porte sur ces données. */
+  async function saveChecklistEtRapport() {
+    await apiFetch(`/agent/dossiers/${id}/checklist`, {
+      method: 'PUT',
+      body: JSON.stringify({ answers }),
+    });
+    await apiFetch(`/agent/dossiers/${id}/rapport`, {
+      method: 'POST',
+      body: JSON.stringify({ rapportTexte: rapport }),
+    });
+  }
+
   async function soumettre() {
+    if (!decision.pronostic) {
+      setError('Générez l’avis IA et validez le montant proposé avant de soumettre');
+      return;
+    }
+    const invalid = decision.validate({ montantObligatoire: true });
+    if (invalid) {
+      setError(invalid);
+      toast.error(invalid);
+      return;
+    }
     setBusy(true);
     setError(null);
     setIssues([]);
     setMsg(null);
     try {
-      await apiFetch(`/agent/dossiers/${id}/checklist`, {
-        method: 'PUT',
-        body: JSON.stringify({ answers }),
-      });
-      await apiFetch(`/agent/dossiers/${id}/rapport`, {
+      await saveChecklistEtRapport();
+      await apiFetch(`/agent/dossiers/${id}/soumettre`, {
         method: 'POST',
-        body: JSON.stringify({ rapportTexte: rapport }),
+        body: JSON.stringify(decision.body()),
       });
-      await apiFetch(`/agent/dossiers/${id}/soumettre`, { method: 'POST' });
       setMsg('Dossier transmis à l’analyste.');
       toast.success('Dossier soumis.');
       onSubmitted?.();
@@ -497,9 +529,35 @@ export default function AgentDossierPanel({
           value={rapport}
           disabled={!canEdit || generating}
           rows={12}
-          placeholder="Cliquez sur « Générer un résumé du dossier » pour lancer l’étude IA."
+          placeholder="Cliquez sur « Générer un résumé du dossier » pour lancer l’Agent IA."
           onChange={(e) => setRapport(e.target.value)}
         />
+      </div>
+
+      <div className={styles.detailTableBlock}>
+        <h3 className={styles.detailTableTitle}>
+          2. Avis et montant proposés par l’IA
+        </h3>
+        <p className={styles.descenteCardHint}>
+          L’IA propose un montant à partir de la CF1 et de la CF2 ; les ratios
+          sont recalculés sur ce montant. Validez-le ou ajustez-le (commentaire
+          obligatoire en cas d’écart) avant de soumettre. Régénérez l’avis si
+          vous modifiez le dossier.
+        </p>
+        <PronosticPanel
+          dossierId={id}
+          endpoint={`/agent/dossiers/${id}/pronostic`}
+          canRegenerate={canEdit}
+          beforeGenerate={saveChecklistEtRapport}
+          onChange={decision.onPronostic}
+        />
+        {decision.pronostic && canEdit ? (
+          <PronosticDecisionFields
+            decision={decision}
+            disabled={busy || generating}
+            idPrefix="agent"
+          />
+        ) : null}
       </div>
 
       <div className={styles.descenteFooterActions}>
@@ -515,24 +573,56 @@ export default function AgentDossierPanel({
           type="button"
           className={`${styles.btn} ${styles.btnPrimary}`}
           onClick={soumettre}
-          disabled={busy || generating}
+          disabled={busy || generating || !decision.pronostic}
         >
-          Soumettre
+          Valider et soumettre
         </button>
       </div>
     </div>
   );
 
+  const dernierRetour = [...(data.transitions ?? [])]
+    .reverse()
+    .find((t) => t.toEtat === 'RETOUR_AGENT') as (DetailTransition & { details?: unknown }) | undefined;
+
   return (
     <DossierDetailView
       data={data}
       backHref="/agent"
+      montantProposeIa={decision.pronostic ? decision.pronostic.avis.montantSuggere : null}
       extraTabs={
         famille === 'ACTIVITE' ? undefined : [{ key: 'completer', label: 'Compléter' }]
       }
       drawers={
         canEdit
           ? [
+              ...(dernierRetour
+                ? [
+                    {
+                      key: 'retour',
+                      label: '↺ Points à corriger',
+                      title: 'Dossier renvoyé — points à corriger',
+                      badge: Array.isArray(dernierRetour.details) ? dernierRetour.details.length : null,
+                      wide: true,
+                      content: (
+                        <div>
+                          <p className={styles.itemMeta}>
+                            Renvoyé le {new Date(dernierRetour.createdAt ?? '').toLocaleString('fr-FR')}
+                          </p>
+                          {dernierRetour.comment ? <p>{dernierRetour.comment}</p> : null}
+                          <PointsRetour details={dernierRetour.details} />
+                        </div>
+                      ),
+                    },
+                  ]
+                : []),
+              {
+                key: 'precontrole',
+                label: '✦ Pré-contrôle IA',
+                title: 'Pré-contrôle IA',
+                wide: true,
+                content: <PrecontroleAgent dossierId={data.id} />,
+              },
               {
                 key: 'soumettre',
                 label: 'Soumettre',

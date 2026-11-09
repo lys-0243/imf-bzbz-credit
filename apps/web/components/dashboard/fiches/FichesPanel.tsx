@@ -84,6 +84,8 @@ const VUE_LABELS: Record<FicheVue, string> = {
   HISTORIQUE: 'Historique crédit',
   DECISION_COMITE: 'Décision du comité',
   APPRO_PCA: 'APPRO PCA',
+  RAPPORT_ANALYSE: 'Rapport d’analyse',
+  AVIS_CONFORMITE: 'Avis de conformité',
   LETTRE: 'Lettre',
   CONTRAT: 'Contrat',
   GAGE: 'Gage',

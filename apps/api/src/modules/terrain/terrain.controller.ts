@@ -25,6 +25,7 @@ import type { ChecklistAnswers, Cf2Analyse } from '@imf/shared';
 import { CurrentUser } from '../identity/current-user.decorator';
 import { JwtAuthGuard } from '../identity/jwt-auth.guard';
 import { Roles, RolesGuard } from '../identity/roles.guard';
+import { DecisionPronosticDto } from '../scoring/decision-pronostic.dto';
 import { TerrainService } from './terrain.service';
 
 class ChecklistDto {
@@ -106,7 +107,7 @@ export class TerrainController {
   constructor(private readonly terrain: TerrainService) {}
 
   @Get('terrain')
-  @Roles(Role.AGENT, Role.ANALYSTE)
+  @Roles(Role.AGENT)
   @ApiOperation({
     summary: 'Ping module terrain',
     description: 'Confirme que le module terrain est implémenté.',
@@ -317,39 +318,50 @@ export class TerrainController {
     return this.terrain.uploadPiece(user, id, meta.kind, file as any);
   }
 
+  @Get('agent/dossiers/:id/pronostic')
+  @Roles(Role.AGENT)
+  @ApiOperation({
+    summary: 'Dernier pronostic (agent)',
+    description:
+      'Avis et montant proposés par l’IA, ratios recalculés sur ce montant. `null` si aucun pronostic.',
+  })
+  @ApiParam({ name: 'id', description: 'ID du dossier' })
+  getPronostic(
+    @CurrentUser() user: { id: string; role: Role },
+    @Param('id') id: string,
+  ) {
+    return this.terrain.getPronostic(user, id);
+  }
+
+  @Post('agent/dossiers/:id/pronostic')
+  @Roles(Role.AGENT)
+  @ApiOperation({
+    summary: 'Générer le pronostic (agent)',
+    description:
+      'Calcule les faits (CF1, CF2, checklist, CBS) et demande à l’IA un avis et un montant, à valider avant soumission.',
+  })
+  @ApiParam({ name: 'id', description: 'ID du dossier' })
+  generatePronostic(
+    @CurrentUser() user: { id: string; role: Role },
+    @Param('id') id: string,
+  ) {
+    return this.terrain.generatePronostic(user, id);
+  }
+
   @Post('agent/dossiers/:id/soumettre')
   @Roles(Role.AGENT)
   @ApiOperation({
-    summary: 'Soumettre au RC',
+    summary: 'Valider le pronostic et soumettre à l’analyse',
     description:
-      'Soumet le dossier après visite/rapport pour validation responsable crédit.',
+      'L’agent valide (ou ajuste) l’avis et le montant de l’IA, puis soumet le dossier à l’analyste. Exige un pronostic généré sur les données actuelles (409 sinon).',
   })
   @ApiParam({ name: 'id', description: 'ID du dossier' })
+  @ApiBody({ type: DecisionPronosticDto })
   soumettre(
     @CurrentUser() user: { id: string; role: Role },
     @Param('id') id: string,
+    @Body() dto: DecisionPronosticDto,
   ) {
-    return this.terrain.soumettre(user, id);
-  }
-
-  @Get('analyste/dossiers')
-  @Roles(Role.ANALYSTE)
-  @ApiOperation({
-    summary: 'Dossiers analyste',
-    description: 'File analyste (nouveaux / retournés / terminés).',
-  })
-  analysteList(@CurrentUser() user: { id: string; role: Role }) {
-    return this.terrain.listForAnalyste(user);
-  }
-
-  @Get('analyste/dossiers/:id')
-  @Roles(Role.ANALYSTE)
-  @ApiOperation({ summary: 'Détail dossier analyste' })
-  @ApiParam({ name: 'id', description: 'ID du dossier' })
-  analysteOne(
-    @CurrentUser() user: { id: string; role: Role },
-    @Param('id') id: string,
-  ) {
-    return this.terrain.getForAnalyste(user, id);
+    return this.terrain.soumettre(user, id, dto);
   }
 }

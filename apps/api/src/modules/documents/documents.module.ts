@@ -10,6 +10,6 @@ import { FILE_STORAGE } from './storage/file-storage';
     DocumentsService,
     { provide: FILE_STORAGE, useFactory: createFileStorage },
   ],
-  exports: [DocumentsService],
+  exports: [DocumentsService, FILE_STORAGE],
 })
 export class DocumentsModule {}

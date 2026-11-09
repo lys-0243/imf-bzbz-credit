@@ -19,6 +19,7 @@ import { PageError, PageLoading, PageStateBlock } from './PageState';
 import { ProfileView } from './ProfileView';
 import { AdminSheet } from './AdminSheet';
 import { AdminParametres } from './AdminParametres';
+import { AdminEnvoisCbs, AdminManuels } from '../poste/Manuels';
 
 export type AdminSection =
   | 'dashboard'
@@ -29,6 +30,8 @@ export type AdminSection =
   | 'produits'
   | 'parametres'
   | 'journal'
+  | 'manuels'
+  | 'cbs'
   | 'profile';
 
 const ROLES = [
@@ -38,6 +41,7 @@ const ROLES = [
   'ANALYSTE',
   'CONFORMITE',
   'DG',
+  'DGA',
   'CA',
   'ADMIN',
 ] as const;
@@ -1945,6 +1949,8 @@ function AdminWorkspace({
       {section === 'produits' ? <AdminProduits /> : null}
       {section === 'parametres' ? <AdminParametres /> : null}
       {section === 'journal' ? <AdminJournal /> : null}
+      {section === 'manuels' ? <AdminManuels /> : null}
+      {section === 'cbs' ? <AdminEnvoisCbs /> : null}
       {section === 'profile' ? <ProfileView /> : null}
     </DashboardShell>
   );

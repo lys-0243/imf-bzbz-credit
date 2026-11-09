@@ -1,7 +1,7 @@
 'use client';
 
-import ResponsableCreditDashboard from '../../../components/dashboard/ResponsableCreditDashboard';
+import PosteDashboard from '../../../components/poste/PosteDashboard';
 
-export default function ResponsableCreditAgentsPage() {
-  return <ResponsableCreditDashboard section="agents" />;
+export default function Page() {
+  return <PosteDashboard base="responsable-credit" section="agents" />;
 }

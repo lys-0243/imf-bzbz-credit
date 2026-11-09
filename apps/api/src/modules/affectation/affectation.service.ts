@@ -7,17 +7,30 @@ import {
 import { DossierEtat, Role } from '@prisma/client';
 import {
   DOSSIER_ETAT_LABELS,
-  PRONOSTIC_RECOMMANDATION_LABELS,
-  decisionDiverge,
+  MOTIF_ECART_AFFECTATION_LABELS,
+  MOTIF_ECART_MIN_CARACTERES,
   montantSouhaiteFromPayload,
-  normalizeCf2Analyse,
-  usesAnalyseAgrPack,
-  type PronosticAvis,
-  type PronosticRecommandation,
+  NOM_ASSISTANT_IA,
+  type MotifEcartAffectation,
+  type SuggestionAgents,
 } from '@imf/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { WorkflowService } from '../workflow/workflow.service';
+
+/** Retire les noms du client d'un texte libre avant de le confier à l'IA. */
+function sansNomsClient(texte: string, noms: Array<string | null | undefined>): string {
+  let t = texte;
+  const mots = noms
+    .flatMap((n) => String(n ?? '').split(/\s+/))
+    .map((m) => m.trim())
+    .filter((m) => m.length >= 3)
+    .sort((a, b) => b.length - a.length);
+  for (const m of mots) {
+    t = t.replace(new RegExp(m.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), 'le client');
+  }
+  return t.replace(/(le client\s*){2,}/gi, 'le client ').trim();
+}
 
 type AuthUser = {
   id: string;
@@ -25,41 +38,16 @@ type AuthUser = {
   zoneId?: string | null;
 };
 
-type RcBucket =
-  | 'file'
-  | 'en_cours'
-  | 'a_valider'
-  | 'renvoyes'
-  | 'soumis';
-
 const EN_COURS_ETATS: DossierEtat[] = [
   DossierEtat.AFFECTE,
   DossierEtat.DESCENTE,
   DossierEtat.RETOUR_AGENT,
 ];
 
-const SOUMIS_ETATS: DossierEtat[] = [
-  DossierEtat.CONFORMITE,
-  DossierEtat.DIRECTION,
-  DossierEtat.CONSEIL,
-  DossierEtat.A_DECAISSER,
-  DossierEtat.REJETE,
-];
-
-const VISIBLE_ETATS: DossierEtat[] = [
-  DossierEtat.EN_ATTENTE_ATTRIBUTION_AGENT,
-  ...EN_COURS_ETATS,
-  DossierEtat.EN_ATTENTE_VALIDATION_RC,
-  ...SOUMIS_ETATS,
-];
-
 const AGENT_CHARGE_ETATS: DossierEtat[] = [
   DossierEtat.AFFECTE,
   DossierEtat.DESCENTE,
   DossierEtat.RETOUR_AGENT,
-  DossierEtat.EN_ATTENTE_VALIDATION_RC,
-  DossierEtat.RAPPORT_AGENT,
-  DossierEtat.SCORING,
 ];
 
 @Injectable()
@@ -74,125 +62,6 @@ export class AffectationService {
     if (user.role !== Role.RESPONSABLE_CREDIT) {
       throw new ForbiddenException('Rôle responsable crédit requis');
     }
-  }
-
-  async listFile() {
-    const rows = await this.listDossiers();
-    return rows.filter((d) => d.bucket === 'file');
-  }
-
-  async listDossiers() {
-    const rows = await this.prisma.dossier.findMany({
-      where: { etat: { in: VISIBLE_ETATS } },
-      orderBy: { updatedAt: 'desc' },
-      take: 500,
-      include: {
-        client: { include: { zone: true, commune: true } },
-        produit: true,
-        agent: { select: { id: true, displayName: true, email: true } },
-        createdBy: { select: { id: true, displayName: true, email: true } },
-        transitions: {
-          where: { toEtat: DossierEtat.RETOUR_AGENT },
-          orderBy: { createdAt: 'desc' },
-          take: 1,
-        },
-      },
-    });
-
-    const retourActorIds = [
-      ...new Set(
-        rows
-          .map((d) => d.transitions[0]?.actorId)
-          .filter((id): id is string => !!id),
-      ),
-    ];
-    const retourActors = retourActorIds.length
-      ? await this.prisma.user.findMany({
-          where: { id: { in: retourActorIds } },
-          select: { id: true, role: true },
-        })
-      : [];
-    const actorRoleMap = Object.fromEntries(
-      retourActors.map((a) => [a.id, a.role]),
-    );
-
-    return rows.map((d) => {
-      const montant = montantSouhaiteFromPayload(
-        d.payload as Record<string, any>,
-      );
-      const lastRetourActorId = d.transitions[0]?.actorId ?? null;
-      const lastRetourByRc =
-        lastRetourActorId != null &&
-        actorRoleMap[lastRetourActorId] === Role.RESPONSABLE_CREDIT;
-      const bucket = this.bucketFor(d.etat, lastRetourByRc);
-      const { transitions: _t, ...rest } = d;
-      return {
-        ...rest,
-        type: d.produit.code,
-        produitLabel: d.produit.label,
-        etatLabel: DOSSIER_ETAT_LABELS[d.etat],
-        montantSouhaite: montant.montantSouhaite,
-        devise: montant.devise,
-        bucket,
-      };
-    });
-  }
-
-  private bucketFor(etat: DossierEtat, lastRetourByRc: boolean): RcBucket {
-    if (etat === DossierEtat.EN_ATTENTE_ATTRIBUTION_AGENT) return 'file';
-    if (etat === DossierEtat.EN_ATTENTE_VALIDATION_RC) return 'a_valider';
-    if (etat === DossierEtat.RETOUR_AGENT && lastRetourByRc) return 'renvoyes';
-    if (EN_COURS_ETATS.includes(etat)) return 'en_cours';
-    if (SOUMIS_ETATS.includes(etat)) return 'soumis';
-    return 'en_cours';
-  }
-
-  async getOne(id: string) {
-    const d = await this.prisma.dossier.findUnique({
-      where: { id },
-      include: {
-        client: { include: { zone: true, commune: true } },
-        agent: { select: { id: true, displayName: true, email: true } },
-        createdBy: { select: { id: true, displayName: true, email: true } },
-        produit: true,
-        pieces: { orderBy: { createdAt: 'asc' } },
-        visite: true,
-        transitions: { orderBy: { createdAt: 'asc' } },
-      },
-    });
-    if (!d) throw new NotFoundException('Dossier introuvable');
-    if (!VISIBLE_ETATS.includes(d.etat)) {
-      throw new ForbiddenException('Dossier non visible pour le responsable crédit');
-    }
-
-    let lastRetourByRc = false;
-    if (d.etat === DossierEtat.RETOUR_AGENT) {
-      const lastRetour = [...d.transitions]
-        .reverse()
-        .find((t) => t.toEtat === DossierEtat.RETOUR_AGENT);
-      if (lastRetour?.actorId) {
-        const actor = await this.prisma.user.findUnique({
-          where: { id: lastRetour.actorId },
-          select: { role: true },
-        });
-        lastRetourByRc = actor?.role === Role.RESPONSABLE_CREDIT;
-      }
-    }
-
-    return {
-      ...d,
-      type: d.produit.code,
-      etatLabel: DOSSIER_ETAT_LABELS[d.etat],
-      editable: false,
-      checklistAnswers: d.visite?.checklistJson ?? null,
-      analyseCf2: normalizeCf2Analyse(d.visite?.analyseCf2Json, {
-        visiteStartedAt: d.visite?.startedAt?.toISOString() ?? null,
-      }),
-      usesAnalyseAgrPack: usesAnalyseAgrPack(d.produit.code),
-      bucket: this.bucketFor(d.etat, lastRetourByRc),
-      canAssign: d.etat === DossierEtat.EN_ATTENTE_ATTRIBUTION_AGENT,
-      canValidate: d.etat === DossierEtat.EN_ATTENTE_VALIDATION_RC,
-    };
   }
 
   async listAgents() {
@@ -260,51 +129,94 @@ export class AffectationService {
     });
   }
 
-  async assign(user: AuthUser, dossierId: string, agentId: string) {
+  async assign(
+    user: AuthUser,
+    dossierId: string,
+    agentId: string,
+    avisIaId?: string | null,
+    motif?: { categorie?: MotifEcartAffectation; texte?: string },
+  ) {
     this.assertRc(user);
     const dossier = await this.prisma.dossier.findUnique({
       where: { id: dossierId },
+      include: {
+        client: {
+          select: {
+            fullName: true,
+            zoneId: true,
+            communeId: true,
+            zone: { select: { name: true } },
+            commune: { select: { name: true } },
+          },
+        },
+        produit: { select: { code: true, label: true } },
+      },
     });
     if (!dossier) throw new NotFoundException('Dossier introuvable');
     if (dossier.etat !== DossierEtat.EN_ATTENTE_ATTRIBUTION_AGENT) {
-      throw new BadRequestException(
-        "Ce dossier n'est pas en attente d'attribution",
-      );
+      throw new BadRequestException("Ce dossier n'est pas en attente d'attribution");
     }
-
     const agent = await this.prisma.user.findFirst({
       where: { id: agentId, role: Role.AGENT, disabledAt: null },
       include: { zone: { select: { name: true, code: true } } },
     });
-    if (!agent) {
-      throw new BadRequestException('Agent invalide ou désactivé');
-    }
+    if (!agent) throw new BadRequestException('Agent invalide ou désactivé');
 
-    this.workflow.assertTransition(
-      dossier.etat,
-      DossierEtat.AFFECTE,
-      user.role,
-    );
+    // Suggestion IA consultée : le choix du RC est tracé (rang proposé, accord).
+    const avis = avisIaId
+      ? await this.prisma.avisIa.findFirst({ where: { id: avisIaId, dossierId, type: 'SUGGESTION_AGENTS' } })
+      : await this.prisma.avisIa.findFirst({
+          where: { dossierId, type: 'SUGGESTION_AGENTS', statut: 'PRET' },
+          orderBy: { createdAt: 'desc' },
+        });
+    const candidats = ((avis?.contenu as unknown as SuggestionAgents | null)?.candidats ?? []);
+    const rangIa = candidats.find((c) => c.agentId === agent.id)?.rang ?? null;
+    const accordAvecIa = avis ? rangIa === 1 : null;
+    const suggere = candidats.find((c) => c.rang === 1) ?? null;
+
+    // Écart avec le n°1 de l'IA : la raison est obligatoire (traçabilité + apprentissage).
+    const ecart = avis != null && suggere != null && rangIa !== 1;
+    const motifTexte = (motif?.texte ?? '').trim();
+    if (ecart && (!motif?.categorie || motifTexte.length < MOTIF_ECART_MIN_CARACTERES)) {
+      throw new BadRequestException(
+        `${suggere!.displayName} était le n°1 suggéré par ${NOM_ASSISTANT_IA} : indiquez la raison de votre choix ` +
+          `(motif et explication d’au moins ${MOTIF_ECART_MIN_CARACTERES} caractères).`,
+      );
+    }
+    const p = (dossier.payload ?? {}) as Record<string, any>;
+    const retour = ecart
+      ? {
+          motifCategorie: motif!.categorie!,
+          motif: motifTexte,
+          // Version destinée à l'IA : sans le nom du client.
+          motifIa: sansNomsClient(motifTexte, [dossier.client.fullName, p.prenom, p.nom, p.postNom]),
+          agentSuggereId: suggere!.agentId,
+          agentSuggereNom: suggere!.displayName,
+          contexte: {
+            produitCode: dossier.produit.code,
+            produitLabel: dossier.produit.label,
+            zoneId: dossier.client.zoneId,
+            communeId: dossier.client.communeId,
+            zone: dossier.client.zone?.name ?? null,
+            commune: dossier.client.commune?.name ?? null,
+            montant: montantSouhaiteFromPayload(p).montantSouhaite,
+          },
+        }
+      : null;
 
     await this.prisma.$transaction(async (tx) => {
-      await tx.dossier.update({
-        where: { id: dossierId },
-        data: {
-          agentId: agent.id,
-          etat: DossierEtat.AFFECTE,
+      await tx.dossier.update({ where: { id: dossierId }, data: { agentId: agent.id } });
+      await this.workflow.transitionTx(
+        tx,
+        user,
+        { ...dossier, agentId: agent.id },
+        DossierEtat.AFFECTE,
+        {
+          comment: `Affecté à ${agent.displayName}${agent.zone ? ` (${agent.zone.name})` : ''}${
+            rangIa ? ` — suggestion IA n°${rangIa}` : avis ? ' — hors suggestions IA' : ''
+          }${retour ? ` — écart motivé : ${MOTIF_ECART_AFFECTATION_LABELS[retour.motifCategorie]}` : ''}`,
         },
-      });
-      await tx.transition.create({
-        data: {
-          dossierId,
-          fromEtat: DossierEtat.EN_ATTENTE_ATTRIBUTION_AGENT,
-          toEtat: DossierEtat.AFFECTE,
-          comment: `Affecté à ${agent.displayName}${
-            agent.zone ? ` (${agent.zone.name})` : ''
-          }`,
-          actorId: user.id,
-        },
-      });
+      );
       await this.audit.log(
         {
           dossierId,
@@ -316,179 +228,16 @@ export class AffectationService {
             agentId: agent.id,
             agentName: agent.displayName,
             zoneId: agent.zoneId,
-          },
-        },
-        tx,
-      );
-    });
-
-    return {
-      id: dossierId,
-      agentId: agent.id,
-      agentName: agent.displayName,
-      etat: DossierEtat.AFFECTE,
-    };
-  }
-
-  async renvoyer(user: AuthUser, dossierId: string, comment: string) {
-    this.assertRc(user);
-    const motif = (comment || '').trim();
-    if (!motif) {
-      throw new BadRequestException('Motif de renvoi obligatoire');
-    }
-
-    const dossier = await this.prisma.dossier.findUnique({
-      where: { id: dossierId },
-    });
-    if (!dossier) throw new NotFoundException('Dossier introuvable');
-    if (dossier.etat !== DossierEtat.EN_ATTENTE_VALIDATION_RC) {
-      throw new BadRequestException(
-        "Ce dossier n'est pas en attente de validation",
-      );
-    }
-
-    this.workflow.assertTransition(
-      dossier.etat,
-      DossierEtat.RETOUR_AGENT,
-      user.role,
-    );
-
-    await this.prisma.$transaction(async (tx) => {
-      await tx.dossier.update({
-        where: { id: dossierId },
-        data: { etat: DossierEtat.RETOUR_AGENT },
-      });
-      await tx.transition.create({
-        data: {
-          dossierId,
-          fromEtat: DossierEtat.EN_ATTENTE_VALIDATION_RC,
-          toEtat: DossierEtat.RETOUR_AGENT,
-          comment: motif,
-          actorId: user.id,
-        },
-      });
-      await this.audit.log(
-        {
-          dossierId,
-          actorId: user.id,
-          action: 'DOSSIER_RENVOYE_AGENT',
-          entityType: 'DOSSIER',
-          entityId: dossierId,
-          payload: { comment: motif },
-        },
-        tx,
-      );
-    });
-
-    return { id: dossierId, etat: DossierEtat.RETOUR_AGENT };
-  }
-
-  async soumettre(
-    user: AuthUser,
-    dossierId: string,
-    decision: {
-      recommandation: PronosticRecommandation;
-      montantRetenu?: number;
-      dureeRetenueMois?: number;
-      commentaire?: string;
-    },
-  ) {
-    this.assertRc(user);
-    const dossier = await this.prisma.dossier.findUnique({
-      where: { id: dossierId },
-    });
-    if (!dossier) throw new NotFoundException('Dossier introuvable');
-    if (dossier.etat !== DossierEtat.EN_ATTENTE_VALIDATION_RC) {
-      throw new BadRequestException(
-        "Ce dossier n'est pas en attente de validation",
-      );
-    }
-
-    this.workflow.assertTransition(
-      dossier.etat,
-      DossierEtat.CONFORMITE,
-      user.role,
-    );
-
-    const pronostic = await this.prisma.pronostic.findFirst({
-      where: { dossierId },
-      orderBy: { createdAt: 'desc' },
-    });
-    const montantRetenu = decision.montantRetenu ?? null;
-    const commentaire = decision.commentaire?.trim() || null;
-    const accordAvecIa = pronostic
-      ? !decisionDiverge(pronostic.avis as unknown as PronosticAvis, {
-          recommandation: decision.recommandation,
-          montantRetenu,
-        })
-      : null;
-    if (accordAvecIa === false && !commentaire) {
-      throw new BadRequestException(
-        'Commentaire obligatoire : la décision s’écarte de l’avis IA',
-      );
-    }
-
-    await this.prisma.$transaction(async (tx) => {
-      await tx.dossier.update({
-        where: { id: dossierId },
-        data: { etat: DossierEtat.CONFORMITE },
-      });
-      const decisionHumaine = await tx.decisionHumaine.create({
-        data: {
-          dossierId,
-          pronosticId: pronostic?.id ?? null,
-          actorId: user.id,
-          role: user.role,
-          recommandation: decision.recommandation,
-          montantRetenu,
-          dureeRetenueMois: decision.dureeRetenueMois ?? null,
-          accordAvecIa,
-          commentaire,
-        },
-      });
-      await tx.transition.create({
-        data: {
-          dossierId,
-          fromEtat: DossierEtat.EN_ATTENTE_VALIDATION_RC,
-          toEtat: DossierEtat.CONFORMITE,
-          comment: [
-            `Validé par le responsable crédit (${PRONOSTIC_RECOMMANDATION_LABELS[decision.recommandation]}) — transmis à la conformité`,
-            commentaire,
-          ]
-            .filter(Boolean)
-            .join(' — '),
-          actorId: user.id,
-        },
-      });
-      await this.audit.log(
-        {
-          dossierId,
-          actorId: user.id,
-          action: 'DECISION_HUMAINE',
-          entityType: 'DOSSIER',
-          entityId: dossierId,
-          payload: {
-            decisionId: decisionHumaine.id,
-            pronosticId: pronostic?.id ?? null,
-            recommandation: decision.recommandation,
+            avisIaId: avis?.id ?? null,
+            rangIa,
             accordAvecIa,
+            ...(retour ?? {}),
           },
-        },
-        tx,
-      );
-      await this.audit.log(
-        {
-          dossierId,
-          actorId: user.id,
-          action: 'DOSSIER_SOUMIS_HIERARCHIE',
-          entityType: 'DOSSIER',
-          entityId: dossierId,
-          payload: { toEtat: DossierEtat.CONFORMITE },
         },
         tx,
       );
     });
 
-    return { id: dossierId, etat: DossierEtat.CONFORMITE };
+    return { id: dossierId, agentId: agent.id, agentName: agent.displayName, etat: DossierEtat.AFFECTE, rangIa };
   }
 }

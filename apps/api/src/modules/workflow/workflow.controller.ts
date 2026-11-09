@@ -17,7 +17,21 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { DossierEtat, Role } from '@prisma/client';
-import { IsEnum, IsOptional, IsString } from 'class-validator';
+import { Type } from 'class-transformer';
+import {
+  IsArray,
+  IsEnum,
+  IsIn,
+  IsInt,
+  IsNumber,
+  IsOptional,
+  IsString,
+  MaxLength,
+  Min,
+  ValidateNested,
+} from 'class-validator';
+import { PRONOSTIC_RECOMMANDATIONS, type PronosticRecommandation } from '@imf/shared';
+import { FileTravailService } from './file-travail.service';
 import { CurrentUser } from '../identity/current-user.decorator';
 import { JwtAuthGuard } from '../identity/jwt-auth.guard';
 import { Roles, RolesGuard } from '../identity/roles.guard';
@@ -26,30 +40,104 @@ import {
   WorkflowService,
 } from './workflow.service';
 
+class DecisionDto {
+  @ApiProperty({ enum: PRONOSTIC_RECOMMANDATIONS })
+  @IsIn(PRONOSTIC_RECOMMANDATIONS)
+  recommandation!: PronosticRecommandation;
+
+  @ApiPropertyOptional({ example: 2500 })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  montantRetenu?: number;
+
+  @ApiPropertyOptional({ example: 12 })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  dureeRetenueMois?: number;
+}
+
 class TransitionDto {
   @ApiProperty({
     enum: DossierEtat,
     example: DossierEtat.CONFORMITE,
-    description: 'Nouvel état cible (doit être autorisé depuis l’état courant)',
+    description: 'État cible. Pour la direction, A_DECAISSER signifie « Approuver » : la plateforme route vers le Conseil au-delà du seuil.',
   })
   @IsEnum(DossierEtat)
   toEtat!: DossierEtat;
 
   @ApiPropertyOptional({
-    example: 'Dossier conforme — transmission direction',
-    description: 'Commentaire libre enregistré sur la transition',
+    example: 'Pièces manquantes',
+    description: 'Motif (obligatoire pour un retour ou un rejet) ou justification d’un écart avec l’IA',
   })
   @IsOptional()
   @IsString()
+  @MaxLength(4000)
+  motif?: string;
+
+  @ApiPropertyOptional({ description: 'Ancien nom du motif (compatibilité)' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(4000)
   comment?: string;
+
+  @ApiPropertyOptional({ description: 'Points à corriger / non-conformités retenus (retours)' })
+  @IsOptional()
+  @IsArray()
+  details?: unknown[];
+
+  @ApiPropertyOptional({ type: DecisionDto, description: 'Décision chiffrée (validation finale RC)' })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => DecisionDto)
+  decision?: DecisionDto;
 }
+
+const ROLES_INTERNES = [
+  Role.AGENT,
+  Role.ANALYSTE,
+  Role.RESPONSABLE_CREDIT,
+  Role.CONFORMITE,
+  Role.DG,
+  Role.DGA,
+  Role.CA,
+  Role.ADMIN,
+];
 
 @ApiTags('Workflow')
 @ApiBearerAuth('JWT')
 @Controller('workflow')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class WorkflowController {
-  constructor(private readonly workflow: WorkflowService) {}
+  constructor(
+    private readonly workflow: WorkflowService,
+    private readonly files: FileTravailService,
+  ) {}
+
+  @Get('file')
+  @Roles(...ROLES_INTERNES)
+  @ApiOperation({
+    summary: 'File de travail',
+    description: 'Dossiers de l’utilisateur selon son rôle, classés par priorité, avec compteurs par onglet.',
+  })
+  file(@CurrentUser() user: { id: string; role: Role }) {
+    return this.files.file(user);
+  }
+
+  @Get('stats')
+  @Roles(...ROLES_INTERNES)
+  @ApiOperation({ summary: 'Indicateurs du tableau de bord (selon le rôle)' })
+  stats(@CurrentUser() user: { id: string; role: Role }) {
+    return this.files.stats(user);
+  }
+
+  @Post('dossiers/:id/prendre-en-charge')
+  @Roles(Role.ANALYSTE, Role.CONFORMITE)
+  @ApiOperation({ summary: 'Prendre en charge un dossier de la file commune' })
+  prendre(@CurrentUser() user: { id: string; role: Role }, @Param('id') id: string) {
+    return this.workflow.prendreEnCharge(user, id);
+  }
 
   @Get()
   @Roles(
@@ -59,6 +147,7 @@ export class WorkflowController {
     Role.RESPONSABLE_CREDIT,
     Role.CONFORMITE,
     Role.DG,
+    Role.DGA,
     Role.CA,
     Role.ADMIN,
   )
@@ -82,6 +171,7 @@ export class WorkflowController {
     Role.RESPONSABLE_CREDIT,
     Role.CONFORMITE,
     Role.DG,
+    Role.DGA,
     Role.CA,
     Role.ADMIN,
   )
@@ -97,6 +187,7 @@ export class WorkflowController {
   @Roles(
     Role.CONFORMITE,
     Role.DG,
+    Role.DGA,
     Role.CA,
     Role.ADMIN,
     Role.RESPONSABLE_CREDIT,
@@ -116,14 +207,15 @@ export class WorkflowController {
         summary: 'Vers conformité',
         value: {
           toEtat: 'CONFORMITE',
-          comment: 'Validation RC OK',
+          motif: 'Rapport validé',
         },
       },
       retourAgent: {
         summary: 'Retour agent',
         value: {
           toEtat: 'RETOUR_AGENT',
-          comment: 'Pièces manquantes',
+          motif: 'Pièces manquantes',
+          details: [{ id: 'A1', constat: 'Photo du commerce absente' }],
         },
       },
     },
@@ -135,11 +227,11 @@ export class WorkflowController {
     @Param('id') id: string,
     @Body() dto: TransitionDto,
   ) {
-    return this.workflow.applyTransition(
-      user,
-      id,
-      dto.toEtat,
-      dto.comment,
-    );
+    return this.workflow.decider(user, id, {
+      toEtat: dto.toEtat,
+      motif: dto.motif ?? dto.comment,
+      details: dto.details,
+      decision: dto.decision,
+    });
   }
 }
