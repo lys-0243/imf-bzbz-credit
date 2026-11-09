@@ -50,6 +50,9 @@ import {
   type ScoreCredit,
   type SuggestionAgents,
   type TypeAvisIa,
+  NOM_ASSISTANT_IA,
+  MOTIF_ECART_AFFECTATION_LABELS,
+  type MotifEcartAffectation,
 } from '@imf/shared';
 import type { ZodType, ZodTypeDef } from 'zod';
 import { empreinte, masquerIdentite } from '../../common/stable';
@@ -317,7 +320,7 @@ export class AssistantService implements OnModuleInit, OnModuleDestroy {
     system: string,
     donnees: unknown,
   ): Promise<{ data: T; modele: string } | { erreur: string }> {
-    if (!this.llm.isConfigured()) return { erreur: 'IA non configurée (ANTHROPIC_API_KEY)' };
+    if (!this.llm.isConfigured()) return { erreur: `${NOM_ASSISTANT_IA} non configurée (ANTHROPIC_API_KEY)` };
     try {
       const res = await this.llm.complete({
         system,
@@ -444,6 +447,12 @@ export class AssistantService implements OnModuleInit, OnModuleDestroy {
       };
     });
     const classes = classerAgents(candidats, { zoneId: d.client.zoneId, communeId: d.client.communeId });
+    const codeAgent = new Map(classes.slice(0, 5).map((c, i) => [c.agentId, `A${i + 1}`]));
+    const retoursRc = await this.retoursAffectation(
+      { zoneId: d.client.zoneId, communeId: d.client.communeId },
+      codeAgent,
+      agents.map((a) => a.displayName),
+    );
     const m = montantSouhaiteFromPayload((d.payload ?? {}) as Record<string, any>);
     const entree = {
       dossier: {
@@ -459,8 +468,88 @@ export class AssistantService implements OnModuleInit, OnModuleDestroy {
         zone: c.zoneName,
         criteres: c.criteres,
       })),
+      // Mémoire des choix du RC : écarts motivés récents avec la suggestion n°1.
+      retoursRc,
     };
     return { entree, classes };
+  }
+
+  /**
+   * Écarts motivés du RC avec la suggestion n°1 (journal d'audit), réinjectés dans
+   * la suggestion suivante pour que l'IA apprenne des préférences du terrain.
+   * Ne garde que les retours pertinents : agents encore classés, même commune ou zone.
+   * Les agents sont pseudonymisés (A1…), le client n'est jamais nommé.
+   */
+  private async retoursAffectation(
+    dossier: { zoneId: string | null; communeId: string | null },
+    codeAgent: Map<string, string>,
+    nomsAgents: string[],
+  ) {
+    const logs = await this.prisma.auditLog.findMany({
+      where: {
+        action: 'DOSSIER_ASSIGNED',
+        createdAt: { gte: new Date(Date.now() - 180 * 86_400_000) },
+        payload: { path: ['accordAvecIa'], equals: false },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 200,
+      select: { createdAt: true, payload: true },
+    });
+    type Retour = {
+      agentId?: string;
+      agentName?: string;
+      agentSuggereId?: string;
+      agentSuggereNom?: string;
+      motifCategorie?: MotifEcartAffectation;
+      motifIa?: string;
+      contexte?: {
+        produitLabel?: string;
+        zoneId?: string | null;
+        communeId?: string | null;
+        zone?: string | null;
+        commune?: string | null;
+        montant?: number | null;
+      };
+    };
+    const ref = (id: string | undefined) => (id && codeAgent.get(id)) || 'un agent hors classement actuel';
+    const pseudonymiser = (texte: string, ids: Array<[string | undefined, string | undefined]>) => {
+      let t = texte;
+      const noms = new Map<string, string>();
+      for (const [id, nom] of ids) if (nom) noms.set(nom, ref(id));
+      for (const nom of nomsAgents) if (!noms.has(nom)) noms.set(nom, 'un autre agent');
+      for (const [nom, code] of [...noms].sort((a, b) => b[0].length - a[0].length)) {
+        t = t.split(nom).join(code);
+      }
+      return t.slice(0, 400);
+    };
+    return logs
+      .map((l) => ({ date: l.createdAt, r: (l.payload ?? {}) as Retour }))
+      .filter(({ r }) => r.motifCategorie && r.motifIa)
+      .filter(
+        ({ r }) =>
+          (r.agentId && codeAgent.has(r.agentId)) ||
+          (r.agentSuggereId && codeAgent.has(r.agentSuggereId)) ||
+          (dossier.communeId != null && r.contexte?.communeId === dossier.communeId) ||
+          (dossier.zoneId != null && r.contexte?.zoneId === dossier.zoneId),
+      )
+      .slice(0, 12)
+      .map(({ date, r }) => ({
+        date: date.toISOString().slice(0, 10),
+        dossier: {
+          produit: r.contexte?.produitLabel ?? null,
+          zone: r.contexte?.zone ?? null,
+          commune: r.contexte?.commune ?? null,
+          memeCommune: dossier.communeId != null && r.contexte?.communeId === dossier.communeId,
+          montant: r.contexte?.montant ?? null,
+        },
+        agentSuggereParIa: ref(r.agentSuggereId),
+        agentChoisiParRc: ref(r.agentId),
+        motif: MOTIF_ECART_AFFECTATION_LABELS[r.motifCategorie!] ?? r.motifCategorie,
+        explication: pseudonymiser(r.motifIa!, [
+          [r.agentId, r.agentName],
+          [r.agentSuggereId, r.agentSuggereNom],
+        ]),
+      }));
   }
 
   private async suggestionAgents(dossierId: string): Promise<Resultat> {
@@ -488,7 +577,9 @@ export class AssistantService implements OnModuleInit, OnModuleDestroy {
       ordonnes = ordre;
       synthese = nommer(ia.data.synthese) || synthese;
     }
+    const retoursPrisEnCompte = ia && 'data' in ia ? entree.retoursRc.length : 0;
     const contenu: SuggestionAgents = {
+      ...(retoursPrisEnCompte ? { retoursPrisEnCompte } : {}),
       candidats: [
         ...ordonnes.map((c, i) => ({ ...c, rang: i + 1 })),
         ...classes.slice(5).map((c, i) => ({ ...c, rang: 6 + i, justification: c.criteres.join(' · ') })),

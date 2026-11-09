@@ -7,12 +7,30 @@ import {
 import { DossierEtat, Role } from '@prisma/client';
 import {
   DOSSIER_ETAT_LABELS,
+  MOTIF_ECART_AFFECTATION_LABELS,
+  MOTIF_ECART_MIN_CARACTERES,
   montantSouhaiteFromPayload,
+  NOM_ASSISTANT_IA,
+  type MotifEcartAffectation,
   type SuggestionAgents,
 } from '@imf/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { WorkflowService } from '../workflow/workflow.service';
+
+/** Retire les noms du client d'un texte libre avant de le confier à l'IA. */
+function sansNomsClient(texte: string, noms: Array<string | null | undefined>): string {
+  let t = texte;
+  const mots = noms
+    .flatMap((n) => String(n ?? '').split(/\s+/))
+    .map((m) => m.trim())
+    .filter((m) => m.length >= 3)
+    .sort((a, b) => b.length - a.length);
+  for (const m of mots) {
+    t = t.replace(new RegExp(m.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), 'le client');
+  }
+  return t.replace(/(le client\s*){2,}/gi, 'le client ').trim();
+}
 
 type AuthUser = {
   id: string;
@@ -111,9 +129,29 @@ export class AffectationService {
     });
   }
 
-  async assign(user: AuthUser, dossierId: string, agentId: string, avisIaId?: string | null) {
+  async assign(
+    user: AuthUser,
+    dossierId: string,
+    agentId: string,
+    avisIaId?: string | null,
+    motif?: { categorie?: MotifEcartAffectation; texte?: string },
+  ) {
     this.assertRc(user);
-    const dossier = await this.prisma.dossier.findUnique({ where: { id: dossierId } });
+    const dossier = await this.prisma.dossier.findUnique({
+      where: { id: dossierId },
+      include: {
+        client: {
+          select: {
+            fullName: true,
+            zoneId: true,
+            communeId: true,
+            zone: { select: { name: true } },
+            commune: { select: { name: true } },
+          },
+        },
+        produit: { select: { code: true, label: true } },
+      },
+    });
     if (!dossier) throw new NotFoundException('Dossier introuvable');
     if (dossier.etat !== DossierEtat.EN_ATTENTE_ATTRIBUTION_AGENT) {
       throw new BadRequestException("Ce dossier n'est pas en attente d'attribution");
@@ -134,6 +172,37 @@ export class AffectationService {
     const candidats = ((avis?.contenu as unknown as SuggestionAgents | null)?.candidats ?? []);
     const rangIa = candidats.find((c) => c.agentId === agent.id)?.rang ?? null;
     const accordAvecIa = avis ? rangIa === 1 : null;
+    const suggere = candidats.find((c) => c.rang === 1) ?? null;
+
+    // Écart avec le n°1 de l'IA : la raison est obligatoire (traçabilité + apprentissage).
+    const ecart = avis != null && suggere != null && rangIa !== 1;
+    const motifTexte = (motif?.texte ?? '').trim();
+    if (ecart && (!motif?.categorie || motifTexte.length < MOTIF_ECART_MIN_CARACTERES)) {
+      throw new BadRequestException(
+        `${suggere!.displayName} était le n°1 suggéré par ${NOM_ASSISTANT_IA} : indiquez la raison de votre choix ` +
+          `(motif et explication d’au moins ${MOTIF_ECART_MIN_CARACTERES} caractères).`,
+      );
+    }
+    const p = (dossier.payload ?? {}) as Record<string, any>;
+    const retour = ecart
+      ? {
+          motifCategorie: motif!.categorie!,
+          motif: motifTexte,
+          // Version destinée à l'IA : sans le nom du client.
+          motifIa: sansNomsClient(motifTexte, [dossier.client.fullName, p.prenom, p.nom, p.postNom]),
+          agentSuggereId: suggere!.agentId,
+          agentSuggereNom: suggere!.displayName,
+          contexte: {
+            produitCode: dossier.produit.code,
+            produitLabel: dossier.produit.label,
+            zoneId: dossier.client.zoneId,
+            communeId: dossier.client.communeId,
+            zone: dossier.client.zone?.name ?? null,
+            commune: dossier.client.commune?.name ?? null,
+            montant: montantSouhaiteFromPayload(p).montantSouhaite,
+          },
+        }
+      : null;
 
     await this.prisma.$transaction(async (tx) => {
       await tx.dossier.update({ where: { id: dossierId }, data: { agentId: agent.id } });
@@ -145,7 +214,7 @@ export class AffectationService {
         {
           comment: `Affecté à ${agent.displayName}${agent.zone ? ` (${agent.zone.name})` : ''}${
             rangIa ? ` — suggestion IA n°${rangIa}` : avis ? ' — hors suggestions IA' : ''
-          }`,
+          }${retour ? ` — écart motivé : ${MOTIF_ECART_AFFECTATION_LABELS[retour.motifCategorie]}` : ''}`,
         },
       );
       await this.audit.log(
@@ -162,6 +231,7 @@ export class AffectationService {
             avisIaId: avis?.id ?? null,
             rangIa,
             accordAvecIa,
+            ...(retour ?? {}),
           },
         },
         tx,

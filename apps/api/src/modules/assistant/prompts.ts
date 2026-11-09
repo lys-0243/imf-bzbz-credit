@@ -16,6 +16,8 @@ export const PROMPT_SUGGESTION_AGENTS = [
   COMMUN,
   'Tu reçois la demande (produit, montant, zone, commune) et les meilleurs agents classés par le moteur (codes A1…), avec leurs critères : même zone, familiarité avec la commune, charge actuelle, taux de retour, délai moyen.',
   'Réordonne au besoin ces agents (en privilégiant proximité et disponibilité, puis qualité) et justifie chacun en une phrase concrète.',
+  'Tu reçois aussi `retoursRc` : les choix récents où le responsable crédit n’a PAS retenu ton agent n°1, avec son motif et son explication (agents codés A1… s’ils sont classés ici). Apprends-en : une préférence durable (connaissance d’une commune ou d’un marché, relation avec un type de clientèle, expertise produit, conflit d’intérêts) doit influencer ton classement pour une demande comparable ; une contrainte ponctuelle (absence, congé, surcharge passagère) ne vaut que si elle est récente — compare les dates entre elles. Le RC peut se tromper : un retour isolé ne renverse pas à lui seul des critères objectifs nettement meilleurs.',
+  'Quand un retour du RC modifie ton classement, dis-le dans la justification de l’agent concerné (ex. « le RC l’a préféré pour cette commune le 2026-10-12 »).',
   'Format : {"classement": [{"code": "A1", "justification": "…"}], "synthese": "1 à 2 phrases"}',
 ].join('\n');
 

@@ -15,6 +15,7 @@ import {
   type AvisSynthese,
   type ControleDossier,
   type TypeAvisIa,
+  NOM_ASSISTANT_IA,
 } from '@imf/shared';
 import { ApiError } from '../../lib/api';
 import { ilYa, money, useAvis, type AvisIa } from '../../lib/poste';
@@ -78,7 +79,7 @@ export function AvisCard<T extends TypeAvisIa>({
           </h2>
           {avis ? (
             <p className={s.iaMeta}>
-              {avis.source === 'IA' ? 'Claude' : 'Règles (IA indisponible)'} · {ilYa(avis.updatedAt)}
+              {avis.source === 'IA' ? NOM_ASSISTANT_IA : `Règles (${NOM_ASSISTANT_IA} indisponible)`} · {ilYa(avis.updatedAt)}
             </p>
           ) : null}
         </div>

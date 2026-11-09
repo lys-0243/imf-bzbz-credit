@@ -1,8 +1,12 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   CLASSE_RISQUE_LABELS,
+  MOTIF_ECART_AFFECTATION_LABELS,
+  MOTIF_ECART_MIN_CARACTERES,
+  MOTIFS_ECART_AFFECTATION,
+  NOM_ASSISTANT_IA,
   normalizeAvisConformite,
   normalizeRapportAnalyse,
   PILIERS_SCORE,
@@ -11,6 +15,7 @@ import {
   STATUTS_CONSTAT,
   STATUT_CONSTAT_LABELS,
   type AvisConformiteData,
+  type MotifEcartAffectation,
   type PilierScore,
   type RapportAnalyseData,
   type SuggestionAgents,
@@ -46,15 +51,23 @@ export function AttributionPanel({ d, onFait }: { d: DossierPoste; onFait: () =>
   const [autre, setAutre] = useState('');
   const { toast } = useBrouillon();
   const suggestion = avis?.contenu as SuggestionAgents | undefined;
+  const numero1 = suggestion?.candidats.find((c) => c.rang === 1) ?? null;
+  /** Choix différent du n°1 de l'IA : la raison est demandée avant d'attribuer. */
+  const [ecart, setEcart] = useState<{ agentId: string; nom: string } | null>(null);
 
-  const attribuer = async (agentId: string, nom: string) => {
+  const attribuer = async (
+    agentId: string,
+    nom: string,
+    motif?: { motifCategorie: MotifEcartAffectation; motif: string },
+  ) => {
     setBusy(agentId);
     setErreur(null);
     try {
       await apiFetch(`/affectation/dossiers/${d.id}/assign`, {
         method: 'POST',
-        body: JSON.stringify({ agentId, avisIaId: avis?.id }),
+        body: JSON.stringify({ agentId, avisIaId: avis?.id, ...(motif ?? {}) }),
       });
+      setEcart(null);
       toast(`Dossier attribué à ${nom}`);
       await rafraichir('/workflow/file');
       onFait();
@@ -65,12 +78,27 @@ export function AttributionPanel({ d, onFait }: { d: DossierPoste; onFait: () =>
     }
   };
 
+  const choisir = (agentId: string, nom: string) => {
+    if (numero1 && agentId !== numero1.agentId) {
+      setErreur(null);
+      setEcart({ agentId, nom });
+      return;
+    }
+    void attribuer(agentId, nom);
+  };
+
   return (
     <section className={s.card}>
       <div className={s.cardHead}>
         <div>
           <h3 className={s.cardTitle}>Attribuer à un agent de crédit</h3>
           <p className={s.cardSub}>Le copilote classe les agents ; vous choisissez.</p>
+          {suggestion?.retoursPrisEnCompte ? (
+            <p className={s.hint}>
+              Classement ajusté avec {suggestion.retoursPrisEnCompte} choix récent
+              {suggestion.retoursPrisEnCompte > 1 ? 's' : ''} des responsables crédit.
+            </p>
+          ) : null}
         </div>
       </div>
       <div className={s.stack} style={{ gap: 10 }}>
@@ -90,7 +118,7 @@ export function AttributionPanel({ d, onFait }: { d: DossierPoste; onFait: () =>
                 type="button"
                 className={`${s.btn} ${c.rang === 1 ? s.btnPrimary : s.btnSecondary} ${s.btnSmall}`}
                 disabled={busy != null}
-                onClick={() => void attribuer(c.agentId, c.displayName)}
+                onClick={() => choisir(c.agentId, c.displayName)}
               >
                 {busy === c.agentId ? 'Attribution…' : 'Attribuer'}
               </button>
@@ -117,16 +145,137 @@ export function AttributionPanel({ d, onFait }: { d: DossierPoste; onFait: () =>
               disabled={!autre || busy != null}
               onClick={() => {
                 const a = agents.data?.find((x) => x.id === autre);
-                if (a) void attribuer(a.id, a.displayName);
+                if (a) choisir(a.id, a.displayName);
               }}
             >
               Attribuer
             </button>
           </div>
         </div>
-        {erreur ? <p className={s.errorText}>{erreur}</p> : null}
+        {erreur && !ecart ? <p className={s.errorText}>{erreur}</p> : null}
       </div>
+
+      {ecart && numero1 ? (
+        <MotifEcartDialog
+          choisi={ecart.nom}
+          suggere={numero1.displayName}
+          busy={busy != null}
+          erreur={erreur}
+          onCancel={() => {
+            setEcart(null);
+            setErreur(null);
+          }}
+          onConfirm={(motif) => void attribuer(ecart.agentId, ecart.nom, motif)}
+        />
+      ) : null}
     </section>
+  );
+}
+
+/** Raison d'un écart avec le n°1 de l'IA : tracée et réutilisée par les suggestions suivantes. */
+function MotifEcartDialog({
+  choisi,
+  suggere,
+  busy,
+  erreur,
+  onCancel,
+  onConfirm,
+}: {
+  choisi: string;
+  suggere: string;
+  busy: boolean;
+  erreur: string | null;
+  onCancel: () => void;
+  onConfirm: (motif: { motifCategorie: MotifEcartAffectation; motif: string }) => void;
+}) {
+  const [categorie, setCategorie] = useState<MotifEcartAffectation | ''>('');
+  const [texte, setTexte] = useState('');
+  const premier = useRef<HTMLSelectElement | null>(null);
+  const annuler = useRef(onCancel);
+  annuler.current = onCancel;
+
+  useEffect(() => {
+    premier.current?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') annuler.current();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  const manque = MOTIF_ECART_MIN_CARACTERES - texte.trim().length;
+  const valide = categorie !== '' && manque <= 0;
+
+  return (
+    <div
+      className={s.overlay}
+      role="presentation"
+      onMouseDown={(e) => e.target === e.currentTarget && !busy && onCancel()}
+    >
+      <div className={s.modal} role="dialog" aria-modal="true" aria-labelledby="ecart-titre">
+        <h2 id="ecart-titre" className={s.modalTitle}>
+          Pourquoi {choisi} ?
+        </h2>
+        <p className={s.hint}>
+          {NOM_ASSISTANT_IA} proposait <strong>{suggere}</strong> en premier. Votre raison est tracée et servira à
+          améliorer les prochaines suggestions.
+        </p>
+        <div className={s.stack} style={{ gap: 12, marginTop: 14 }}>
+          <div className={s.field}>
+            <label className={s.label} htmlFor="ecart-motif">
+              Motif
+            </label>
+            <select
+              id="ecart-motif"
+              ref={premier}
+              className={s.select}
+              value={categorie}
+              onChange={(e) => setCategorie(e.target.value as MotifEcartAffectation | '')}
+            >
+              <option value="">— Sélectionner —</option>
+              {MOTIFS_ECART_AFFECTATION.map((m) => (
+                <option key={m} value={m}>
+                  {MOTIF_ECART_AFFECTATION_LABELS[m]}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className={s.field}>
+            <label className={s.label} htmlFor="ecart-texte">
+              Explication
+            </label>
+            <textarea
+              id="ecart-texte"
+              className={s.textarea}
+              rows={3}
+              maxLength={1000}
+              value={texte}
+              placeholder="Ex. : connaît bien les commerçants du marché de Matete ; l’agent suggéré est en congé jusqu’au 15."
+              onChange={(e) => setTexte(e.target.value)}
+            />
+            <span className={s.hint}>
+              {manque > 0
+                ? `Encore ${manque} caractère${manque > 1 ? 's' : ''} minimum.`
+                : 'Évitez les informations personnelles sur le client.'}
+            </span>
+          </div>
+        </div>
+        {erreur ? <p className={s.errorText}>{erreur}</p> : null}
+        <div className={s.modalActions}>
+          <button type="button" className={`${s.btn} ${s.btnSecondary}`} disabled={busy} onClick={onCancel}>
+            Annuler
+          </button>
+          <button
+            type="button"
+            className={`${s.btn} ${s.btnPrimary}`}
+            disabled={!valide || busy}
+            onClick={() => categorie && onConfirm({ motifCategorie: categorie, motif: texte.trim() })}
+          >
+            {busy ? 'Attribution…' : `Attribuer à ${choisi}`}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 

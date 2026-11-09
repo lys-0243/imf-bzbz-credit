@@ -9,6 +9,7 @@ import {
   type PronosticAvis,
   type PronosticRecommandation,
   type RatioFait,
+  NOM_ASSISTANT_IA,
 } from '@imf/shared';
 import { ApiError, apiFetch } from '../../lib/api';
 import { dashStyles as styles } from './DashboardShell';
@@ -220,8 +221,8 @@ export function PronosticPanel({
       </div>
       <p className={styles.assignMeta}>
         {pronostic.source === 'IA'
-          ? `Généré par IA (${pronostic.modele ?? 'modèle inconnu'})`
-          : 'Généré par les règles CF 2.4 (IA indisponible)'}
+          ? `Généré par ${NOM_ASSISTANT_IA}`
+          : `Généré par les règles CF 2.4 (${NOM_ASSISTANT_IA} indisponible)`}
         {` · confiance ${CONFIANCE_LABELS[avis.confiance]} · ${new Date(
           pronostic.createdAt,
         ).toLocaleString('fr-FR')}`}

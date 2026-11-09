@@ -17,7 +17,8 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
-import { IsOptional, IsString } from 'class-validator';
+import { IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
+import { MOTIFS_ECART_AFFECTATION, type MotifEcartAffectation } from '@imf/shared';
 import { CurrentUser } from '../identity/current-user.decorator';
 import { JwtAuthGuard } from '../identity/jwt-auth.guard';
 import { Roles, RolesGuard } from '../identity/roles.guard';
@@ -35,6 +36,23 @@ class AssignDto {
   @IsOptional()
   @IsString()
   avisIaId?: string;
+
+  @ApiPropertyOptional({
+    enum: MOTIFS_ECART_AFFECTATION,
+    description: 'Obligatoire si l’agent choisi n’est pas le n°1 suggéré par l’IA',
+  })
+  @IsOptional()
+  @IsIn(MOTIFS_ECART_AFFECTATION as unknown as string[])
+  motifCategorie?: MotifEcartAffectation;
+
+  @ApiPropertyOptional({
+    example: 'Connaît bien les commerçants du marché de Matete',
+    description: 'Explication de l’écart (obligatoire avec motifCategorie) — réutilisée par l’IA',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  motif?: string;
 }
 
 @ApiTags('Affectation')
@@ -57,7 +75,9 @@ export class AffectationController {
   @Post('dossiers/:id/assign')
   @ApiOperation({
     summary: 'Affecter à un agent',
-    description: 'Passe le dossier à l’état AFFECTE et notifie l’agent.',
+    description:
+      'Passe le dossier à l’état AFFECTE et notifie l’agent. Si l’agent n’est pas le n°1 de la suggestion IA, ' +
+      'motifCategorie + motif sont obligatoires : ils sont tracés et réutilisés par les suggestions suivantes.',
   })
   @ApiParam({ name: 'id', description: 'ID du dossier' })
   @ApiBody({
@@ -76,6 +96,9 @@ export class AffectationController {
     @Param('id') id: string,
     @Body() dto: AssignDto,
   ) {
-    return this.affectation.assign(user, id, dto.agentId, dto.avisIaId);
+    return this.affectation.assign(user, id, dto.agentId, dto.avisIaId, {
+      categorie: dto.motifCategorie,
+      texte: dto.motif,
+    });
   }
 }

@@ -1,10 +1,9 @@
 'use client';
 
+import { Fragment, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
 import { ApiError, apiFetch } from '../../lib/api';
 import { dashStyles as styles } from './DashboardShell';
-
 
 type AgentDossier = {
   id: string;
@@ -78,9 +77,7 @@ export function AgentsChargeView() {
   return (
     <div>
       <h1 className={styles.pageTitle}>Agents</h1>
-      <p className={styles.assignHint}>
-        Charge et dossiers en cours par agent (toutes zones).
-      </p>
+      <p className={styles.assignHint}>Charge et dossiers en cours par agent (toutes zones).</p>
 
       {error ? <p className={styles.listError}>{error}</p> : null}
       {loading ? <p className={styles.itemMeta}>Chargement…</p> : null}
@@ -95,79 +92,82 @@ export function AgentsChargeView() {
       ) : null}
 
       {!loading && agents.length > 0 ? (
-        <div className={styles.agentsList}>
-          {agents.map((a) => {
-            const open = expanded === a.id;
-            return (
-              <div key={a.id} className={styles.agentCard}>
-                <button
-                  type="button"
-                  className={styles.agentCardHeader}
-                  onClick={() => setExpanded(open ? null : a.id)}
-                >
-                  <div>
-                    <strong>{a.displayName}</strong>
-                    <p className={styles.assignMeta}>
-                      {a.zone?.name || 'Sans zone'} · {a.email}
-                    </p>
-                  </div>
-                  <div className={styles.agentCardMeta}>
-                    <span className={statutClass(a.statut)}>
-                      {statutLabel(a.statut)}
-                    </span>
-                    <span className={styles.agentCharge}>
-                      {a.dossiersEnCours} dossier
-                      {a.dossiersEnCours > 1 ? 's' : ''}
-                    </span>
-                  </div>
-                </button>
-                {open ? (
-                  <div className={styles.agentCardBody}>
-                    {(a.dossiers || []).length === 0 ? (
-                      <p className={styles.itemMeta}>Aucun dossier en charge.</p>
-                    ) : (
-                      <div className={styles.tableWrap}>
-                        <table className={styles.table}>
-                          <thead>
-                            <tr>
-                              <th>Référence</th>
-                              <th>Client</th>
-                              <th>Produit</th>
-                              <th>État</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {(a.dossiers || []).map((d) => (
-                              <tr
-                                key={d.id}
-                                onClick={() =>
-                                  router.push(`/responsable-credit/${d.id}`)
-                                }
-                              >
-                                <td>
-                                  <strong>{d.reference}</strong>
-                                </td>
-                                <td>{d.client.fullName}</td>
-                                <td>{d.produitLabel || d.type}</td>
-                                <td>
-                                  <span className={styles.badge}>
-                                    {d.etatLabel}
-                                  </span>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                  </div>
-                ) : null}
-              </div>
-            );
-          })}
+        <div className={styles.tableWrap}>
+          <table className={styles.table}>
+            <thead>
+              <tr>
+                <th>Agent</th>
+                <th>Zone</th>
+                <th>E-mail</th>
+                <th>Statut</th>
+                <th>Dossiers</th>
+              </tr>
+            </thead>
+            <tbody>
+              {agents.map((a) => {
+                const open = expanded === a.id;
+                return (
+                  <Fragment key={a.id}>
+                    <tr
+                      className={open ? styles.trActive : undefined}
+                      onClick={() => setExpanded(open ? null : a.id)}
+                    >
+                      <td>
+                        <strong>{a.displayName}</strong>
+                      </td>
+                      <td>{a.zone?.name || 'Sans zone'}</td>
+                      <td>{a.email}</td>
+                      <td>
+                        <span className={statutClass(a.statut)}>{statutLabel(a.statut)}</span>
+                      </td>
+                      <td>
+                        {a.dossiersEnCours} dossier{a.dossiersEnCours > 1 ? 's' : ''}
+                      </td>
+                    </tr>
+                    {open ? (
+                      <tr className={styles.agentDetailRow}>
+                        <td colSpan={5}>
+                          {(a.dossiers || []).length === 0 ? (
+                            <p className={styles.itemMeta}>Aucun dossier en charge.</p>
+                          ) : (
+                            <table className={styles.agentNestedTable}>
+                              <thead>
+                                <tr>
+                                  <th>Référence</th>
+                                  <th>Client</th>
+                                  <th>Produit</th>
+                                  <th>État</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {(a.dossiers || []).map((d) => (
+                                  <tr
+                                    key={d.id}
+                                    onClick={() => router.push(`/responsable-credit/${d.id}`)}
+                                  >
+                                    <td>
+                                      <strong>{d.reference}</strong>
+                                    </td>
+                                    <td>{d.client.fullName}</td>
+                                    <td>{d.produitLabel || d.type}</td>
+                                    <td>
+                                      <span className={styles.badge}>{d.etatLabel}</span>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          )}
+                        </td>
+                      </tr>
+                    ) : null}
+                  </Fragment>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       ) : null}
     </div>
   );
 }
-

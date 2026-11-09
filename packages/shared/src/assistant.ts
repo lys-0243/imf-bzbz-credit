@@ -5,6 +5,9 @@ import { ajustementScoreSchema, type AjustementScore, type ScoreCredit } from '.
 import { STATUTS_CONSTAT, type StatutConstat } from './rapportAnalyse';
 import type { EtapeWorkflow } from './workflow';
 
+/** Nom de l’assistant IA affiché aux utilisateurs (jamais le nom du fournisseur ni du modèle). */
+export const NOM_ASSISTANT_IA = 'Bisou Bisou AI';
+
 /**
  * Avis IA par étape du circuit (contenu de `AvisIa`). Tous consultatifs :
  * un humain valide ou s'écarte, avec justification.
@@ -346,7 +349,41 @@ export type AgentClasse = {
 export type SuggestionAgents = {
   candidats: AgentClasse[];
   synthese: string;
+  /** Nombre de choix passés du RC (écarts motivés) transmis à l'IA pour ce classement. */
+  retoursPrisEnCompte?: number;
 };
+
+/**
+ * Motifs d'un RC qui n'attribue pas l'agent classé n°1 par l'IA. Le motif est
+ * tracé et réinjecté dans les suggestions suivantes (mémoire des choix du RC).
+ */
+export const MOTIFS_ECART_AFFECTATION = [
+  'CONNAISSANCE_TERRAIN',
+  'RELATION_CLIENT',
+  'EXPERTISE_PRODUIT',
+  'INDISPONIBILITE',
+  'CHARGE_REELLE',
+  'EQUILIBRAGE',
+  'ACCOMPAGNEMENT',
+  'CONFLIT_INTERET',
+  'AUTRE',
+] as const;
+export type MotifEcartAffectation = (typeof MOTIFS_ECART_AFFECTATION)[number];
+
+export const MOTIF_ECART_AFFECTATION_LABELS: Record<MotifEcartAffectation, string> = {
+  CONNAISSANCE_TERRAIN: 'Connaît mieux la commune / le marché',
+  RELATION_CLIENT: 'Connaît déjà le client',
+  EXPERTISE_PRODUIT: 'Expertise sur ce produit',
+  INDISPONIBILITE: 'Agent suggéré indisponible (congé, absence, mission)',
+  CHARGE_REELLE: 'Charge réelle différente de celle affichée',
+  EQUILIBRAGE: 'Équilibrer la charge de l’équipe',
+  ACCOMPAGNEMENT: 'Formation / accompagnement d’un agent',
+  CONFLIT_INTERET: 'Conflit d’intérêts avec l’agent suggéré',
+  AUTRE: 'Autre raison',
+};
+
+/** Longueur minimale de l'explication d'un écart (exploitable par l'IA). */
+export const MOTIF_ECART_MIN_CARACTERES = 10;
 
 /** Classement déterministe des agents pour un dossier (le RC décide). */
 export function classerAgents(

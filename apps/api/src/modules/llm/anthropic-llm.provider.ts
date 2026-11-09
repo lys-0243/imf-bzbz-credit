@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { Injectable } from '@nestjs/common';
+import { NOM_ASSISTANT_IA } from '@imf/shared';
 import type {
   LlmCompletion,
   LlmCompletionInput,
@@ -63,31 +64,31 @@ export class AnthropicLlmProvider implements LlmProvider {
         throw new Error('ANTHROPIC_API_KEY invalide');
       }
       if (e instanceof Anthropic.RateLimitError) {
-        throw new Error('Claude : limite de débit atteinte, réessayer plus tard');
+        throw new Error(`${NOM_ASSISTANT_IA} : limite de débit atteinte, réessayer plus tard`);
       }
       if (e instanceof Anthropic.APIConnectionTimeoutError) {
-        throw new Error('Claude : délai de réponse dépassé');
+        throw new Error(`${NOM_ASSISTANT_IA} : délai de réponse dépassé`);
       }
       if (e instanceof Anthropic.APIConnectionError) {
-        throw new Error('Claude : connexion impossible');
+        throw new Error(`${NOM_ASSISTANT_IA} : connexion impossible`);
       }
       if (e instanceof Anthropic.APIError) {
-        throw new Error(`Claude HTTP ${e.status ?? '?'}`);
+        throw new Error(`${NOM_ASSISTANT_IA} : erreur HTTP ${e.status ?? '?'}`);
       }
       throw e;
     }
 
     if (response.stop_reason === 'refusal') {
-      throw new Error('Claude a refusé la demande');
+      throw new Error(`${NOM_ASSISTANT_IA} a refusé la demande`);
     }
     if (response.stop_reason === 'max_tokens') {
-      throw new Error('Réponse Claude tronquée (max_tokens)');
+      throw new Error(`Réponse ${NOM_ASSISTANT_IA} tronquée (max_tokens)`);
     }
     const text = response.content
       .flatMap((b) => (b.type === 'text' ? [b.text] : []))
       .join('')
       .trim();
-    if (!text) throw new Error('Réponse Claude vide');
+    if (!text) throw new Error(`Réponse ${NOM_ASSISTANT_IA} vide`);
     return {
       text: input.json ? extractJsonObject(text) : text,
       model: response.model || model,
