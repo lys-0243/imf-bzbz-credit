@@ -8,6 +8,7 @@
     "start": "node dist/main.js"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^1.5.0",
     "@imf/shared": "*",
     "@nestjs/common": "^11.1.5",
     "@nestjs/core": "^11.1.5",
@@ -15,16 +16,22 @@
     "@nestjs/passport": "^11.0.5",
     "@nestjs/platform-express": "^11.1.5",
     "@nestjs/swagger": "^11.2.0",
+    "@nestjs/throttler": "^6.7.1",
     "@prisma/client": "^6.14.0",
+    "@turbodocx/html-to-docx": "^1.23.1",
     "@types/multer": "^2.2.0",
     "bcryptjs": "^3.0.2",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.2",
+    "cloudinary": "^2.11.0",
+    "mammoth": "^1.8.0",
     "multer": "^2.2.0",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
+    "sanitize-html": "^2.18.1",
+    "unpdf": "^0.12.1",
     "zod": "^3.25.76"
   },
   "devDependencies": {
@@ -34,6 +41,7 @@
     "@types/express": "^5.0.3",
     "@types/node": "^24.3.0",
     "@types/passport-jwt": "^4.0.1",
+    "@types/sanitize-html": "^2.16.2",
     "ts-node": "^10.9.2",
     "typescript": "^5.8.3"
   }

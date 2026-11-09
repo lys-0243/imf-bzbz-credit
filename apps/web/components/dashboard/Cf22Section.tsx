@@ -15,6 +15,7 @@ import {
   sumStock,
   sumVentesFromAchats,
   sumVentesHebdo,
+  toDatetimeLocalValue,
   ventesMensuellesFromAchat,
   ventesMensuellesFromHebdo,
   ventesMensuellesFromRecents,
@@ -268,8 +269,9 @@ export function Cf22Section({
         </FormRow>
         <FormRow label="Date / heure de la visite">
           <input
+            type="datetime-local"
             className={styles.cf1FormControl}
-            value={cf22.business.dateHeureVisite}
+            value={toDatetimeLocalValue(cf22.business.dateHeureVisite)}
             disabled={disabled}
             onChange={(e) =>
               patchBusiness({ dateHeureVisite: e.target.value })
@@ -297,6 +299,7 @@ export function Cf22Section({
           <table className={styles.detailDataTable}>
             <thead>
               <tr>
+                <th title="Produit principal (x)">Princ.</th>
                 <th>Nom du Produit</th>
                 <th>Quantité</th>
                 <th>Prix d’achat</th>
@@ -312,6 +315,18 @@ export function Cf22Section({
                 const valeur = stockValeur(line);
                 return (
                   <tr key={line.id}>
+                    <td>
+                      <input
+                        type="checkbox"
+                        checked={Boolean(line.principal)}
+                        disabled={disabled}
+                        title="Produit principal"
+                        aria-label={`Produit principal ${line.produit || idx + 1}`}
+                        onChange={(e) =>
+                          updateStock(idx, { principal: e.target.checked })
+                        }
+                      />
+                    </td>
                     <td>
                       <input
                         className={styles.cf1FormControl}

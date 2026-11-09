@@ -1,11 +1,9 @@
 'use client';
 
 import { useParams } from 'next/navigation';
-import AnalysteDashboard from '../../../components/dashboard/AnalysteDashboard';
+import PosteDashboard from '../../../components/poste/PosteDashboard';
 
-export default function AnalysteDetailPage() {
+export default function Page() {
   const params = useParams();
-  return (
-    <AnalysteDashboard section="detail" selectedId={String(params.id)} />
-  );
+  return <PosteDashboard base="analyste" section="detail" selectedId={String(params.id)} />;
 }

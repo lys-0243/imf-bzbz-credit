@@ -1,15 +1,7 @@
-import { pageMetadata } from '../../lib/seo';
+'use client';
 
-export const metadata = pageMetadata(
-  'Conformité',
-  'Contrôle réglementaire et validation des dossiers.',
-);
+import PosteDashboard from '../../components/poste/PosteDashboard';
 
-export default function ConformitePage() {
-  return (
-    <div>
-      <h1>Conformité</h1>
-      <p>RAG et validation réglementaire — à implémenter.</p>
-    </div>
-  );
+export default function Page() {
+  return <PosteDashboard base="conformite" section="dashboard" />;
 }

@@ -1,15 +1,7 @@
-import { pageMetadata } from '../../lib/seo';
+'use client';
 
-export const metadata = pageMetadata(
-  'Direction / CA',
-  'Signature et décisions Direction / Conseil d’administration.',
-);
+import PosteDashboard from '../../components/poste/PosteDashboard';
 
-export default function DirectionPage() {
-  return (
-    <div>
-      <h1>Direction / CA</h1>
-      <p>Signature et cas Conseil — à implémenter.</p>
-    </div>
-  );
+export default function Page() {
+  return <PosteDashboard base="direction" section="dashboard" />;
 }

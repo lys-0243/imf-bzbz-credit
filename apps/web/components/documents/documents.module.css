@@ -1,0 +1,331 @@
+.screen {
+  min-height: 100vh;
+  padding: 24px 16px 48px;
+  background: #e9e7e2;
+}
+
+.toolbar {
+  max-width: 210mm;
+  margin: 0 auto 16px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.toolbarTitle {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.printBtn {
+  height: 40px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 5px;
+  background: var(--imf-blue);
+  color: #fff;
+  font: inherit;
+  cursor: pointer;
+}
+
+.page {
+  box-sizing: border-box;
+  max-width: 210mm;
+  min-height: 297mm;
+  margin: 0 auto 16px;
+  padding: 16mm 15mm;
+  background: #fff;
+  color: #111;
+  font-size: 10.5pt;
+  line-height: 1.45;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 2px solid var(--imf-blue);
+  padding-bottom: 8px;
+  margin-bottom: 16px;
+  font-size: 8.5pt;
+}
+
+.headerName {
+  font-weight: 700;
+  font-size: 11pt;
+  color: var(--imf-blue);
+}
+
+.title {
+  text-align: center;
+  font-size: 14pt;
+  margin: 8px 0 16px;
+  text-transform: uppercase;
+}
+
+.subtitle {
+  font-size: 11pt;
+  margin: 18px 0 6px;
+}
+
+.p {
+  margin: 0 0 6px;
+}
+
+.list {
+  margin: 0 0 6px;
+  padding-left: 16px;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 6px 0 12px;
+  font-size: 9pt;
+}
+
+.table th,
+.table td {
+  border: 1px solid #999;
+  padding: 4px 6px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.table th {
+  background: #f1f1f1;
+}
+
+.num {
+  text-align: right !important;
+  white-space: nowrap;
+}
+
+.signatures {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 18px 24px;
+  margin-top: 24px;
+  break-inside: avoid;
+}
+
+.signature {
+  min-height: 70px;
+  border-top: 1px solid #555;
+  padding-top: 4px;
+  font-size: 9pt;
+}
+
+.muted {
+  color: #555;
+  font-size: 8.5pt;
+}
+
+/* Contenu des documents éditables (éditeur TipTap et impression) */
+.docContent {
+  font-size: 10.5pt;
+  line-height: 1.5;
+  color: #111;
+  outline: none;
+  min-height: 120mm;
+}
+
+.docContent h1 {
+  font-size: 14pt;
+  text-transform: uppercase;
+  margin: 10px 0 14px;
+}
+
+.docContent h2 {
+  font-size: 10.5pt;
+  margin: 12px 0 4px;
+}
+
+.docContent h3 {
+  font-size: 10pt;
+  margin: 10px 0 4px;
+}
+
+.docContent p {
+  margin: 0 0 6px;
+}
+
+.docContent ul,
+.docContent ol {
+  margin: 0 0 6px;
+  padding-left: 20px;
+}
+
+.docContent li p {
+  margin: 0;
+}
+
+.docContent hr {
+  border: 0;
+  border-top: 2px solid var(--imf-blue);
+  margin: 8px 0 14px;
+}
+
+.docContent table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  margin: 6px 0 12px;
+  font-size: 9.5pt;
+}
+
+.docContent th,
+.docContent td {
+  position: relative;
+  border: 1px solid #999;
+  padding: 4px 6px;
+  vertical-align: top;
+}
+
+.docContent th {
+  background: #f1f1f1;
+  text-align: left;
+}
+
+.docContent th p,
+.docContent td p {
+  margin: 0;
+}
+
+.docContent :global(.selectedCell)::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(40, 64, 128, 0.12);
+  pointer-events: none;
+}
+
+.docContent :global(.column-resize-handle) {
+  position: absolute;
+  top: 0;
+  right: -2px;
+  bottom: 0;
+  width: 4px;
+  background: var(--imf-blue);
+  pointer-events: none;
+}
+
+.docContent :global(.tableWrapper) {
+  overflow-x: auto;
+}
+
+/* Éditeur : actions et barre d’outils façon Word */
+.editorShell {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.editorActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.editorActionsBtns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.editorToolbar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  max-width: 210mm;
+  width: 100%;
+  margin: 0 auto;
+  padding: 6px 8px;
+  border: 1px solid #dcdcdc;
+  border-radius: 10px;
+  background: #fafafa;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+}
+
+.toolBtn {
+  min-width: 32px;
+  height: 32px;
+  padding: 0 9px;
+  border: 1px solid #d6d6d6;
+  border-radius: 6px;
+  background: #fff;
+  color: #222;
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.toolBtn:hover:not(:disabled) {
+  border-color: var(--imf-blue);
+}
+
+.toolBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.toolBtnActive {
+  background: #e3e9f7;
+  border-color: var(--imf-blue);
+  color: var(--imf-blue);
+}
+
+.toolBtnPrimary {
+  background: var(--imf-blue);
+  border-color: var(--imf-blue);
+  color: #fff;
+}
+
+.toolSelect {
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid #d6d6d6;
+  border-radius: 6px;
+  background: #fff;
+  font: inherit;
+  font-size: 0.85rem;
+}
+
+.toolSep {
+  width: 1px;
+  height: 22px;
+  margin: 0 4px;
+  background: #d6d6d6;
+}
+
+@media print {
+  .screen {
+    padding: 0;
+    background: #fff;
+  }
+
+  .noPrint {
+    display: none !important;
+  }
+
+  .page {
+    margin: 0;
+    max-width: none;
+    min-height: auto;
+    padding: 0;
+    box-shadow: none;
+  }
+
+  @page {
+    size: A4;
+    margin: 14mm 13mm;
+  }
+}

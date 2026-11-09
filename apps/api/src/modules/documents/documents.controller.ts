@@ -3,19 +3,18 @@ import {
   Get,
   Param,
   Res,
-  StreamableFile,
   UseGuards,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiOperation,
   ApiParam,
-  ApiProduces,
   ApiTags,
 } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
-import { createReadStream } from 'fs';
 import type { Response } from 'express';
+import { pipeline } from 'node:stream/promises';
+import { CurrentUser } from '../identity/current-user.decorator';
 import { JwtAuthGuard } from '../identity/jwt-auth.guard';
 import { Roles, RolesGuard } from '../identity/roles.guard';
 import { DocumentsService } from './documents.service';
@@ -29,6 +28,10 @@ import { DocumentsService } from './documents.service';
   Role.AGENT,
   Role.RESPONSABLE_CREDIT,
   Role.ANALYSTE,
+  Role.CONFORMITE,
+  Role.DG,
+  Role.DGA,
+  Role.CA,
   Role.ADMIN,
 )
 export class DocumentsController {
@@ -45,21 +48,36 @@ export class DocumentsController {
 
   @Get('pieces/:id')
   @ApiOperation({
-    summary: 'Télécharger une pièce',
-    description: 'Retourne le fichier binaire de la pièce jointe.',
+    summary: 'Ouvrir / télécharger une pièce',
+    description:
+      'Renvoie le binaire de la pièce depuis le stockage serveur (aperçu iframe / téléchargement).',
   })
   @ApiParam({ name: 'id', description: 'ID de la pièce' })
-  @ApiProduces('application/octet-stream')
   async download(
+    @CurrentUser() user: { id: string; role: Role },
     @Param('id') id: string,
-    @Res({ passthrough: true }) res: Response,
+    @Res() res: Response,
   ) {
     const piece = await this.documents.findPiece(id);
-    const abs = await this.documents.resolveAbsolutePath(piece.blobPath);
-    res.set({
-      'Content-Disposition': `attachment; filename="${piece.blobPath}"`,
-    });
-    return new StreamableFile(createReadStream(abs));
+    await this.documents.assertCanAccessDossier(user, piece.dossierId);
+    const file = await this.documents.openPiece(piece);
+    const filename = piece.originalName || `piece-${piece.id}`;
+    res.setHeader('Content-Type', file.contentType);
+    res.setHeader('Content-Length', String(file.bytes));
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader(
+      'Content-Disposition',
+      `inline; filename*=UTF-8''${encodeURIComponent(filename)}`,
+    );
+    if (Buffer.isBuffer(file.body)) {
+      res.send(file.body);
+      return;
+    }
+    try {
+      await pipeline(file.body, res);
+    } catch {
+      res.destroy();
+    }
   }
 
   @Get('dossiers/:dossierId')
@@ -68,7 +86,11 @@ export class DocumentsController {
     description: 'Métadonnées des documents liés au dossier (sans binaire).',
   })
   @ApiParam({ name: 'dossierId', description: 'ID du dossier' })
-  async list(@Param('dossierId') dossierId: string) {
+  async list(
+    @CurrentUser() user: { id: string; role: Role },
+    @Param('dossierId') dossierId: string,
+  ) {
+    await this.documents.assertCanAccessDossier(user, dossierId);
     return this.documents.listByDossier(dossierId);
   }
 }

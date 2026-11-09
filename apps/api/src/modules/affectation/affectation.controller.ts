@@ -12,11 +12,13 @@ import {
   ApiOperation,
   ApiParam,
   ApiProperty,
+  ApiPropertyOptional,
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
-import { IsString, MinLength } from 'class-validator';
+import { IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
+import { MOTIFS_ECART_AFFECTATION, type MotifEcartAffectation } from '@imf/shared';
 import { CurrentUser } from '../identity/current-user.decorator';
 import { JwtAuthGuard } from '../identity/jwt-auth.guard';
 import { Roles, RolesGuard } from '../identity/roles.guard';
@@ -29,17 +31,28 @@ class AssignDto {
   })
   @IsString()
   agentId!: string;
-}
 
-class RenvoyerDto {
-  @ApiProperty({
-    example: 'Compléter les photos du commerce et le relevé de compte.',
-    minLength: 3,
-    description: 'Motif du renvoi à l’agent',
-  })
+  @ApiPropertyOptional({ description: 'Avis IA « agents suggérés » consulté (traçabilité)' })
+  @IsOptional()
   @IsString()
-  @MinLength(3)
-  comment!: string;
+  avisIaId?: string;
+
+  @ApiPropertyOptional({
+    enum: MOTIFS_ECART_AFFECTATION,
+    description: 'Obligatoire si l’agent choisi n’est pas le n°1 suggéré par l’IA',
+  })
+  @IsOptional()
+  @IsIn(MOTIFS_ECART_AFFECTATION as unknown as string[])
+  motifCategorie?: MotifEcartAffectation;
+
+  @ApiPropertyOptional({
+    example: 'Connaît bien les commerçants du marché de Matete',
+    description: 'Explication de l’écart (obligatoire avec motifCategorie) — réutilisée par l’IA',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  motif?: string;
 }
 
 @ApiTags('Affectation')
@@ -50,25 +63,6 @@ class RenvoyerDto {
 export class AffectationController {
   constructor(private readonly affectation: AffectationService) {}
 
-  @Get('file')
-  @ApiOperation({
-    summary: 'File d’attente',
-    description: 'Dossiers en attente d’attribution à un agent.',
-  })
-  listFile() {
-    return this.affectation.listFile();
-  }
-
-  @Get('dossiers')
-  @ApiOperation({
-    summary: 'Tous les dossiers RC',
-    description:
-      'Liste des dossiers visibles du responsable crédit, avec bucket (file, en_cours, a_valider…).',
-  })
-  listDossiers() {
-    return this.affectation.listDossiers();
-  }
-
   @Get('agents')
   @ApiOperation({
     summary: 'Agents disponibles',
@@ -78,17 +72,12 @@ export class AffectationController {
     return this.affectation.listAgents();
   }
 
-  @Get('dossiers/:id')
-  @ApiOperation({ summary: 'Détail dossier (vue RC)' })
-  @ApiParam({ name: 'id', description: 'ID du dossier' })
-  getOne(@Param('id') id: string) {
-    return this.affectation.getOne(id);
-  }
-
   @Post('dossiers/:id/assign')
   @ApiOperation({
     summary: 'Affecter à un agent',
-    description: 'Passe le dossier à l’état AFFECTE et notifie l’agent.',
+    description:
+      'Passe le dossier à l’état AFFECTE et notifie l’agent. Si l’agent n’est pas le n°1 de la suggestion IA, ' +
+      'motifCategorie + motif sont obligatoires : ils sont tracés et réutilisés par les suggestions suivantes.',
   })
   @ApiParam({ name: 'id', description: 'ID du dossier' })
   @ApiBody({
@@ -107,44 +96,9 @@ export class AffectationController {
     @Param('id') id: string,
     @Body() dto: AssignDto,
   ) {
-    return this.affectation.assign(user, id, dto.agentId);
-  }
-
-  @Post('dossiers/:id/renvoyer')
-  @ApiOperation({
-    summary: 'Renvoyer à l’agent',
-    description: 'Renvoie le dossier en RETOUR_AGENT avec un commentaire obligatoire.',
-  })
-  @ApiParam({ name: 'id', description: 'ID du dossier' })
-  @ApiBody({
-    type: RenvoyerDto,
-    examples: {
-      photos: {
-        summary: 'Demande de compléments',
-        value: {
-          comment: 'Compléter les photos du commerce et le relevé de compte.',
-        },
-      },
-    },
-  })
-  renvoyer(
-    @CurrentUser() user: { id: string; role: Role },
-    @Param('id') id: string,
-    @Body() dto: RenvoyerDto,
-  ) {
-    return this.affectation.renvoyer(user, id, dto.comment);
-  }
-
-  @Post('dossiers/:id/soumettre')
-  @ApiOperation({
-    summary: 'Soumettre en conformité',
-    description: 'Valide le dossier côté RC et le fait avancer vers CONFORMITE.',
-  })
-  @ApiParam({ name: 'id', description: 'ID du dossier' })
-  soumettre(
-    @CurrentUser() user: { id: string; role: Role },
-    @Param('id') id: string,
-  ) {
-    return this.affectation.soumettre(user, id);
+    return this.affectation.assign(user, id, dto.agentId, dto.avisIaId, {
+      categorie: dto.motifCategorie,
+      texte: dto.motif,
+    });
   }
 }

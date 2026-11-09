@@ -6,7 +6,8 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "prepare": "tsc -p tsconfig.json"
+    "prepare": "tsc -p tsconfig.json",
+    "test": "tsc -p tsconfig.json && node --test --disable-warning=MODULE_TYPELESS_PACKAGE_JSON \"test/*.test.ts\""
   },
   "dependencies": {
     "zod": "^3.25.76"

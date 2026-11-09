@@ -1,13 +1,23 @@
+import { Platform } from 'react-native';
 import { API_URL } from './config';
 import * as SecureStore from 'expo-secure-store';
 
 const TOKEN_KEY = 'imf_access_token';
 
+// SecureStore n'existe pas sur le web : on se rabat sur localStorage.
+const isWeb = Platform.OS === 'web';
+
 export async function getToken() {
+  if (isWeb) return localStorage.getItem(TOKEN_KEY);
   return SecureStore.getItemAsync(TOKEN_KEY);
 }
 
 export async function setToken(token: string | null) {
+  if (isWeb) {
+    if (token) localStorage.setItem(TOKEN_KEY, token);
+    else localStorage.removeItem(TOKEN_KEY);
+    return;
+  }
   if (token) await SecureStore.setItemAsync(TOKEN_KEY, token);
   else await SecureStore.deleteItemAsync(TOKEN_KEY);
 }
@@ -18,9 +28,13 @@ export async function api<T>(
 ): Promise<T> {
   const token = await getToken();
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
     ...(options.headers as Record<string, string>),
   };
+  const isFormData =
+    typeof FormData !== 'undefined' && options.body instanceof FormData;
+  if (!isFormData && !headers['Content-Type']) {
+    headers['Content-Type'] = 'application/json';
+  }
   if (token) headers.Authorization = `Bearer ${token}`;
 
   const res = await fetch(`${API_URL}${path}`, { ...options, headers });

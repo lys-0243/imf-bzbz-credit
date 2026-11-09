@@ -115,10 +115,7 @@ export default function LoginForm() {
             </button>
           </form>
 
-          <p className={styles.hint}>
-            Ex. <code>agent.a@imf.local</code> / <code>Agent1!</code> ·{' '}
-            <code>analyste@imf.local</code> / <code>Analyste1!</code>
-          </p>
+          
         </section>
 
         <aside className={styles.visualPane} aria-hidden={false}>

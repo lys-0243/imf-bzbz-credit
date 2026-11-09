@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { HealthController } from './health.controller';
 import { PrismaModule } from './prisma/prisma.module';
 import { IdentityModule } from './modules/identity/identity.module';
@@ -7,17 +8,24 @@ import { AffectationModule } from './modules/affectation/affectation.module';
 import { TerrainModule } from './modules/terrain/terrain.module';
 import { WorkflowModule } from './modules/workflow/workflow.module';
 import { ScoringModule } from './modules/scoring/scoring.module';
-import { ConformiteModule } from './modules/conformite/conformite.module';
+import { AnalyseModule } from './modules/analyse/analyse.module';
+import { AssistantModule } from './modules/assistant/assistant.module';
+import { ManuelsModule } from './modules/manuels/manuels.module';
 import { DocumentsModule } from './modules/documents/documents.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { ClientsModule } from './modules/clients/clients.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { BankingModule } from './modules/banking/banking.module';
+import { DossiersModule } from './modules/dossiers/dossiers.module';
+import { ParametresModule } from './modules/parametres/parametres.module';
 
 @Module({
   imports: [
+    // Limites appliquées route par route (ThrottlerGuard), pas globalement.
+    ThrottlerModule.forRoot([{ ttl: 60_000, limit: 10 }]),
     PrismaModule,
     AuditModule,
+    ParametresModule,
     IdentityModule,
     DemandesModule,
     ClientsModule,
@@ -25,10 +33,13 @@ import { BankingModule } from './modules/banking/banking.module';
     TerrainModule,
     WorkflowModule,
     ScoringModule,
-    ConformiteModule,
+    ManuelsModule,
+    AssistantModule,
+    AnalyseModule,
     DocumentsModule,
     AdminModule,
     BankingModule,
+    DossiersModule,
   ],
   controllers: [HealthController],
 })
