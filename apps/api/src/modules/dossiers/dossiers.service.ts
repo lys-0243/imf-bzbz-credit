@@ -14,6 +14,10 @@ import {
   isFormulaireCode,
   montantSouhaiteFromPayload,
   normalizeCf2Analyse,
+  actionsDisponibles,
+  etapeDeEtat,
+  montantEnUsd,
+  regleTransition,
   normalizeFormulaire,
   normalizeFormulaires,
   peutEditerFormulaire,
@@ -24,6 +28,7 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { DocumentsService } from '../documents/documents.service';
+import { ParametresService } from '../parametres/parametres.service';
 import { TerrainService } from '../terrain/terrain.service';
 
 type AuthUser = { id: string; role: Role };
@@ -32,6 +37,7 @@ type AuthUser = { id: string; role: Role };
 const ETATS_PAR_ROLE: Partial<Record<Role, DossierEtat[]>> = {
   [Role.CONFORMITE]: [DossierEtat.CONFORMITE],
   [Role.DG]: [DossierEtat.DIRECTION, DossierEtat.CONSEIL, DossierEtat.A_DECAISSER],
+  [Role.DGA]: [DossierEtat.DIRECTION, DossierEtat.CONSEIL, DossierEtat.A_DECAISSER],
   [Role.CA]: [DossierEtat.CONSEIL, DossierEtat.A_DECAISSER],
   [Role.ADMIN]: [
     DossierEtat.CONFORMITE,
@@ -49,6 +55,7 @@ export class DossiersService {
     private readonly audit: AuditService,
     private readonly documents: DocumentsService,
     private readonly terrain: TerrainService,
+    private readonly parametres: ParametresService,
   ) {}
 
   async list(user: AuthUser) {
@@ -95,15 +102,85 @@ export class DossiersService {
         visite: true,
         transitions: { orderBy: { createdAt: 'asc' } },
         formulaires: true,
+        analyste: { select: { id: true, displayName: true } },
+        conformite: { select: { id: true, displayName: true } },
+        decisions: {
+          orderBy: { createdAt: 'asc' },
+          include: { actor: { select: { id: true, displayName: true } } },
+        },
+        cbsEnvois: { orderBy: { createdAt: 'desc' }, take: 1 },
       },
     });
     if (!d) throw new NotFoundException('Dossier introuvable');
+    const acteurs = await this.prisma.user.findMany({
+      where: { id: { in: [...new Set(d.transitions.map((t) => t.actorId))] } },
+      select: { id: true, displayName: true, role: true },
+    });
+    const parametres = await this.parametres.get();
     const anterieurs = await this.prisma.dossier.count({
       where: { clientId: d.clientId, createdAt: { lt: d.createdAt } },
     });
-    const { formulaires, ...rest } = d;
+    const { formulaires, decisions, cbsEnvois, ...rest } = d;
+    const titulaires = {
+      userId: user.id,
+      agentId: d.agentId,
+      analysteId: d.analysteId,
+      conformiteId: d.conformiteId,
+    };
+    const montant = montantSouhaiteFromPayload((d.payload ?? {}) as Record<string, any>);
     return {
       ...rest,
+      transitions: d.transitions.map((t) => {
+        const a = acteurs.find((x) => x.id === t.actorId);
+        return {
+          ...t,
+          acteur: a ? { id: a.id, displayName: a.displayName, role: a.role } : null,
+          nature: t.fromEtat ? (regleTransition(t.fromEtat, t.toEtat)?.nature ?? 'avance') : 'avance',
+        };
+      }),
+      decisions: decisions.map((x) => ({
+        id: x.id,
+        etape: x.etape,
+        role: x.role,
+        acteur: x.actor,
+        recommandation: x.recommandation,
+        montantRetenu: x.montantRetenu,
+        dureeRetenueMois: x.dureeRetenueMois,
+        accordAvecIa: x.accordAvecIa,
+        commentaire: x.commentaire,
+        avisIaId: x.avisIaId,
+        createdAt: x.createdAt,
+      })),
+      etape: etapeDeEtat(d.etat),
+      titulaires: { agent: d.agent, analyste: d.analyste, conformite: d.conformite },
+      peutPrendreEnCharge:
+        (user.role === Role.ANALYSTE &&
+          (d.etat === DossierEtat.ANALYSTE || d.etat === DossierEtat.RETOUR_ANALYSTE) &&
+          !d.analysteId) ||
+        (user.role === Role.CONFORMITE && d.etat === DossierEtat.CONFORMITE && !d.conformiteId),
+      actions: actionsDisponibles(d.etat, user.role, titulaires).map((r) => ({
+        toEtat: r.to,
+        label: r.label,
+        nature: r.nature,
+        motifRequis: r.motifRequis,
+      })),
+      seuil: {
+        seuilConseilUsd: parametres.seuilApprobationCa,
+        montantUsd: montant.montantSouhaite ? montantEnUsd(montant.montantSouhaite, montant.devise, parametres) : null,
+        delaiCibleJours: (() => {
+          const e = etapeDeEtat(d.etat);
+          return e ? parametres.delaisCiblesJours[e] : null;
+        })(),
+      },
+      cbs: cbsEnvois[0]
+        ? {
+            statut: cbsEnvois[0].statut,
+            tentatives: cbsEnvois[0].tentatives,
+            dernierMessage: cbsEnvois[0].dernierMessage,
+            envoyeAt: cbsEnvois[0].envoyeAt,
+            updatedAt: cbsEnvois[0].updatedAt,
+          }
+        : null,
       type: d.produit.code,
       etatLabel: DOSSIER_ETAT_LABELS[d.etat],
       checklistAnswers: d.visite?.checklistJson ?? null,
@@ -121,13 +198,21 @@ export class DossiersService {
 
   private editables(
     user: AuthUser,
-    d: { etat: DossierEtat; agentId: string | null; agentValideAt: Date | null },
+    d: {
+      etat: DossierEtat;
+      agentId: string | null;
+      agentValideAt: Date | null;
+      analysteId: string | null;
+      conformiteId: string | null;
+    },
   ): FormulaireCode[] {
     const ctx = {
       role: user.role,
       etat: d.etat,
       agentAssigne: d.agentId === user.id,
       agentAValide: d.agentValideAt != null,
+      titulaireAnalyse: !d.analysteId || d.analysteId === user.id,
+      titulaireConformite: !d.conformiteId || d.conformiteId === user.id,
     };
     return (Object.keys(FORMULAIRES) as FormulaireCode[]).filter((code) =>
       peutEditerFormulaire(code, ctx),
@@ -147,7 +232,7 @@ export class DossiersService {
     await this.documents.assertCanAccessDossier(user, id);
     const d = await this.prisma.dossier.findUnique({
       where: { id },
-      select: { etat: true, agentId: true, agentValideAt: true },
+      select: { etat: true, agentId: true, agentValideAt: true, analysteId: true, conformiteId: true },
     });
     if (!d) throw new NotFoundException('Dossier introuvable');
     if (!this.editables(user, d).includes(code)) {
@@ -160,6 +245,13 @@ export class DossiersService {
       await this.terrain.ensureAgentTerrain(user, id);
     }
 
+    // Saisir le rapport ou l'avis de conformité vaut prise en charge.
+    if (code === 'RAPPORT_ANALYSE' && user.role === Role.ANALYSTE && !d.analysteId) {
+      await this.prisma.dossier.updateMany({ where: { id, analysteId: null }, data: { analysteId: user.id } });
+    }
+    if (code === 'AVIS_CONFORMITE' && user.role === Role.CONFORMITE && !d.conformiteId) {
+      await this.prisma.dossier.updateMany({ where: { id, conformiteId: null }, data: { conformiteId: user.id } });
+    }
     const data = normalizeFormulaire(code, raw);
     if (JSON.stringify(data).length > 200_000) {
       throw new BadRequestException('Formulaire trop volumineux');

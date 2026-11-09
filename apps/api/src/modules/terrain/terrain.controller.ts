@@ -107,7 +107,7 @@ export class TerrainController {
   constructor(private readonly terrain: TerrainService) {}
 
   @Get('terrain')
-  @Roles(Role.AGENT, Role.ANALYSTE)
+  @Roles(Role.AGENT)
   @ApiOperation({
     summary: 'Ping module terrain',
     description: 'Confirme que le module terrain est implémenté.',
@@ -351,9 +351,9 @@ export class TerrainController {
   @Post('agent/dossiers/:id/soumettre')
   @Roles(Role.AGENT)
   @ApiOperation({
-    summary: 'Valider le pronostic et soumettre au RC',
+    summary: 'Valider le pronostic et soumettre à l’analyse',
     description:
-      'L’agent valide (ou ajuste) l’avis et le montant de l’IA, puis soumet le dossier au responsable crédit. Exige un pronostic généré sur les données actuelles (409 sinon).',
+      'L’agent valide (ou ajuste) l’avis et le montant de l’IA, puis soumet le dossier à l’analyste. Exige un pronostic généré sur les données actuelles (409 sinon).',
   })
   @ApiParam({ name: 'id', description: 'ID du dossier' })
   @ApiBody({ type: DecisionPronosticDto })
@@ -363,26 +363,5 @@ export class TerrainController {
     @Body() dto: DecisionPronosticDto,
   ) {
     return this.terrain.soumettre(user, id, dto);
-  }
-
-  @Get('analyste/dossiers')
-  @Roles(Role.ANALYSTE)
-  @ApiOperation({
-    summary: 'Dossiers analyste',
-    description: 'File analyste (nouveaux / retournés / terminés).',
-  })
-  analysteList(@CurrentUser() user: { id: string; role: Role }) {
-    return this.terrain.listForAnalyste(user);
-  }
-
-  @Get('analyste/dossiers/:id')
-  @Roles(Role.ANALYSTE)
-  @ApiOperation({ summary: 'Détail dossier analyste' })
-  @ApiParam({ name: 'id', description: 'ID du dossier' })
-  analysteOne(
-    @CurrentUser() user: { id: string; role: Role },
-    @Param('id') id: string,
-  ) {
-    return this.terrain.getForAnalyste(user, id);
   }
 }

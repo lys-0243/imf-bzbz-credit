@@ -7,6 +7,10 @@ import {
 import { Prisma, Role, type Pronostic } from '@prisma/client';
 import {
   avisParRegles,
+  computeScoreCredit,
+  evaluerProposition,
+  type EligibiliteScore,
+  type ScoreCredit,
   buildContexteClient,
   buildDossierFacts,
   computeCf5Totaux,
@@ -30,6 +34,7 @@ import {
   type PronosticAvis,
   type PronosticRecommandation,
 } from '@imf/shared';
+import { stableStringify } from '../../common/stable';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { BankingService } from '../banking/banking.service';
@@ -66,21 +71,6 @@ export type PronosticDto = {
   /** Dernière validation de l'agent sur ce dossier (avant soumission). */
   validationAgent: ValidationAgentDto | null;
 };
-
-/** JSON à clés triées : Postgres (jsonb) ne conserve pas l'ordre des clés. */
-function stableStringify(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`;
-  if (value && typeof value === 'object') {
-    return `{${Object.keys(value as Record<string, unknown>)
-      .sort()
-      .map(
-        (k) =>
-          `${JSON.stringify(k)}:${stableStringify((value as Record<string, unknown>)[k])}`,
-      )
-      .join(',')}}`;
-  }
-  return JSON.stringify(value ?? null);
-}
 
 @Injectable()
 export class ScoringService {
@@ -149,9 +139,12 @@ export class ScoringService {
   }
 
   /** Faits déterministes du dossier + analyse CF2 utilisée pour les recalculs. */
-  private async loadFacts(
-    dossierId: string,
-  ): Promise<{ facts: DossierFacts; analyse: Cf2Analyse | null }> {
+  private async loadFacts(dossierId: string): Promise<{
+    facts: DossierFacts;
+    analyse: Cf2Analyse | null;
+    eligibilite: EligibiliteScore | null;
+    payload: Record<string, any>;
+  }> {
     const d = await this.prisma.dossier.findUnique({
       where: { id: dossierId },
       include: {
@@ -237,7 +230,72 @@ export class ScoringService {
         analyse,
       }),
     });
-    return { facts, analyse };
+    return {
+      facts,
+      analyse,
+      eligibilite: eligibiliteRenseignee && cf1 ? (cf1.eligibilite as EligibiliteScore) : null,
+      payload,
+    };
+  }
+
+  /**
+   * Contexte complet pour l'analyse : faits, éligibilité, anciennetés,
+   * nombre de retours à l'agent, montant retenu par l'agent.
+   */
+  async contexteAnalyse(dossierId: string) {
+    const base = await this.loadFacts(dossierId);
+    const [retoursAgent, decisionAgent, parametres] = await Promise.all([
+      this.prisma.transition.count({ where: { dossierId, toEtat: 'RETOUR_AGENT' } }),
+      this.prisma.decisionHumaine.findFirst({
+        where: { dossierId, role: Role.AGENT },
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.parametres.get(),
+    ]);
+    return {
+      ...base,
+      retoursAgent,
+      montantAgent: decisionAgent?.montantRetenu ?? null,
+      dureeAgentMois: decisionAgent?.dureeRetenueMois ?? null,
+      grille: parametres.grilleScore,
+      activiteDepuis:
+        base.analyse?.cf22.business.activiteDepuis ||
+        String(base.payload.business?.dureeTypeBusiness ?? '') ||
+        null,
+      lieuDepuis:
+        base.analyse?.cf22.business.lieuDepuis || String(base.payload.business?.dureeAdresse ?? '') || null,
+    };
+  }
+
+  /** Score moteur évalué sur un montant / une durée (sinon ceux de l'agent). */
+  scoreMoteur(
+    ctx: Awaited<ReturnType<ScoringService['contexteAnalyse']>>,
+    cible?: { montant?: number | null; dureeMois?: number | null },
+  ): ScoreCredit {
+    const montant = cible?.montant ?? ctx.montantAgent ?? ctx.facts.proposition.montantPropose;
+    const duree =
+      cible?.dureeMois ?? ctx.dureeAgentMois ?? ctx.facts.proposition.echeanceMois ?? ctx.facts.referenceIa.dureeReferenceMois;
+    const evaluation =
+      ctx.analyse && ctx.facts.analyseDisponible && montant && duree
+        ? evaluerProposition({
+            analyse: ctx.analyse,
+            montant,
+            echeanceMois: duree,
+            grilleTaux: ctx.facts.referenceIa.grilleTaux,
+            garanties: ctx.facts.referenceIa.garanties,
+          })
+        : null;
+    return computeScoreCredit(
+      {
+        facts: ctx.facts,
+        evaluation,
+        eligibilite: ctx.eligibilite,
+        activiteDepuis: ctx.activiteDepuis,
+        lieuDepuis: ctx.lieuDepuis,
+        retoursAgent: ctx.retoursAgent,
+      },
+      ctx.grille,
+    );
   }
 
   async buildFacts(dossierId: string): Promise<DossierFacts> {

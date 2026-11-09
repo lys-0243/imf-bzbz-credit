@@ -206,31 +206,12 @@ export class TerrainService {
     const now = new Date();
     await this.prisma.$transaction(async (tx) => {
       if (needsDescente) {
-        this.workflow.assertTransition(d.etat, DossierEtat.DESCENTE, user.role);
-        await tx.dossier.update({
-          where: { id },
-          data: { etat: DossierEtat.DESCENTE },
+        await this.workflow.transitionTx(tx, user, d, DossierEtat.DESCENTE, {
+          comment:
+            d.etat === DossierEtat.RETOUR_AGENT
+              ? 'Reprise du dossier après retour'
+              : 'Ouverture du travail terrain',
         });
-        await tx.transition.create({
-          data: {
-            dossierId: id,
-            fromEtat: d.etat,
-            toEtat: DossierEtat.DESCENTE,
-            comment: 'Ouverture du travail terrain (sans démarrage manuel)',
-            actorId: user.id,
-          },
-        });
-        await this.audit.log(
-          {
-            dossierId: id,
-            actorId: user.id,
-            action: 'TERRAIN_OPENED',
-            entityType: 'DOSSIER',
-            entityId: id,
-            payload: { reference: d.reference },
-          },
-          tx,
-        );
       }
       if (needsVisite) {
         await tx.visiteTerrain.create({
@@ -696,47 +677,25 @@ ${JSON.stringify(redactPii(context), null, 2)}`,
     }
 
     const now = new Date();
-    const chain: Array<{ from: DossierEtat; to: DossierEtat; comment: string }> =
-      [
-        {
-          from: DossierEtat.DESCENTE,
-          to: DossierEtat.RAPPORT_AGENT,
-          comment: 'Rapport agent soumis',
-        },
-        {
-          from: DossierEtat.RAPPORT_AGENT,
-          to: DossierEtat.SCORING,
-          comment: 'Pronostic IA validé par l’agent',
-        },
-        {
-          from: DossierEtat.SCORING,
-          to: DossierEtat.EN_ATTENTE_VALIDATION_RC,
-          comment: 'Transmission au responsable crédit',
-        },
-      ];
-
-    for (const step of chain) {
-      this.workflow.assertTransition(step.from, step.to, user.role);
-    }
+    const chain: Array<{ to: DossierEtat; comment: string }> = [
+      { to: DossierEtat.RAPPORT_AGENT, comment: 'Rapport agent soumis' },
+      { to: DossierEtat.SCORING, comment: 'Pronostic IA validé par l’agent' },
+      { to: DossierEtat.ANALYSTE, comment: 'Transmission à l’analyse' },
+    ];
 
     await this.prisma.$transaction(async (tx) => {
       await tx.visiteTerrain.update({
         where: { dossierId: id },
         data: { completedAt: now },
       });
-      await tx.dossier.update({
-        where: { id },
-        data: {
-          etat: DossierEtat.EN_ATTENTE_VALIDATION_RC,
-          agentValideAt: now,
-        },
-      });
+      await tx.dossier.update({ where: { id }, data: { agentValideAt: now } });
       const decisionHumaine = await tx.decisionHumaine.create({
         data: {
           dossierId: id,
           pronosticId: pronostic.id,
           actorId: user.id,
           role: user.role,
+          etape: 'AGENT',
           recommandation: decision.recommandation,
           montantRetenu,
           dureeRetenueMois: decision.dureeRetenueMois ?? null,
@@ -762,31 +721,17 @@ ${JSON.stringify(redactPii(context), null, 2)}`,
         },
         tx,
       );
+      let etat: DossierEtat = d.etat;
       for (const step of chain) {
-        await tx.transition.create({
-          data: {
-            dossierId: id,
-            fromEtat: step.from,
-            toEtat: step.to,
-            comment: step.comment,
-            actorId: user.id,
-          },
-        });
+        await this.workflow.transitionTx(
+          tx,
+          user,
+          { ...d, etat, agentValideAt: now },
+          step.to,
+          { comment: step.comment },
+        );
+        etat = step.to;
       }
-      await this.audit.log(
-        {
-          dossierId: id,
-          actorId: user.id,
-          action: 'AGENT_SOUMIS',
-          entityType: 'DOSSIER',
-          entityId: id,
-          payload: {
-            reference: d.reference,
-            toEtat: DossierEtat.EN_ATTENTE_VALIDATION_RC,
-          },
-        },
-        tx,
-      );
     });
 
     return this.prisma.dossier.findUnique({
@@ -799,93 +744,5 @@ ${JSON.stringify(redactPii(context), null, 2)}`,
         transitions: { orderBy: { createdAt: 'asc' } },
       },
     });
-  }
-
-  async listForAnalyste(user: AuthUser) {
-    if (user.role !== Role.ANALYSTE) {
-      throw new ForbiddenException('Rôle analyste requis');
-    }
-    const rows = await this.prisma.dossier.findMany({
-      where: {
-        etat: {
-          in: [
-            DossierEtat.ANALYSTE,
-            DossierEtat.RETOUR_ANALYSTE,
-            DossierEtat.CONFORMITE,
-            DossierEtat.DIRECTION,
-            DossierEtat.CONSEIL,
-            DossierEtat.A_DECAISSER,
-            DossierEtat.REJETE,
-          ],
-        },
-      },
-      orderBy: { updatedAt: 'desc' },
-      take: 200,
-      include: {
-        client: { include: { zone: true, commune: true } },
-        agent: { select: { id: true, displayName: true, email: true } },
-        produit: true,
-        visite: true,
-      },
-    });
-    return rows.map((d) => {
-      const montant = montantSouhaiteFromPayload(
-        d.payload as Record<string, any>,
-      );
-      return {
-        id: d.id,
-        reference: d.reference,
-        produit: d.produit,
-        produitLabel: d.produit.label,
-        type: d.produit.code,
-        etat: d.etat,
-        etatLabel: DOSSIER_ETAT_LABELS[d.etat],
-        client: d.client,
-        agent: d.agent,
-        scoreValue: d.scoreValue,
-        agentValideAt: d.agentValideAt,
-        rapportTexte: d.visite?.rapportTexte ?? null,
-        updatedAt: d.updatedAt,
-        bucket: this.analysteBucket(d.etat),
-        montantSouhaite: montant.montantSouhaite,
-        devise: montant.devise,
-      };
-    });
-  }
-
-  private analysteBucket(
-    etat: DossierEtat,
-  ): 'nouveaux' | 'en_cours' | 'retournes' | 'termines' {
-    if (etat === DossierEtat.ANALYSTE) return 'nouveaux';
-    if (etat === DossierEtat.RETOUR_ANALYSTE) return 'retournes';
-    return 'termines';
-  }
-
-  async getForAnalyste(user: AuthUser, id: string) {
-    if (user.role !== Role.ANALYSTE) {
-      throw new ForbiddenException('Rôle analyste requis');
-    }
-    const d = await this.prisma.dossier.findUnique({
-      where: { id },
-      include: {
-        client: { include: { zone: true, commune: true } },
-        agent: { select: { id: true, displayName: true, email: true } },
-        produit: true,
-        pieces: { orderBy: { createdAt: 'asc' } },
-        visite: true,
-        transitions: { orderBy: { createdAt: 'asc' } },
-      },
-    });
-    if (!d) throw new NotFoundException('Dossier introuvable');
-    return {
-      ...d,
-      type: d.produit.code,
-      etatLabel: DOSSIER_ETAT_LABELS[d.etat],
-      checklistAnswers: d.visite?.checklistJson ?? null,
-      analyseCf2: normalizeCf2Analyse(d.visite?.analyseCf2Json, {
-        visiteStartedAt: d.visite?.startedAt?.toISOString() ?? null,
-      }),
-      usesAnalyseAgrPack: usesAnalyseAgrPack(d.produit.code),
-    };
   }
 }

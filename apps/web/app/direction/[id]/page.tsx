@@ -1,9 +1,9 @@
 'use client';
 
 import { useParams } from 'next/navigation';
-import HierarchieDashboard from '../../../components/dashboard/HierarchieDashboard';
+import PosteDashboard from '../../../components/poste/PosteDashboard';
 
 export default function Page() {
   const params = useParams();
-  return <HierarchieDashboard base="direction" section="detail" selectedId={String(params.id)} />;
+  return <PosteDashboard base="direction" section="detail" selectedId={String(params.id)} />;
 }

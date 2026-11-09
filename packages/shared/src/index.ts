@@ -29,6 +29,7 @@ export const ROLES = [
   'ANALYSTE',
   'CONFORMITE',
   'DG',
+  'DGA',
   'CA',
   'ADMIN',
 ] as const;
@@ -808,14 +809,14 @@ export const DOSSIER_ETAT_LABELS: Record<DossierEtat, string> = {
   DESCENTE: 'Descente terrain',
   RAPPORT_AGENT: 'Rapport agent',
   SCORING: 'Scoring',
-  EN_ATTENTE_VALIDATION_RC: 'En attente de validation responsable crédit',
+  EN_ATTENTE_VALIDATION_RC: 'Validation finale responsable crédit',
   ANALYSTE: 'Analyste crédit',
   RETOUR_AGENT: 'Retour agent',
   CONFORMITE: 'Conformité',
   RETOUR_ANALYSTE: 'Retour analyste',
   DIRECTION: 'Direction générale',
   CONSEIL: "Conseil d'administration",
-  A_DECAISSER: 'À décaisser',
+  A_DECAISSER: 'Crédit accordé — clôturé',
   REJETE: 'Rejeté',
 };
 
@@ -888,6 +889,20 @@ export type BankingDecisionNotify = {
     phone: string;
   };
   decidedAt: string;
+  /** Champs enrichis (circuit complet) — optionnels pour compatibilité. */
+  dureeMois?: number | null;
+  tauxMensuel?: number | null;
+  frais?: {
+    fraisDossier: number;
+    fraisDecaissement: number;
+    tva: number;
+    caution: number;
+    totalFrais: number;
+  } | null;
+  garanties?: Array<{ libelle: string; valeur: number }>;
+  score?: { total: number; classe: string } | null;
+  approbations?: Array<{ role: string; nom: string; date: string; recommandation: string }>;
+  conditions?: string[];
 };
 
 export type BankingNotifyResult = {
@@ -914,3 +929,8 @@ export * from './formulaires';
 export * from './documents';
 export * from './dossierSynthese';
 export * from './documentsHtml';
+export * from './workflow';
+export * from './scoreCredit';
+export * from './rapportAnalyse';
+export * from './assistant';
+export * from './manuels';

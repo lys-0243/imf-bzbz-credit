@@ -1,7 +1,7 @@
 'use client';
 
-import AnalysteDashboard from '../../components/dashboard/AnalysteDashboard';
+import PosteDashboard from '../../components/poste/PosteDashboard';
 
-export default function AnalystePage() {
-  return <AnalysteDashboard section="dashboard" />;
+export default function Page() {
+  return <PosteDashboard base="analyste" section="dashboard" />;
 }

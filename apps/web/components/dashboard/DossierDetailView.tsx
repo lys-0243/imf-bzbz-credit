@@ -663,7 +663,22 @@ export function DossierDetailView({
   onTabRequestHandled,
   drawers = [],
   montantProposeIa,
+  header,
+  leadingTabs,
+  initialTab,
+  bottomInset = 0,
+  sansBoutonsFlottants = false,
 }: {
+  /** Bloc affiché au-dessus du bandeau (ex. frise du parcours). */
+  header?: ReactNode;
+  /** Onglets placés avant les onglets du dossier (contenu via `extraTabContent`). */
+  leadingTabs?: TabDef[];
+  /** Onglet ouvert à l'affichage du dossier. */
+  initialTab?: string;
+  /** Hauteur réservée en bas (barre de décision fixe). */
+  bottomInset?: number;
+  /** Masque les boutons flottants Historique / Actions (poste de décision). */
+  sansBoutonsFlottants?: boolean;
   data: DossierDetailData;
   backHref?: string;
   extraTabs?: TabDef[];
@@ -781,12 +796,13 @@ export function DossierDetailView({
   ]);
 
   const tabs = useMemo(
-    () => [...baseTabs, ...(extraTabs ?? [])],
-    [baseTabs, extraTabs],
+    () => [...(leadingTabs ?? []), ...baseTabs, ...(extraTabs ?? [])],
+    [leadingTabs, baseTabs, extraTabs],
   );
 
   // Sans onglet (ex. Dare-Dare en descente), l’historique s’affiche en contenu principal.
-  const defaultTab = tabs[0]?.key ?? 'historique';
+  const defaultTab =
+    (initialTab && tabs.some((t) => t.key === initialTab) ? initialTab : tabs[0]?.key) ?? 'historique';
 
   useEffect(() => {
     setTab(defaultTab);
@@ -1284,8 +1300,12 @@ export function DossierDetailView({
 
   return (
     <FichesProvider dossierId={data.id}>
-    <div className={styles.detailPage}>
+    <div
+      className={styles.detailPage}
+      style={bottomInset ? { height: `calc(100vh - ${68 + bottomInset}px)` } : undefined}
+    >
       <div className={styles.detailFixed}>
+        {header}
         <div className={styles.detailHero}>
           <div className={styles.detailHeroTop}>
             <div>
@@ -1400,7 +1420,7 @@ export function DossierDetailView({
         <div className={styles.detailScroll}>{tabContent}</div>
       </div>
 
-      <div className={styles.fabStack}>
+      <div className={styles.fabStack} style={sansBoutonsFlottants ? { display: 'none' } : undefined}>
         <button
           type="button"
           className={styles.actionsFab}

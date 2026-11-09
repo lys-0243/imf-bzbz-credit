@@ -3,6 +3,8 @@
 import type { ReactNode } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '../../lib/auth';
+import { useFile } from '../../lib/poste';
+import { CommandPalette } from '../poste/CommandPalette';
 import styles from './dashboard.module.css';
 
 export type SidebarDossier = {
@@ -47,6 +49,8 @@ export type NavKey =
   | 'produits'
   | 'parametres'
   | 'journal'
+  | 'manuels'
+  | 'cbs'
   | 'profile'
   | 'logout';
 
@@ -58,6 +62,7 @@ export type NavCounts = {
   retournes?: number;
   termines?: number;
   soumis?: number;
+  aTraiter?: number;
 };
 
 type NavItem = {
@@ -97,30 +102,8 @@ const AGENT_NAV: NavItem[] = [
 
 const ANALYSTE_NAV: NavItem[] = [
   { key: 'dashboard', label: 'Tableau de bord', href: '/analyste' },
-  {
-    key: 'nouveaux',
-    label: 'Nouveaux dossiers',
-    href: '/analyste/nouveaux',
-    countKey: 'nouveaux',
-  },
-  {
-    key: 'dossiers',
-    label: 'Dossiers en cours',
-    href: '/analyste/dossiers-en-cours',
-    countKey: 'enCours',
-  },
-  {
-    key: 'retournes',
-    label: 'Dossiers retournés',
-    href: '/analyste/dossiers-retournes',
-    countKey: 'retournes',
-  },
-  {
-    key: 'termines',
-    label: 'Dossiers terminés',
-    href: '/analyste/dossiers-termines',
-    countKey: 'termines',
-  },
+  { key: 'file', label: 'File de travail', href: '/analyste/file', countKey: 'aTraiter' },
+  { key: 'manuels', label: 'Manuels & procédures', href: '/analyste/manuels' },
 ];
 
 const ADMIN_NAV: NavItem[] = [
@@ -130,58 +113,26 @@ const ADMIN_NAV: NavItem[] = [
   { key: 'zones', label: 'Zones', href: '/admin/zones' },
   { key: 'produits', label: 'Produits', href: '/admin/produits' },
   { key: 'parametres', label: 'Paramètres IMF', href: '/admin/parametres' },
+  { key: 'manuels', label: 'Manuels (RAG)', href: '/admin/manuels' },
+  { key: 'cbs', label: 'Envois CBS', href: '/admin/envois-cbs' },
   { key: 'journal', label: 'Journal d’activité', href: '/admin/journal' },
 ];
 
 const RESPONSABLE_CREDIT_NAV: NavItem[] = [
-  {
-    key: 'dashboard',
-    label: 'Tableau de bord',
-    href: '/responsable-credit',
-  },
-  {
-    key: 'file',
-    label: 'File d’attente',
-    href: '/responsable-credit/file',
-    countKey: 'file',
-  },
-  {
-    key: 'dossiers',
-    label: 'Dossiers en cours',
-    href: '/responsable-credit/en-cours',
-    countKey: 'enCours',
-  },
-  {
-    key: 'a_valider',
-    label: 'À valider',
-    href: '/responsable-credit/a-valider',
-    countKey: 'aValider',
-  },
-  {
-    key: 'retournes',
-    label: 'Renvoyés',
-    href: '/responsable-credit/renvoyes',
-    countKey: 'retournes',
-  },
-  {
-    key: 'soumis',
-    label: 'Soumis',
-    href: '/responsable-credit/soumis',
-    countKey: 'soumis',
-  },
-  {
-    key: 'agents',
-    label: 'Agents',
-    href: '/responsable-credit/agents',
-  },
+  { key: 'dashboard', label: 'Tableau de bord', href: '/responsable-credit' },
+  { key: 'file', label: 'File de travail', href: '/responsable-credit/file', countKey: 'aTraiter' },
+  { key: 'agents', label: 'Agents', href: '/responsable-credit/agents' },
 ];
 
 const CONFORMITE_NAV: NavItem[] = [
-  { key: 'dashboard', label: 'Dossiers à contrôler', href: '/conformite' },
+  { key: 'dashboard', label: 'Tableau de bord', href: '/conformite' },
+  { key: 'file', label: 'File de travail', href: '/conformite/file', countKey: 'aTraiter' },
+  { key: 'manuels', label: 'Manuels & procédures', href: '/conformite/manuels' },
 ];
 
 const DIRECTION_NAV: NavItem[] = [
-  { key: 'dashboard', label: 'Dossiers', href: '/direction' },
+  { key: 'dashboard', label: 'Tableau de bord', href: '/direction' },
+  { key: 'file', label: 'Dossiers à décider', href: '/direction/file', countKey: 'aTraiter' },
 ];
 
 type ShellBase =
@@ -194,7 +145,12 @@ type ShellBase =
 
 function activeKey(pathname: string, base: ShellBase): NavKey {
   if (pathname.startsWith(`/${base}/profile`)) return 'profile';
-  if (base === 'conformite' || base === 'direction') return 'dashboard';
+  if (base !== 'agent' && base !== 'admin') {
+    if (pathname.startsWith(`/${base}/manuels`)) return 'manuels';
+    if (pathname.startsWith(`/${base}/agents`)) return 'agents';
+    if (pathname === `/${base}` || pathname === `/${base}/`) return 'dashboard';
+    return 'file';
+  }
   if (base === 'admin') {
     if (pathname.startsWith('/admin/dossiers')) return 'dossiers';
     if (pathname.startsWith('/admin/utilisateurs')) return 'utilisateurs';
@@ -202,20 +158,8 @@ function activeKey(pathname: string, base: ShellBase): NavKey {
     if (pathname.startsWith('/admin/produits')) return 'produits';
     if (pathname.startsWith('/admin/parametres')) return 'parametres';
     if (pathname.startsWith('/admin/journal')) return 'journal';
-    return 'dashboard';
-  }
-  if (base === 'responsable-credit') {
-    if (pathname.startsWith('/responsable-credit/file')) return 'file';
-    if (pathname.startsWith('/responsable-credit/en-cours')) return 'dossiers';
-    if (pathname.startsWith('/responsable-credit/a-valider')) return 'a_valider';
-    if (pathname.startsWith('/responsable-credit/renvoyes')) return 'retournes';
-    if (pathname.startsWith('/responsable-credit/soumis')) return 'soumis';
-    if (pathname.startsWith('/responsable-credit/agents')) return 'agents';
-    if (pathname === '/responsable-credit' || pathname === '/responsable-credit/') {
-      return 'dashboard';
-    }
-    const rest = pathname.slice('/responsable-credit/'.length);
-    if (rest && !rest.includes('/')) return 'dossiers';
+    if (pathname.startsWith('/admin/manuels')) return 'manuels';
+    if (pathname.startsWith('/admin/envois-cbs')) return 'cbs';
     return 'dashboard';
   }
   if (pathname.startsWith(`/${base}/nouveaux`)) return 'nouveaux';
@@ -241,6 +185,9 @@ export function DashboardShell({
   const { user, logout } = useAuth();
   const router = useRouter();
   const pathname = usePathname() || `/${base}`;
+  const posteBase = base !== 'agent' && base !== 'admin';
+  const file = useFile(posteBase);
+  const navCounts: NavCounts | undefined = posteBase ? { ...counts, aTraiter: file.data?.aTraiter } : counts;
   const nav =
     base === 'agent'
       ? AGENT_NAV
@@ -288,8 +235,8 @@ export function DashboardShell({
             {nav.map((item) => {
               const active = item.key === current;
               const count =
-                item.countKey && counts
-                  ? counts[item.countKey]
+                item.countKey && navCounts
+                  ? navCounts[item.countKey]
                   : undefined;
               return (
                 <li key={item.key}>
@@ -348,6 +295,10 @@ export function DashboardShell({
       </aside>
 
       <div className={styles.main}>{children}</div>
+      <CommandPalette
+        base={base === 'admin' ? 'admin/dossiers' : base}
+        navigation={nav.filter((n) => n.href).map((n) => ({ label: n.label, href: n.href!, groupe: 'Navigation' }))}
+      />
     </div>
   );
 }
@@ -493,6 +444,20 @@ function NavIcon({ name }: { name: NavKey }) {
         <svg {...props}>
           <path d="M8 4h11a2 2 0 012 2v14H8a2 2 0 01-2-2V6a2 2 0 012-2z" />
           <path d="M10 9h7M10 13h7M10 17h4" />
+        </svg>
+      );
+    case 'manuels':
+      return (
+        <svg {...props}>
+          <path d="M4 5a2 2 0 012-2h5v17H6a2 2 0 01-2-2V5z" />
+          <path d="M20 5a2 2 0 00-2-2h-5v17h5a2 2 0 002-2V5z" />
+        </svg>
+      );
+    case 'cbs':
+      return (
+        <svg {...props}>
+          <path d="M3 10l9-6 9 6" />
+          <path d="M5 10v8M9 10v8M15 10v8M19 10v8M3 20h18" />
         </svg>
       );
     case 'profile':

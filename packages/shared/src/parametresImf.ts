@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { TAUX_PAR_TRANCHE } from './cf2Analyse';
+import { DEFAULT_GRILLE_SCORE, grilleScoreSchema, normalizeGrilleScore } from './scoreCredit';
 
 const pct = z.number().min(0).max(1);
 
@@ -32,6 +33,20 @@ export const parametresImfSchema = z.object({
   }),
   /** Au-delà de ce montant, le crédit passe en Conseil d’administration (APPRO PCA). */
   seuilApprobationCa: z.number().min(0),
+  /** Francs congolais pour 1 USD (comparaison au seuil des dossiers en CDF). */
+  tauxChangeCdfUsd: z.number().positive(),
+  /** Délai cible (jours) par étape avant signalement dans les files. */
+  delaisCiblesJours: z.object({
+    AFFECTATION: z.number().min(0),
+    AGENT: z.number().min(0),
+    ANALYSE: z.number().min(0),
+    CONFORMITE: z.number().min(0),
+    VALIDATION_RC: z.number().min(0),
+    DIRECTION: z.number().min(0),
+    CONSEIL: z.number().min(0),
+  }),
+  /** Grille du score de crédit (poids des piliers, classes, marge IA). */
+  grilleScore: grilleScoreSchema,
   grilleTaux: z
     .array(
       z.object({
@@ -73,6 +88,17 @@ export const DEFAULT_PARAMETRES_IMF: ParametresImf = {
     montantMaxPret: 80000,
   },
   seuilApprobationCa: 500,
+  tauxChangeCdfUsd: 2800,
+  delaisCiblesJours: {
+    AFFECTATION: 1,
+    AGENT: 5,
+    ANALYSE: 2,
+    CONFORMITE: 2,
+    VALIDATION_RC: 1,
+    DIRECTION: 2,
+    CONSEIL: 7,
+  },
+  grilleScore: DEFAULT_GRILLE_SCORE,
   grilleTaux: TAUX_PAR_TRANCHE.map((t) => ({ ...t })),
 };
 
@@ -83,6 +109,9 @@ export function normalizeParametresImf(raw: unknown): ParametresImf {
     institution: { ...DEFAULT_PARAMETRES_IMF.institution, ...(src.institution ?? {}) },
     conditions: { ...DEFAULT_PARAMETRES_IMF.conditions, ...(src.conditions ?? {}) },
     seuilApprobationCa: src.seuilApprobationCa ?? DEFAULT_PARAMETRES_IMF.seuilApprobationCa,
+    tauxChangeCdfUsd: src.tauxChangeCdfUsd ?? DEFAULT_PARAMETRES_IMF.tauxChangeCdfUsd,
+    delaisCiblesJours: { ...DEFAULT_PARAMETRES_IMF.delaisCiblesJours, ...(src.delaisCiblesJours ?? {}) },
+    grilleScore: normalizeGrilleScore(src.grilleScore),
     grilleTaux: src.grilleTaux?.length ? src.grilleTaux : DEFAULT_PARAMETRES_IMF.grilleTaux,
   };
   const parsed = parametresImfSchema.safeParse(merged);
@@ -119,9 +148,32 @@ export function computeConditionsDeboursement(
   };
 }
 
+/** Montant converti en USD (le seuil du Conseil est exprimé en USD). */
+export function montantEnUsd(
+  montant: number,
+  devise: string | null | undefined,
+  params: ParametresImf = DEFAULT_PARAMETRES_IMF,
+): number {
+  return (devise ?? 'USD').toUpperCase() === 'CDF' ? montant / params.tauxChangeCdfUsd : montant;
+}
+
+/**
+ * Au-delà du seuil (strictement), le Conseil d'administration doit approuver ;
+ * jusqu'au seuil inclus, l'approbation de la DG / DGA clôture la demande.
+ */
 export function requiertApprobationCa(
   montant: number,
   params: ParametresImf = DEFAULT_PARAMETRES_IMF,
+  devise: string | null = 'USD',
 ): boolean {
-  return montant > params.seuilApprobationCa;
+  return montantEnUsd(montant, devise, params) > params.seuilApprobationCa;
+}
+
+/** État atteint quand la direction approuve le crédit. */
+export function routageApprobationDirection(
+  montant: number,
+  devise: string | null,
+  params: ParametresImf = DEFAULT_PARAMETRES_IMF,
+): 'A_DECAISSER' | 'CONSEIL' {
+  return requiertApprobationCa(montant, params, devise) ? 'CONSEIL' : 'A_DECAISSER';
 }

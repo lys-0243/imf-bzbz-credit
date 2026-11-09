@@ -37,7 +37,7 @@ class DocumentEditeDto {
   version!: number;
 }
 
-const ROLES_DOCUMENTS = [Role.RESPONSABLE_CREDIT, Role.DG, Role.ADMIN];
+const ROLES_DOCUMENTS = [Role.RESPONSABLE_CREDIT, Role.DG, Role.DGA, Role.ADMIN];
 
 const TOUS_ROLES = [
   Role.RECEPTION,
@@ -46,6 +46,7 @@ const TOUS_ROLES = [
   Role.ANALYSTE,
   Role.CONFORMITE,
   Role.DG,
+  Role.DGA,
   Role.CA,
   Role.ADMIN,
 ];
@@ -61,7 +62,7 @@ export class DossiersController {
   ) {}
 
   @Get()
-  @Roles(Role.CONFORMITE, Role.DG, Role.CA, Role.ADMIN)
+  @Roles(Role.CONFORMITE, Role.DG, Role.DGA, Role.CA, Role.ADMIN)
   @ApiOperation({
     summary: 'Dossiers de la hiérarchie',
     description: 'Conformité : CONFORMITE ; DG : DIRECTION / CONSEIL / A_DECAISSER ; CA : CONSEIL / A_DECAISSER.',

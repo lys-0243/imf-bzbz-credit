@@ -1,14 +1,9 @@
 'use client';
 
 import { useParams } from 'next/navigation';
-import ResponsableCreditDashboard from '../../../components/dashboard/ResponsableCreditDashboard';
+import PosteDashboard from '../../../components/poste/PosteDashboard';
 
-export default function ResponsableCreditDetailPage() {
+export default function Page() {
   const params = useParams();
-  return (
-    <ResponsableCreditDashboard
-      section="detail"
-      selectedId={String(params.id)}
-    />
-  );
+  return <PosteDashboard base="responsable-credit" section="detail" selectedId={String(params.id)} />;
 }

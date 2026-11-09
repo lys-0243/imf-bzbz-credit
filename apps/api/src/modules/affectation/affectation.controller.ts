@@ -12,15 +12,15 @@ import {
   ApiOperation,
   ApiParam,
   ApiProperty,
+  ApiPropertyOptional,
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
-import { IsString, MinLength } from 'class-validator';
+import { IsOptional, IsString } from 'class-validator';
 import { CurrentUser } from '../identity/current-user.decorator';
 import { JwtAuthGuard } from '../identity/jwt-auth.guard';
 import { Roles, RolesGuard } from '../identity/roles.guard';
-import { DecisionPronosticDto } from '../scoring/decision-pronostic.dto';
 import { AffectationService } from './affectation.service';
 
 class AssignDto {
@@ -30,17 +30,11 @@ class AssignDto {
   })
   @IsString()
   agentId!: string;
-}
 
-class RenvoyerDto {
-  @ApiProperty({
-    example: 'Compléter les photos du commerce et le relevé de compte.',
-    minLength: 3,
-    description: 'Motif du renvoi à l’agent',
-  })
+  @ApiPropertyOptional({ description: 'Avis IA « agents suggérés » consulté (traçabilité)' })
+  @IsOptional()
   @IsString()
-  @MinLength(3)
-  comment!: string;
+  avisIaId?: string;
 }
 
 @ApiTags('Affectation')
@@ -51,25 +45,6 @@ class RenvoyerDto {
 export class AffectationController {
   constructor(private readonly affectation: AffectationService) {}
 
-  @Get('file')
-  @ApiOperation({
-    summary: 'File d’attente',
-    description: 'Dossiers en attente d’attribution à un agent.',
-  })
-  listFile() {
-    return this.affectation.listFile();
-  }
-
-  @Get('dossiers')
-  @ApiOperation({
-    summary: 'Tous les dossiers RC',
-    description:
-      'Liste des dossiers visibles du responsable crédit, avec bucket (file, en_cours, a_valider…).',
-  })
-  listDossiers() {
-    return this.affectation.listDossiers();
-  }
-
   @Get('agents')
   @ApiOperation({
     summary: 'Agents disponibles',
@@ -77,13 +52,6 @@ export class AffectationController {
   })
   listAgents() {
     return this.affectation.listAgents();
-  }
-
-  @Get('dossiers/:id')
-  @ApiOperation({ summary: 'Détail dossier (vue RC)' })
-  @ApiParam({ name: 'id', description: 'ID du dossier' })
-  getOne(@Param('id') id: string) {
-    return this.affectation.getOne(id);
   }
 
   @Post('dossiers/:id/assign')
@@ -108,47 +76,6 @@ export class AffectationController {
     @Param('id') id: string,
     @Body() dto: AssignDto,
   ) {
-    return this.affectation.assign(user, id, dto.agentId);
-  }
-
-  @Post('dossiers/:id/renvoyer')
-  @ApiOperation({
-    summary: 'Renvoyer à l’agent',
-    description: 'Renvoie le dossier en RETOUR_AGENT avec un commentaire obligatoire.',
-  })
-  @ApiParam({ name: 'id', description: 'ID du dossier' })
-  @ApiBody({
-    type: RenvoyerDto,
-    examples: {
-      photos: {
-        summary: 'Demande de compléments',
-        value: {
-          comment: 'Compléter les photos du commerce et le relevé de compte.',
-        },
-      },
-    },
-  })
-  renvoyer(
-    @CurrentUser() user: { id: string; role: Role },
-    @Param('id') id: string,
-    @Body() dto: RenvoyerDto,
-  ) {
-    return this.affectation.renvoyer(user, id, dto.comment);
-  }
-
-  @Post('dossiers/:id/soumettre')
-  @ApiOperation({
-    summary: 'Soumettre en conformité',
-    description:
-      'Valide le dossier côté RC avec sa décision (rattachée au dernier pronostic) et le fait avancer vers CONFORMITE.',
-  })
-  @ApiParam({ name: 'id', description: 'ID du dossier' })
-  @ApiBody({ type: DecisionPronosticDto })
-  soumettre(
-    @CurrentUser() user: { id: string; role: Role },
-    @Param('id') id: string,
-    @Body() dto: DecisionPronosticDto,
-  ) {
-    return this.affectation.soumettre(user, id, dto);
+    return this.affectation.assign(user, id, dto.agentId, dto.avisIaId);
   }
 }

@@ -12,6 +12,12 @@ import {
 import { normalizeHistorique, type HistoriqueData } from './historique';
 import { normalizePlanRoute, type PlanRouteData } from './planRoute';
 import { normalizePreComite, type PreComiteData } from './preComite';
+import {
+  normalizeAvisConformite,
+  normalizeRapportAnalyse,
+  type AvisConformiteData,
+  type RapportAnalyseData,
+} from './rapportAnalyse';
 
 /** Feuilles Analyse_AGR.xlsx stockées en `DossierFormulaire` (hors CF1 / CF2). */
 export const FORMULAIRE_CODES = [
@@ -26,6 +32,8 @@ export const FORMULAIRE_CODES = [
   'PRE_COMITE',
   'DECISION_COMITE',
   'APPRO_PCA',
+  'RAPPORT_ANALYSE',
+  'AVIS_CONFORMITE',
 ] as const;
 export type FormulaireCode = (typeof FORMULAIRE_CODES)[number];
 
@@ -41,6 +49,8 @@ export type FormulairesData = {
   DECISION_COMITE: DecisionComiteData;
   APPRO_PCA: ApproPcaData;
   CF8: Cf8Data;
+  RAPPORT_ANALYSE: RapportAnalyseData;
+  AVIS_CONFORMITE: AvisConformiteData;
 };
 
 type RegleEdition = {
@@ -50,6 +60,8 @@ type RegleEdition = {
   agentTerrain?: boolean;
   /** L’agent doit être assigné au dossier (même après soumission). */
   agentAssigne?: boolean;
+  /** L’utilisateur doit être titulaire (ou le dossier sans titulaire). */
+  titulaire?: 'analyste' | 'conformite';
 };
 
 const ETATS_AGENT = ['AFFECTE', 'DESCENTE', 'RETOUR_AGENT'];
@@ -104,7 +116,7 @@ export const FORMULAIRES: {
     label: 'PV du comité de crédit',
     feuille: 'Décision du comité',
     normalize: normalizeDecisionComite,
-    edition: [{ roles: ['DG', 'ADMIN'], etats: ['DIRECTION', 'A_DECAISSER'] }],
+    edition: [{ roles: ['DG', 'DGA', 'ADMIN'], etats: ['DIRECTION', 'A_DECAISSER'] }],
   },
   APPRO_PCA: {
     label: 'Mémo d’approbation PCA',
@@ -120,6 +132,18 @@ export const FORMULAIRES: {
       { roles: ['AGENT'], etats: ETATS_APRES_AGENT, agentAssigne: true },
       { roles: ['RESPONSABLE_CREDIT'], etats: ETATS_APRES_AGENT },
     ],
+  },
+  RAPPORT_ANALYSE: {
+    label: 'Rapport d’analyse',
+    feuille: 'Rapport analyste',
+    normalize: normalizeRapportAnalyse,
+    edition: [{ roles: ['ANALYSTE', 'ADMIN'], etats: ['ANALYSTE', 'RETOUR_ANALYSTE'], titulaire: 'analyste' }],
+  },
+  AVIS_CONFORMITE: {
+    label: 'Avis de conformité',
+    feuille: 'Conformité',
+    normalize: normalizeAvisConformite,
+    edition: [{ roles: ['CONFORMITE', 'ADMIN'], etats: ['CONFORMITE'], titulaire: 'conformite' }],
   },
 };
 
@@ -145,12 +169,25 @@ export function normalizeFormulaires(
 
 export function peutEditerFormulaire(
   code: FormulaireCode,
-  ctx: { role: string; etat: string; agentAssigne: boolean; agentAValide: boolean },
+  ctx: {
+    role: string;
+    etat: string;
+    agentAssigne: boolean;
+    agentAValide: boolean;
+    /** Titulaire d'analyse / conformité : true si l'utilisateur l'est ou si personne ne l'est. */
+    titulaireAnalyse?: boolean;
+    titulaireConformite?: boolean;
+  },
 ): boolean {
   return FORMULAIRES[code].edition.some((r) => {
     if (!r.roles.includes(ctx.role) || !r.etats.includes(ctx.etat)) return false;
     if (r.agentTerrain) return ctx.agentAssigne && !ctx.agentAValide;
     if (r.agentAssigne) return ctx.agentAssigne;
+    if (r.titulaire && ctx.role !== 'ADMIN') {
+      return r.titulaire === 'analyste'
+        ? ctx.titulaireAnalyse !== false
+        : ctx.titulaireConformite !== false;
+    }
     return true;
   });
 }

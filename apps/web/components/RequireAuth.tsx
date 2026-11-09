@@ -15,6 +15,7 @@ const ROLE_HOME: Record<string, string> = {
   RESPONSABLE_CREDIT: '/responsable-credit',
   CONFORMITE: '/conformite',
   DG: '/direction',
+  DGA: '/direction',
   CA: '/direction',
   ADMIN: '/admin',
 };

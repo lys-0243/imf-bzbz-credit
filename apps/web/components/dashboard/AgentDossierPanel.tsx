@@ -16,12 +16,15 @@ import { Cf2Panel } from './Cf2Panel';
 import { dashStyles as styles } from './DashboardShell';
 import {
   DossierDetailView,
+  type DetailTransition,
   type DossierDetailData,
   type PendingAction,
 } from './DossierDetailView';
 import { PageError, PageLoading, PageStateBlock } from './PageState';
 import { PronosticDecisionFields, usePronosticDecision } from './PronosticDecisionForm';
 import { PronosticPanel, type PronosticView } from './PronosticPanel';
+import { PrecontroleAgent } from '../poste/DossierWorkspace';
+import { PointsRetour } from '../poste/ParcoursChronologie';
 
 type Piece = {
   id: string;
@@ -181,7 +184,7 @@ export default function AgentDossierPanel({
         actions.push({
           id: 'soumettre',
           label: 'Soumettre le dossier',
-          reason: 'Checklist complète — transmission au responsable crédit',
+          reason: 'Checklist complète — transmission à l’analyste',
           drawer: 'soumettre',
         });
       }
@@ -360,7 +363,7 @@ export default function AgentDossierPanel({
         method: 'POST',
         body: JSON.stringify(decision.body()),
       });
-      setMsg('Dossier transmis au responsable crédit.');
+      setMsg('Dossier transmis à l’analyste.');
       toast.success('Dossier soumis.');
       onSubmitted?.();
     } catch (e) {
@@ -578,6 +581,10 @@ export default function AgentDossierPanel({
     </div>
   );
 
+  const dernierRetour = [...(data.transitions ?? [])]
+    .reverse()
+    .find((t) => t.toEtat === 'RETOUR_AGENT') as (DetailTransition & { details?: unknown }) | undefined;
+
   return (
     <DossierDetailView
       data={data}
@@ -589,6 +596,33 @@ export default function AgentDossierPanel({
       drawers={
         canEdit
           ? [
+              ...(dernierRetour
+                ? [
+                    {
+                      key: 'retour',
+                      label: '↺ Points à corriger',
+                      title: 'Dossier renvoyé — points à corriger',
+                      badge: Array.isArray(dernierRetour.details) ? dernierRetour.details.length : null,
+                      wide: true,
+                      content: (
+                        <div>
+                          <p className={styles.itemMeta}>
+                            Renvoyé le {new Date(dernierRetour.createdAt ?? '').toLocaleString('fr-FR')}
+                          </p>
+                          {dernierRetour.comment ? <p>{dernierRetour.comment}</p> : null}
+                          <PointsRetour details={dernierRetour.details} />
+                        </div>
+                      ),
+                    },
+                  ]
+                : []),
+              {
+                key: 'precontrole',
+                label: '✦ Pré-contrôle IA',
+                title: 'Pré-contrôle IA',
+                wide: true,
+                content: <PrecontroleAgent dossierId={data.id} />,
+              },
               {
                 key: 'soumettre',
                 label: 'Soumettre',
