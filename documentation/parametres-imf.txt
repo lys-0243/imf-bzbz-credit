@@ -1,0 +1,273 @@
+PARAMÈTRES IMF — GUIDE DE RÉFÉRENCE
+Plateforme crédit IMF Bisou Bisou
+Écran : Administration › Paramètres IMF (réservé au rôle Administrateur)
+==========================================================================
+
+Les valeurs par défaut sont celles du classeur docs/Analyse_AGR.xlsx.
+Le bouton « Valeurs par défaut (Excel) » les rétablit toutes.
+Toute modification s'applique aux calculs faits APRÈS l'enregistrement ;
+les décisions déjà prises ne sont pas recalculées.
+Chaque modification est tracée dans le journal d'activité (avant / après).
+
+Sommaire
+  1. Identité de l'institution
+  2. Conditions tarifaires
+  3. Délais cibles par étape
+  4. Grille du score de crédit
+  5. Grille de taux mensuels par tranche (CF 2.5)
+  6. Récapitulatif : où chaque paramètre est utilisé
+
+
+--------------------------------------------------------------------------
+1. IDENTITÉ DE L'INSTITUTION
+--------------------------------------------------------------------------
+
+Ces informations sont reprises telles quelles dans les documents générés
+(lettre, contrat de prêt, acte de gage, acte de caution, PV, mémo PCA).
+
+  Raison sociale ............... IMF BISOU BISOU SA
+  Forme juridique .............. Société Anonyme avec Conseil d'Administration
+  Siège social ................. Avenue Colonel EBEYA, n°218, C/Gombe, Kinshasa
+  RCCM ......................... CD/KNG/RCCM/23-B-00636
+  Identification nationale ..... 01-K6500-N28451L
+  Agrément BCC ................. D120/N004405 du 23 décembre 2023
+  Représentant (contrats) ...... nom du signataire des contrats
+  Fonction du représentant ..... ex. Directeur Général
+  Président du comité de crédit  nom porté sur le PV du comité
+  Téléphone réclamations ....... numéro indiqué au client dans le contrat
+  E-mail réclamations .......... adresse indiquée au client dans le contrat
+  Ville de signature ........... ex. Kinshasa
+
+À vérifier avant la mise en production : le téléphone de réclamation
+par défaut (+243xxxxxxxxx) est un exemple à remplacer.
+
+
+--------------------------------------------------------------------------
+2. CONDITIONS TARIFAIRES
+--------------------------------------------------------------------------
+
+Frais facturés au client, calculés sur le MONTANT APPROUVÉ du crédit.
+Ils apparaissent dans le PV du comité (« Décision du comité »), dans les
+contrats et dans le message envoyé au core banking (CBS).
+
+Paramètre                         Défaut    Effet
+--------------------------------  --------  ----------------------------------
+Frais de dossier                  2 %       prélevés à l'octroi
+Frais de décaissement             0,5 %     prélevés à l'octroi
+TVA sur frais                     16 %      appliquée aux frais de dossier
+                                            + frais de décaissement
+Caution / épargne obligatoire     30 %      bloquée à l'octroi ; compte aussi
+                                            comme garantie (voir ci-dessous)
+SMS alerte                        1 USD     par mois, mentionné au contrat
+Frais d'inscription des gages     0 %       mentionnés au contrat
+Pénalité de retard                1 %       sur le capital restant dû, à partir
+                                            du lendemain de l'échéance impayée
+                                            (mentionnée au contrat)
+Montant minimum d'un prêt         100 USD   TEXTE DU CONTRAT UNIQUEMENT
+Montant maximum d'un prêt         80 000    TEXTE DU CONTRAT UNIQUEMENT
+Seuil d'approbation du Conseil    500 USD   voir ci-dessous
+Taux de change (CDF pour 1 USD)   2 800     voir ci-dessous
+
+Exemple de calcul — crédit approuvé de 1 000 USD
+  Frais de dossier       1 000 × 2 %    =  20 USD
+  Frais de décaissement  1 000 × 0,5 %  =   5 USD
+  TVA                    (20 + 5) × 16 % =   4 USD
+  Total des frais                        =  29 USD
+  Caution                1 000 × 30 %   = 300 USD
+
+La caution comme garantie
+  Dans la fiche CF5.1 (garanties du demandeur), une ligne « caution
+  financière » est calculée automatiquement : % caution × montant proposé.
+  Elle entre dans la valeur totale des garanties, donc dans le ratio de
+  garantie CF 2.4 (norme ≥ 120 % du principal + intérêts) et dans le pilier
+  « Garanties » du score de crédit.
+
+Montants minimum / maximum
+  Ils ne servent qu'à la phrase du contrat (« prêts variant de … à … »).
+  Les limites réellement contrôlées à la saisie sont celles de chaque
+  produit (Administration › Produits : montant min / max, durée min / max).
+
+Seuil d'approbation du Conseil d'administration
+  Quand la Direction générale (DG ou DGA) clique sur « Approuver » :
+    - montant approuvé ≤ 500 USD  → la demande est clôturée (« Crédit
+      accordé ») et envoyée au core banking ;
+    - montant approuvé > 500 USD  → le dossier passe au Conseil
+      d'administration, qui approuve (puis envoi au CBS) ou rejette.
+  Le montant comparé est celui porté au PV du comité. Exactement 500 USD
+  reste du ressort de la direction.
+
+Taux de change CDF / USD
+  Sert uniquement à comparer au seuil du Conseil un dossier libellé en
+  francs congolais : 1 400 000 CDF ÷ 2 800 = 500 USD → direction ;
+  1 500 000 CDF → Conseil. À mettre à jour selon le taux de référence
+  retenu par l'IMF.
+
+
+--------------------------------------------------------------------------
+3. DÉLAIS CIBLES PAR ÉTAPE (JOURS)
+--------------------------------------------------------------------------
+
+Temps qu'un dossier peut passer dans une étape avant d'être signalé
+« en retard ».
+
+  Étape                         Défaut   Qui doit agir
+  ----------------------------  -------  ------------------------------
+  Attribution                   1 j      Responsable crédit
+  Agent de crédit               5 j      Agent (terrain, saisie, soumission)
+  Analyse                       2 j      Analyste
+  Conformité                    2 j      Agent de conformité
+  Validation RC                 1 j      Responsable crédit
+  Direction générale            2 j      DG ou DGA
+  Conseil d'administration      7 j      Conseil
+
+Comment le délai est compté
+  - Le compteur démarre à l'entrée du dossier dans son état actuel.
+  - Un retour (ex. analyste → agent, conformité → analyste) fait entrer le
+    dossier dans une nouvelle étape : le compteur repart de zéro.
+  - Les dossiers clôturés (accordés ou rejetés) ne sont jamais en retard.
+
+Ce que produit un retard
+  - Dans la file de travail : barre rouge à gauche de la ligne et mention
+    « délai cible dépassé ».
+  - Le dossier remonte en tête de file (priorité : à traiter, retours,
+    retards, ancienneté).
+  - Le compteur « En retard » du tableau de bord augmente.
+Ce que le retard ne fait PAS
+  - Il ne bloque aucune action.
+  - Il n'envoie aucune notification (e-mail, SMS) à qui que ce soit.
+
+
+--------------------------------------------------------------------------
+4. GRILLE DU SCORE DE CRÉDIT
+--------------------------------------------------------------------------
+
+Le score sur 100 est calculé à l'étape d'analyse, en trois temps :
+  1) le MOTEUR le calcule à partir des chiffres du dossier (déterministe) ;
+  2) l'IA propose des ajustements limités, chacun justifié ;
+  3) l'ANALYSTE valide le score retenu (avec commentaire si écart).
+Le score validé et sa classe sont visibles par la conformité, le RC, la
+direction et le Conseil, et sont transmis au core banking.
+
+4.1 Poids des piliers (total à garder à 100 %)
+
+  Pilier                         Poids   Ce qui est noté
+  -----------------------------  ------  --------------------------------------
+  Capacité de remboursement      30 %    DSR (mensualité / capacité de
+                                         paiement), capacité ≤ 0, montant
+                                         au-delà du maximum DSR 40 %
+  Garanties                      20 %    couverture des garanties sur
+                                         principal + intérêts (norme ≥ 120 %)
+  Structure financière           15 %    liquidité, levier, endettement,
+                                         rotation du stock (ratios CF 2.4)
+  Historique de crédit           15 %    crédits soldés, retards, défauts,
+                                         crédit en cours, score CBS ;
+                                         nouveau client = note neutre (55)
+  Stabilité et éligibilité       10 %    ancienneté de l'activité et du lieu,
+                                         critères d'éligibilité CF1
+  Qualité du dossier             10 %    éléments de checklist manquants,
+                                         retours à l'agent, CF2 absente
+
+  Les ratios sont recalculés sur le montant et la durée évalués par
+  l'analyste (champs « Montant évalué » et « Durée » de l'écran Score).
+  Si le total des poids n'est pas 100 %, le calcul se ramène quand même
+  sur 100, mais la grille devient difficile à lire.
+
+4.2 Seuils des classes de risque
+
+  Score        Classe   Libellé              Recommandation par défaut
+  -----------  -------  -------------------  --------------------------
+  ≥ 80         A        Risque faible        Accord
+  65 à 79      B        Risque modéré        Accord
+  50 à 64      C        Risque moyen         Accord conditionnel
+  35 à 49      D        Risque élevé         Accord conditionnel
+  < 35         E        Risque très élevé    Refus
+
+4.3 Plafond en cas de critère éliminatoire — défaut 30
+  Critères éliminatoires : client, garant ou codébiteur sur liste noire ;
+  activité sur la liste d'exclusion ; défaut de paiement au core banking ;
+  capacité de paiement nulle ou négative.
+  En présence d'un seul de ces critères, le score est plafonné à 30 et la
+  classe forcée à E, quelles que soient les autres notes. Ni l'IA ni les
+  ajustements ne peuvent lever ce plafond.
+
+4.4 Ajustement maximal de l'IA par pilier — défaut 10 points
+  L'IA peut monter ou baisser chaque pilier de 10 points au plus, en
+  justifiant par des éléments que le calcul ne capte pas (cohérence entre
+  CF1, CF2 et le terrain, saisonnalité, qualité des réponses…). Un
+  ajustement plus grand est ramené automatiquement à la limite.
+
+4.5 Écart avec l'IA imposant une justification — défaut 5 points
+  Si le score total retenu par l'analyste s'écarte de 5 points ou plus du
+  score proposé par l'IA, un commentaire est obligatoire. L'écart est tracé.
+
+4.6 Version de la grille — défaut 2026-11.1
+  À changer à chaque modification de la grille (ex. 2026-12.1). La version
+  est enregistrée avec chaque score validé : on sait ainsi avec quelle
+  grille un dossier a été noté.
+
+Exemple de calcul
+  Capacité 100 × 30 % = 30,0
+  Garanties 10 × 20 %  =  2,0
+  Structure 100 × 15 % = 15,0
+  Historique 55 × 15 % =  8,25
+  Stabilité 60 × 10 %  =  6,0
+  Qualité 80 × 10 %    =  8,0
+  Total                = 69,25 → 69/100, classe B (Accord)
+
+
+--------------------------------------------------------------------------
+5. GRILLE DE TAUX MENSUELS PAR TRANCHE (CF 2.5)
+--------------------------------------------------------------------------
+
+Taux d'intérêt mensuel selon le montant du prêt (en USD).
+
+  Montant (USD)           Taux mensuel
+  ----------------------  ------------
+  50 à 500                6 %
+  500 à 1 000             5,5 %
+  1 000 à 5 000           5 %
+  5 000 à 10 000          4,5 %
+  10 000 à 30 000         3,5 %
+
+Règle des bornes
+  La première tranche qui contient le montant s'applique : 500 USD → 6 %,
+  1 000 USD → 5,5 %, 5 000 USD → 5 %, 10 000 USD → 4,5 %.
+  En dessous de 50 USD ou au-delà de 30 000 USD, AUCUN taux ne s'applique :
+  la mensualité, le DSR et le montant maximum ne peuvent pas être calculés.
+  Ajouter une ligne si l'IMF accorde de tels montants (le maximum du contrat
+  est de 80 000 USD).
+
+À quoi sert le taux de la grille
+  - Calcul de la mensualité, donc du DSR et des ratios CF 2.4.
+  - Montant maximum conseillé : le plus gros prêt compatible avec un DSR de
+    40 % sur la durée choisie. L'IA ne peut pas proposer davantage ; un
+    montant supérieur est ramené à ce maximum.
+  - Alerte si l'agent saisit en CF 2.5 un taux différent de la grille.
+  - PV du comité (si le taux du PV est laissé vide), contrats et message
+    envoyé au core banking.
+
+Gestion des lignes
+  Boutons « + » (ajouter une tranche) et « − » (supprimer). Il faut garder
+  au moins une ligne. Les taux se saisissent en % (ex. 5,5).
+
+
+--------------------------------------------------------------------------
+6. RÉCAPITULATIF : OÙ CHAQUE PARAMÈTRE EST UTILISÉ
+--------------------------------------------------------------------------
+
+  Paramètre                         Utilisé dans
+  --------------------------------  ---------------------------------------
+  Identité de l'institution         documents générés (contrats, actes, PV)
+  Frais, TVA, SMS, caution          PV du comité, contrats, envoi CBS
+  Caution (%)                       + garanties CF5.1, ratio de garantie,
+                                    pilier « Garanties » du score
+  Pénalité, frais d'inscription     contrats
+  Montant min / max                 phrase du contrat uniquement
+  Seuil du Conseil                  routage de l'approbation DG / DGA,
+                                    note de décision de l'IA, frise
+  Taux de change                    comparaison au seuil des dossiers en CDF
+  Délais cibles                     file de travail, tableau de bord
+  Grille du score                   écran Score de l'analyste, avis IA
+                                    d'analyse, synthèses, envoi CBS
+  Grille de taux                    CF 2.4 / CF 2.5, pronostic et montant IA,
+                                    score, PV, contrats, envoi CBS
