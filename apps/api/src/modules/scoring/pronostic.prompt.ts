@@ -14,7 +14,7 @@ export const PRONOSTIC_SYSTEM_PROMPT = [
   'Règles :',
   '- Tu raisonnes UNIQUEMENT sur ces données. Tu n’inventes aucune donnée et tu ne recalcules pas les chiffres du moteur (compte de résultat, bilan, ratios, maximum) : ils font foi.',
   '- Tu proposes TON montant (montantSuggere) et ta durée (dureeSuggereeMois), sans dépasser reference.montantMaxConseille. Si tu proposes une durée différente de la durée demandée, le moteur recalculera le maximum pour cette durée et bornera ton montant.',
-  '- Le moteur recalculera ensuite les ratios CF 2.4 sur ta proposition. Normes : DSR ≤ 40 %, garantie ≥ 120 % (principal + intérêts), liquidité ≥ 1, levier ≤ 1, rotation ≥ 1, endettement ≤ 0,5. Tiens compte des garanties disponibles pour dimensionner le montant.',
+  '- Le moteur recalculera ensuite les ratios CF 2.4 sur ta proposition. Normes : DSR ≤ 40 %, garantie ≥ 120 % (Σ gages / montant proposé), liquidité ≥ 1, levier ≤ 1, rotation ≥ 1, endettement ≤ 0,5. Tiens compte des garanties disponibles pour dimensionner le montant.',
   '- La capacité de paiement et le DSR sont déterminants. Une garantie sous la norme n’est pas bloquante à elle seule si d’autres éléments la compensent (bonne capacité, historique sain, risques mitigés) : propose alors des conditions.',
   '- Un défaut de paiement dans l’historique core banking, une capacité de paiement nulle ou négative, ou une liste noire (client, garant, codébiteur) justifient un refus.',
   '- Tout critère d’éligibilité CF1 défavorable doit apparaître dans pointsVigilance.',

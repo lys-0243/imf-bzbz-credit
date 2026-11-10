@@ -178,6 +178,20 @@ export const receptionPayloadSchema = z
           .nullable()
           .optional(),
         historiqueCount: z.number().int().nonnegative().optional(),
+        /** Dernier crédit connu au core banking (prérempli dans la CF1). */
+        dernierPret: z
+          .object({
+            reference: z.string(),
+            produitCode: z.string(),
+            montant: z.number(),
+            devise: z.string(),
+            dateDebut: z.string(),
+            dateFin: z.string().nullable(),
+            dureeMois: z.number().int().nullable(),
+            statut: z.string(),
+          })
+          .nullable()
+          .optional(),
         checkedAt: z.string().optional(),
       })
       .optional(),
@@ -669,14 +683,29 @@ export function enrichmentFromPayload(
       autreInstitutionNom: String(
         pret.autreInstitutionNom ?? p.autreInstitutionNom ?? '',
       ),
-      montantPretPrecedent:
-        pret.montantPretPrecedent == null || pret.montantPretPrecedent === ''
-          ? ''
-          : Number(pret.montantPretPrecedent),
-      dureePretPrecedent: String(pret.dureePretPrecedent ?? ''),
+      ...pretPrecedentCf1(p, pret),
     },
     conjointNom,
     conjointDateNaissance,
+  };
+}
+
+/** Champs « prêt précédent » de la CF1 : le core banking fait foi quand il connaît le client. */
+function pretPrecedentCf1(
+  p: Record<string, any>,
+  pret: Record<string, any>,
+): { montantPretPrecedent: number | ''; dureePretPrecedent: string } {
+  const pp = pretPrecedentDuPayload(p);
+  if (pp.source === 'CBS') {
+    return { montantPretPrecedent: pp.pret.montant, dureePretPrecedent: dureePretPrecedentLabel(pp.pret) };
+  }
+  if (pp.source === 'AUCUN') return { montantPretPrecedent: '', dureePretPrecedent: '' };
+  return {
+    montantPretPrecedent:
+      pret.montantPretPrecedent == null || pret.montantPretPrecedent === ''
+        ? ''
+        : Number(pret.montantPretPrecedent),
+    dureePretPrecedent: String(pret.dureePretPrecedent ?? ''),
   };
 }
 
@@ -894,6 +923,71 @@ export type BankingCreditHistorique = {
   dateFin?: string | null;
   statut: BankingCreditStatut;
 };
+
+/** Dernier crédit du client au core banking, tel que figé dans le dossier. */
+export type PretPrecedent = {
+  reference: string;
+  produitCode: string;
+  montant: number;
+  devise: string;
+  dateDebut: string;
+  dateFin: string | null;
+  dureeMois: number | null;
+  statut: string;
+};
+
+/** Nombre de mois (arrondi) entre deux dates ISO ; null si une date manque ou est invalide. */
+export function moisEntre(debut: string | null | undefined, fin: string | null | undefined): number | null {
+  if (!debut || !fin) return null;
+  const a = new Date(debut);
+  const b = new Date(fin);
+  if (Number.isNaN(a.getTime()) || Number.isNaN(b.getTime()) || b < a) return null;
+  const mois = (b.getFullYear() - a.getFullYear()) * 12 + (b.getMonth() - a.getMonth()) + (b.getDate() - a.getDate()) / 30;
+  return Math.max(1, Math.round(mois));
+}
+
+/** Crédit le plus récent (date de début) de l'historique core banking. */
+export function dernierPretDuHistorique(historique: BankingCreditHistorique[] | null | undefined): PretPrecedent | null {
+  const tri = [...(historique ?? [])]
+    .filter((h) => h.dateDebut)
+    .sort((x, y) => y.dateDebut.localeCompare(x.dateDebut));
+  const h = tri[0];
+  if (!h) return null;
+  return {
+    reference: h.reference,
+    produitCode: h.produitCode,
+    montant: h.montant,
+    devise: h.devise,
+    dateDebut: h.dateDebut,
+    dateFin: h.dateFin ?? null,
+    dureeMois: moisEntre(h.dateDebut, h.dateFin),
+    statut: h.statut,
+  };
+}
+
+/** Libellé de la durée du prêt précédent (CF1). */
+export function dureePretPrecedentLabel(p: Pick<PretPrecedent, 'dureeMois' | 'statut'>): string {
+  if (p.dureeMois != null) return `${p.dureeMois} mois`;
+  return p.statut === 'EN_COURS' ? 'En cours' : '';
+}
+
+/**
+ * Prêt précédent pour la CF1, d'après la vérification core banking figée dans le dossier :
+ * - `CBS` : le client a déjà eu un crédit → champs préremplis, non modifiables ;
+ * - `AUCUN` : compte vérifié sans aucun crédit → champs masqués ;
+ * - `INCONNU` : pas de vérification exploitable → saisie libre par l'agent.
+ */
+export function pretPrecedentDuPayload(
+  payload: Record<string, any> | null | undefined,
+): { source: 'CBS'; pret: PretPrecedent } | { source: 'AUCUN' } | { source: 'INCONNU' } {
+  const bl = (payload ?? {}).bankingLookup as
+    | { found?: boolean; historiqueCount?: number; dernierPret?: PretPrecedent | null }
+    | undefined;
+  if (!bl?.found) return { source: 'INCONNU' };
+  if (bl.dernierPret) return { source: 'CBS', pret: bl.dernierPret };
+  if ((bl.historiqueCount ?? 0) === 0) return { source: 'AUCUN' };
+  return { source: 'INCONNU' };
+}
 
 export type BankingScore = {
   value: number;

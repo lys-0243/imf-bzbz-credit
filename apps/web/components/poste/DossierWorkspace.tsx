@@ -47,7 +47,8 @@ function CopiloteEtape({ d, role }: { d: DossierPoste; role: string }) {
   const actif = d.actions.length > 0 || (d.etat === 'EN_ATTENTE_ATTRIBUTION_AGENT' && role === 'RESPONSABLE_CREDIT');
   const peutGenerer = actif && cfg.generateurs.includes(role);
   return (
-    <AvisCard dossierId={d.id} type={cfg.type} peutGenerer={peutGenerer}>
+    // Remonté à chaque type d'avis : état local et lancement automatique propres à l'étape.
+    <AvisCard key={cfg.type} dossierId={d.id} type={cfg.type} peutGenerer={peutGenerer}>
       {(avis: AvisIa<any>) => {
         switch (cfg.type) {
           case 'SUGGESTION_AGENTS':

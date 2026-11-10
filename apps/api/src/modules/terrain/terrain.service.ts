@@ -10,6 +10,7 @@ import { DossierEtat, Prisma, Role } from '@prisma/client';
 import {
   ChecklistAnswers,
   DOSSIER_ETAT_LABELS,
+  PRONOSTIC_RECOMMANDATION_LABELS,
   clientFieldsFromPayload,
   decisionDiverge,
   getApplicableChecklistItems,
@@ -26,6 +27,8 @@ import {
   type AgentActiviteEnrichment,
   type AgentSalaireEnrichment,
   type Cf2Analyse,
+  type DossierFacts,
+  type EvaluationProposition,
   type FamilleProduit,
   type PronosticAvis,
   type PronosticRecommandation,
@@ -287,6 +290,20 @@ export class TerrainService {
     });
     if (!d?.visite) throw new NotFoundException('Dossier introuvable');
 
+    // Le résumé reprend l'avis IA : il doit porter sur les données actuelles.
+    const courant = await this.scoring.latestWithFreshness(id);
+    if (!courant) {
+      throw new BadRequestException(
+        'Générez d’abord l’avis et le montant proposés par l’IA : le résumé s’appuie dessus',
+      );
+    }
+    if (!courant.aJour) {
+      throw new ConflictException(
+        'Les données du dossier ont changé depuis l’avis IA : régénérez-le avant le résumé',
+      );
+    }
+    const avisIa = this.avisPourResume(courant.pronostic);
+
     const payload = (d.payload ?? {}) as Record<string, any>;
     const { montantSouhaite, devise } = montantSouhaiteFromPayload(payload);
     const context = {
@@ -309,6 +326,7 @@ export class TerrainService {
       devise,
       pieces: d.pieces.map((p) => p.kind),
       payload,
+      avisIa,
       transitions: d.transitions.map((t) => ({
         from: t.fromEtat,
         to: t.toEtat,
@@ -317,30 +335,92 @@ export class TerrainService {
       })),
     };
 
-    const rapportTexte = await this.buildAiResume(context);
-    return { rapportTexte };
+    const recommandation = this.recommandationResume(avisIa);
+    const rapportTexte = await this.buildAiResume(context, recommandation);
+    return { rapportTexte, pronosticId: courant.pronostic.id };
   }
 
-  private async buildAiResume(context: Record<string, unknown>): Promise<string> {
-    const fallback = this.buildFallbackResume(context);
+  /** Avis IA (après recalcul par le moteur) tel que repris dans le résumé. */
+  private avisPourResume(p: { avis: unknown; facts: unknown; evaluation: unknown }) {
+    const avis = p.avis as PronosticAvis;
+    const facts = p.facts as DossierFacts;
+    const evaluation = (p.evaluation ?? null) as EvaluationProposition | null;
+    const fmtRatio = (v: number | null, pct: boolean) =>
+      v == null
+        ? 'non calculable'
+        : pct
+          ? `${Math.round(v * 1000) / 10} %`
+          : String(Math.round(v * 100) / 100);
+    return {
+      recommandation: PRONOSTIC_RECOMMANDATION_LABELS[avis.recommandation],
+      refus: avis.recommandation === 'REFUS',
+      montantPropose: avis.montantSuggere,
+      dureeMois: avis.dureeSuggereeMois,
+      devise: facts.demande?.devise ?? null,
+      tauxMensuel: evaluation?.tauxMensuel ?? null,
+      mensualite: evaluation?.mensualite ?? null,
+      capacitePaiement: facts.compteResultat?.capacitePaiement ?? null,
+      ratios: (evaluation?.ratios ?? facts.ratios ?? []).map((r) => ({
+        ratio: r.label,
+        valeur: fmtRatio(r.valeur, r.enPourcentage),
+        norme: r.norme,
+        respecte: r.respecte,
+      })),
+      conditions: avis.conditions,
+      pointsForts: avis.pointsForts,
+      pointsVigilance: avis.pointsVigilance,
+      justification: avis.justification,
+    };
+  }
+
+  /** Paragraphe de recommandation recopié de l'avis IA (jamais rédigé par le LLM). */
+  private recommandationResume(
+    a: ReturnType<TerrainService['avisPourResume']>,
+  ): string {
+    const money = (n: number) =>
+      `${a.devise ? `${a.devise} ` : ''}${n.toLocaleString('fr-FR', { maximumFractionDigits: 2 })}`;
+    const parts = [`Recommandation (avis IA) : ${a.recommandation}`];
+    if (!a.refus && a.montantPropose != null) {
+      let pret = `montant proposé ${money(a.montantPropose)}`;
+      if (a.dureeMois) pret += ` sur ${a.dureeMois} mois`;
+      if (a.mensualite != null) pret += `, mensualité ${money(a.mensualite)}`;
+      parts.push(pret);
+    }
+    let texte = `${parts.join(' — ')}.`;
+    if (a.conditions.length) texte += ` Conditions : ${a.conditions.join(' ; ')}.`;
+    return texte;
+  }
+
+  private async buildAiResume(
+    context: Record<string, unknown>,
+    recommandation: string,
+  ): Promise<string> {
+    const fallback = this.buildFallbackResume(context, recommandation);
     if (!this.llm.isConfigured()) return fallback;
 
     try {
       const res = await this.llm.complete({
-        system:
-          "Tu es un agent de crédit IMF en RDC. Rédige un résumé exécutif de descente terrain en français, professionnel, structuré (contexte client, activité/emploi, demande de crédit, points d'attention, recommandation). 180 à 280 mots. Pas de markdown. Les données nominatives sont retirées : désigne le demandeur par « le client ».",
+        system: [
+          'Tu es un agent de crédit IMF en RDC. Rédige un résumé exécutif de descente terrain en français, professionnel, structuré en paragraphes : contexte client, activité/emploi, demande de crédit, analyse financière, points d’attention. 160 à 250 mots. Pas de markdown. Les données nominatives sont retirées : désigne le demandeur par « le client ».',
+          'Le champ `avisIa` est l’avis du moteur et de l’IA sur ce dossier : le résumé doit le justifier et ne jamais le contredire. Cite uniquement les chiffres présents dans les données (montant, durée, mensualité, capacité, ratios de `avisIa.ratios`) ; n’en calcule ni n’en invente aucun. Distingue le montant sollicité par le client (`montantSouhaite`) du montant proposé (`avisIa.montantPropose`). Les points d’attention reprennent `avisIa.pointsVigilance`.',
+          'N’écris PAS de recommandation ni de conclusion sur la décision : elle est ajoutée automatiquement à la fin, recopiée de l’avis IA.',
+        ].join('\n'),
         user: `Analyse ce dossier et génère le résumé exécutif à valider par l'agent :
 ${JSON.stringify(redactPii(context), null, 2)}`,
       });
-      return res.text;
+      return `${res.text.trim()}\n\n${recommandation}`;
     } catch {
       return fallback;
     }
   }
 
-  private buildFallbackResume(context: Record<string, unknown>): string {
+  private buildFallbackResume(
+    context: Record<string, unknown>,
+    recommandation: string,
+  ): string {
     const client = (context.client ?? {}) as Record<string, unknown>;
     const payload = (context.payload ?? {}) as Record<string, any>;
+    const avisIa = context.avisIa as { pointsVigilance?: string[] } | undefined;
     const montant = context.montantSouhaite;
     const devise = context.devise || '';
     const type = String(context.produitLabel || context.type || '');
@@ -378,8 +458,12 @@ ${JSON.stringify(redactPii(context), null, 2)}`,
 
     lines.push(
       `Pièces déjà présentes au dossier : ${pieces.length ? pieces.join(', ') : 'aucune'}.`,
-      `Points d’attention : vérifier la cohérence des revenus/activité, la complétude documentaire et l’adresse d’activité déclarée (${client.activityAddress || '—'}).`,
-      `Recommandation provisoire : poursuivre l’instruction sous réserve de validation terrain et de complétude des pièces manquantes.`,
+      `Points d’attention : ${
+        avisIa?.pointsVigilance?.length
+          ? avisIa.pointsVigilance.join(' ; ')
+          : `vérifier la cohérence des revenus/activité, la complétude documentaire et l’adresse d’activité déclarée (${client.activityAddress || '—'})`
+      }.`,
+      recommandation,
     );
 
     return lines.join('\n\n');

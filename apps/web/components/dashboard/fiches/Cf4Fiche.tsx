@@ -14,7 +14,13 @@ import type { FicheProps } from './types';
 
 type Section = 'identite' | 'business' | 'emploi' | 'certification';
 
-export function Cf4Fiche({ value, onChange, disabled, devise }: FicheProps<Cf4Data>) {
+/** Texte de certification signé par l’agent de crédit (affiché en tête du bloc). */
+const TEXTE_CERTIFICATION =
+  'Je certifie que les informations présentées sur ce formulaire sont telles qu’elles ont été recueillies au cours des visites. J’ai tout fait pour m’assurer de la véracité des informations reçues. Aucune information susceptible à influencer la dernière décision de cette demande n’a été omise intentionnellement.';
+
+export function Cf4Fiche({ value, onChange, disabled, devise, ctx }: FicheProps<Cf4Data>) {
+  /** Agent attribué au dossier — imposé (le serveur l’écrit aussi à l’enregistrement). */
+  const agentNom = ctx.agent?.displayName || value.certification.agent || '';
   function set<S extends Section>(section: S, patch: Partial<Cf4Data[S]>) {
     onChange({ ...value, [section]: { ...value[section], ...patch } });
   }
@@ -100,8 +106,20 @@ export function Cf4Fiche({ value, onChange, disabled, devise }: FicheProps<Cf4Da
       </FormBlock>
 
       <FormBlock title="Certification de l’agent de crédit">
+        <tr>
+          <td colSpan={2}>
+            <p style={{ margin: 0, fontSize: '0.78rem', lineHeight: 1.45, color: 'var(--imf-muted)', fontStyle: 'italic' }}>
+              {TEXTE_CERTIFICATION}
+            </p>
+          </td>
+        </tr>
         {text('certification', 'date', 'Date', 'date')}
-        {text('certification', 'agent', 'Agent de crédit')}
+        <FormRow label="Agent de crédit">
+          <TextInput value={agentNom || 'Aucun agent attribué'} disabled onChange={() => undefined} />
+          <span style={{ display: 'block', marginTop: 4, fontSize: '0.75rem', color: 'var(--imf-muted)' }}>
+            Agent attribué au dossier — non modifiable.
+          </span>
+        </FormRow>
       </FormBlock>
     </>
   );

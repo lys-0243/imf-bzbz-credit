@@ -29,7 +29,7 @@
   display: flex;
   flex-direction: column;
   background: #fff;
-  border-radius: 20px;
+  border-radius: var(--imf-radius);
   box-shadow: 0 28px 80px rgba(10, 20, 50, 0.35);
   overflow: hidden;
   animation: rise 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
@@ -72,7 +72,7 @@
   align-items: center;
   gap: 8px;
   padding: 9px 16px;
-  border-radius: 999px;
+  border-radius: var(--imf-radius);
   background: #f0f3fa;
   color: var(--imf-blue);
   font-size: 0.88rem;
@@ -90,7 +90,7 @@
   height: 38px;
   flex-shrink: 0;
   border: 0;
-  border-radius: 19px;
+  border-radius: var(--imf-radius);
   background: #f0f0f0;
   color: #555;
   display: grid;

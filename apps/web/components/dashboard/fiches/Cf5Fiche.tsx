@@ -1,10 +1,12 @@
 'use client';
 
+import { useEffect, useRef } from 'react';
 import {
   GARANTIE_TYPE_LABELS,
   GARANTIE_TYPES,
   computeCf5Totaux,
   newCf5Bien,
+  signaturesCf5Proposees,
   valeurBien,
   type Cf5Data,
   type GarantieEtat,
@@ -48,6 +50,26 @@ export function Cf5Fiche({
   const totaux = computeCf5Totaux(value, calc);
   const set = (i: number, patch: Partial<Cf5Data['biens'][number]>) =>
     onChange({ ...value, biens: patchAt(value.biens, i, patch) });
+
+  // Signatures préremplies depuis le dossier (une fois à l'ouverture, champs vides seulement) ;
+  // l'agent est toujours l'agent attribué — le serveur l'impose aussi à l'enregistrement.
+  const proposees = signaturesCf5Proposees(ctx, proprietaire);
+  const agentNom = proposees.agent || value.signatures.agent;
+  const prerempli = useRef(false);
+  useEffect(() => {
+    if (disabled || prerempli.current) return;
+    prerempli.current = true;
+    const sig = value.signatures;
+    const next = {
+      ...sig,
+      proprietaire: sig.proprietaire.trim() || proposees.proprietaire,
+      conjoint: sig.conjoint.trim() || proposees.conjoint,
+      agent: proposees.agent || sig.agent,
+      date: sig.date || new Date().toISOString().slice(0, 10),
+    };
+    if (JSON.stringify(next) !== JSON.stringify(sig)) onChange({ ...value, signatures: next });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- préremplissage unique à l'ouverture
+  }, [disabled]);
 
   return (
     <>
@@ -127,6 +149,12 @@ export function Cf5Fiche({
       </FormBlock>
 
       <FormBlock title="Signatures">
+        <tr>
+          <td colSpan={2} style={{ fontSize: '0.78rem', color: 'var(--imf-muted)' }}>
+            Préremplies depuis le dossier ({proprietaire === 'garant' ? 'CF4 — garant' : 'CF1 — demandeur'}) : vérifiez et
+            complétez le témoin.
+          </td>
+        </tr>
         <FormRow label="Propriétaire de la garantie">
           <TextInput value={value.signatures.proprietaire} disabled={disabled} onChange={(proprietaire) => onChange({ ...value, signatures: { ...value.signatures, proprietaire } })} />
         </FormRow>
@@ -137,7 +165,10 @@ export function Cf5Fiche({
           <TextInput value={value.signatures.temoin} disabled={disabled} onChange={(temoin) => onChange({ ...value, signatures: { ...value.signatures, temoin } })} />
         </FormRow>
         <FormRow label="Agent de crédit">
-          <TextInput value={value.signatures.agent} disabled={disabled} onChange={(agent) => onChange({ ...value, signatures: { ...value.signatures, agent } })} />
+          <TextInput value={agentNom || 'Aucun agent attribué'} disabled onChange={() => undefined} />
+          <span style={{ display: 'block', marginTop: 4, fontSize: '0.75rem', color: 'var(--imf-muted)' }}>
+            Agent attribué au dossier — non modifiable.
+          </span>
         </FormRow>
         <FormRow label="Date">
           <TextInput type="date" value={value.signatures.date} disabled={disabled} onChange={(date) => onChange({ ...value, signatures: { ...value.signatures, date } })} />

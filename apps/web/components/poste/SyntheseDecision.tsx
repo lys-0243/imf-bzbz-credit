@@ -8,6 +8,9 @@ import {
   PRONOSTIC_RECOMMANDATION_LABELS,
   type PronosticAvis,
   type ScoreCredit,
+  computeCf5Totaux,
+  normalizeFormulaire,
+  type ParametresImf,
 } from '@imf/shared';
 import { money, ROLE_LABELS, useApi, type DossierPoste } from '../../lib/poste';
 import s from './poste.module.css';
@@ -76,6 +79,7 @@ function fmtRatio(v: number | null, pct: boolean) {
 
 export function SyntheseDecision({ d }: { d: DossierPoste }) {
   const pronostic = useApi<{ avis: PronosticAvis } | null>(`/scoring/dossiers/${d.id}/pronostic`);
+  const parametres = useApi<ParametresImf>('/parametres');
   const payload = (d.payload ?? {}) as Record<string, any>;
   const { montantSouhaite, devise } = montantSouhaiteFromPayload(payload);
   const decision = (etape: string) => [...d.decisions].reverse().find((x) => x.etape === etape);
@@ -95,7 +99,17 @@ export function SyntheseDecision({ d }: { d: DossierPoste }) {
   ];
 
   const score = d.scoreReasons?.retenu ?? null;
-  const ratios = d.analyseCf2 ? computeCf24Ratios(d.analyseCf2) : [];
+  // Σ gages = total CF5.1 du demandeur (caution sur le montant proposé), comme la CF 2.4.
+  const totalCf5 =
+    d.analyseCf2 && parametres.data
+      ? computeCf5Totaux(normalizeFormulaire('CF5_1_DEMANDEUR', d.formulaires?.CF5_1_DEMANDEUR), {
+          montantPropose: Number(String(d.analyseCf2.cf25?.montantPropose ?? '').replace(',', '.')) || 0,
+          cautionPct: parametres.data.conditions.cautionPct,
+        }).total
+      : null;
+  const ratios = d.analyseCf2
+    ? computeCf24Ratios(d.analyseCf2, totalCf5 != null ? { valeurGaranties: totalCf5 } : {})
+    : [];
   const conformite = d.formulaires?.AVIS_CONFORMITE as { decision?: string; constats?: Array<{ statut: string; exigence: string }> } | undefined;
   const drapeaux: Array<{ texte: string; grave: boolean }> = [
     ...(score?.eliminatoires ?? []).map((t) => ({ texte: t, grave: true })),

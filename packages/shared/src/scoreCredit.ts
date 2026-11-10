@@ -247,7 +247,7 @@ function pilierGaranties(ratios: RatioFait[]): Omit<PilierResultat, 'poids' | 'l
   return {
     pilier: 'GARANTIES',
     score,
-    details: [`Couverture ${round(g * 100)} % du principal + intérêts (norme ≥ 120 %) : ${score}`],
+    details: [`Couverture ${round(g * 100)} % du montant proposé (norme ≥ 120 %) : ${score}`],
   };
 }
 

@@ -38,7 +38,10 @@ export function RechercheManuels() {
     const t = window.setTimeout(() => setDebounced(q.trim()), 300);
     return () => window.clearTimeout(t);
   }, [q]);
-  const res = useApi<Array<ExtraitManuel & { rang: number }>>(debounced ? `/manuels/recherche?q=${encodeURIComponent(debounced)}&limite=15` : null);
+  const res = useApi<Array<ExtraitManuel & { rang: number }>>(
+    debounced ? `/manuels/recherche?q=${encodeURIComponent(debounced)}&limite=15` : null,
+    { keepPreviousData: true },
+  );
   const manuels = useApi<Manuel[]>('/manuels');
   const actifs = (manuels.data ?? []).filter((m) => m.actif);
 

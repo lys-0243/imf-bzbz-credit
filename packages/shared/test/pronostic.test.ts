@@ -312,13 +312,15 @@ describe('Données client pour l’IA', () => {
       'cf21_uniteFamiliale',
       'cf22_activiteCommerciale',
       'cf23_saisonnaliteMargesDepenses',
-      'cf24_saisies',
+      // cf24_saisies absente : la fixture n'y renseigne que Σ gages, qui vient de la CF5.1.
       'cf25_resume',
     ]);
     const cf21 = ctx.cf2.cf21_uniteFamiliale as Record<string, unknown>;
     assert.equal(cf21.nombreReferences, 1);
     assert.match(json, /Élève/);
     assert.match(json, /"activiteEnregistreeLegalement":false/);
+    // La saisie manuelle CF 2.4 de Σ gages n'est plus transmise (la CF5.1 fait foi).
+    assert.ok(!json.includes('valeurGaranties'));
   });
 
   test('ni identifiant technique ni proposition de l’agent', () => {

@@ -69,6 +69,8 @@ export default function AgentDossierPanel({
   const [busy, setBusy] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  /** Avis IA sur lequel le résumé affiché a été généré (session courante). */
+  const [resumePronosticId, setResumePronosticId] = useState<string | null>(null);
   const toast = useToast();
   /** Avis et montant proposés par l'IA, à valider avant soumission. */
   const decision = usePronosticDecision();
@@ -98,6 +100,7 @@ export default function AgentDossierPanel({
     let cancelled = false;
     setData(null);
     setError(null);
+    setResumePronosticId(null);
     decision.reset();
     (async () => {
       try {
@@ -205,11 +208,12 @@ export default function AgentDossierPanel({
     setError(null);
     setMsg(null);
     try {
-      const res = await apiFetch<{ rapportTexte: string }>(
+      const res = await apiFetch<{ rapportTexte: string; pronosticId: string }>(
         `/agent/dossiers/${id}/rapport/generate`,
         { method: 'POST' },
       );
       setRapport(res.rapportTexte || '');
+      setResumePronosticId(res.pronosticId);
       setMsg('Résumé généré — validez ou ajustez le texte ci-dessous.');
       toast.success('Résumé généré.');
     } catch (e) {
@@ -416,40 +420,6 @@ export default function AgentDossierPanel({
     }
   }
 
-  async function toggleAc(itemId: string, checked: boolean) {
-    const next: ChecklistAnswers = {
-      ...answers,
-      values: {
-        ...answers.values,
-        [itemId]: {
-          ...answers.values?.[itemId],
-          ac: checked,
-          checked,
-        },
-      },
-    };
-    setAnswers(next);
-    setBusy(true);
-    setError(null);
-    try {
-      await apiFetch(`/agent/dossiers/${id}/checklist`, {
-        method: 'PUT',
-        body: JSON.stringify({ answers: next }),
-      });
-      toast.success(checked ? 'AC validé.' : 'AC retiré.');
-    } catch (e) {
-      const message =
-        e instanceof ApiError
-          ? e.message
-          : 'Échec enregistrement validation AC';
-      setError(message);
-      toast.error(message);
-      await load();
-    } finally {
-      setBusy(false);
-    }
-  }
-
   if (error && !data) {
     return (
       <PageStateBlock>
@@ -497,17 +467,53 @@ export default function AgentDossierPanel({
       ) : null}
 
       <div className={styles.detailTableBlock}>
-        <h3 className={styles.detailTableTitle}>1. Résumé exécutif (IA)</h3>
+        <h3 className={styles.detailTableTitle}>
+          1. Avis et montant proposés par l’IA
+        </h3>
         <p className={styles.descenteCardHint}>
-          Dernière étape : l’IA analyse le dossier et propose un résumé à
-          valider.
+          L’IA propose un montant à partir de la CF1 et de la CF2 ; les ratios
+          sont recalculés sur ce montant. Validez-le ou ajustez-le (commentaire
+          obligatoire en cas d’écart) avant de soumettre. Régénérez l’avis si
+          vous modifiez le dossier.
         </p>
+        <PronosticPanel
+          dossierId={id}
+          endpoint={`/agent/dossiers/${id}/pronostic`}
+          canRegenerate={canEdit}
+          beforeGenerate={saveChecklistEtRapport}
+          onChange={decision.onPronostic}
+        />
+        {decision.pronostic && canEdit ? (
+          <PronosticDecisionFields
+            decision={decision}
+            disabled={busy || generating}
+            idPrefix="agent"
+          />
+        ) : null}
+      </div>
+
+      <div className={styles.detailTableBlock}>
+        <h3 className={styles.detailTableTitle}>2. Résumé exécutif (IA)</h3>
+        <p className={styles.descenteCardHint}>
+          {decision.pronostic
+            ? 'Le résumé est rédigé à partir de l’avis ci-dessus : même décision, même montant, mêmes ratios.'
+            : 'Générez d’abord l’avis IA : le résumé s’appuie dessus.'}
+        </p>
+        {resumePronosticId &&
+        decision.pronostic &&
+        decision.pronostic.id !== resumePronosticId &&
+        rapport.trim() ? (
+          <p className={styles.msgErr}>
+            L’avis IA a été régénéré depuis ce résumé : régénérez le résumé
+            pour qu’il reste cohérent.
+          </p>
+        ) : null}
         <div className={styles.descenteResumeActions}>
           <button
             type="button"
             className={`${styles.btn} ${styles.btnPrimary}`}
             onClick={generateResume}
-            disabled={!canEdit || generating || busy}
+            disabled={!canEdit || generating || busy || !decision.pronostic}
           >
             {generating
               ? 'Génération en cours…'
@@ -532,32 +538,6 @@ export default function AgentDossierPanel({
           placeholder="Cliquez sur « Générer un résumé du dossier » pour lancer l’Agent IA."
           onChange={(e) => setRapport(e.target.value)}
         />
-      </div>
-
-      <div className={styles.detailTableBlock}>
-        <h3 className={styles.detailTableTitle}>
-          2. Avis et montant proposés par l’IA
-        </h3>
-        <p className={styles.descenteCardHint}>
-          L’IA propose un montant à partir de la CF1 et de la CF2 ; les ratios
-          sont recalculés sur ce montant. Validez-le ou ajustez-le (commentaire
-          obligatoire en cas d’écart) avant de soumettre. Régénérez l’avis si
-          vous modifiez le dossier.
-        </p>
-        <PronosticPanel
-          dossierId={id}
-          endpoint={`/agent/dossiers/${id}/pronostic`}
-          canRegenerate={canEdit}
-          beforeGenerate={saveChecklistEtRapport}
-          onChange={decision.onPronostic}
-        />
-        {decision.pronostic && canEdit ? (
-          <PronosticDecisionFields
-            decision={decision}
-            disabled={busy || generating}
-            idPrefix="agent"
-          />
-        ) : null}
       </div>
 
       <div className={styles.descenteFooterActions}>
@@ -677,8 +657,6 @@ export default function AgentDossierPanel({
       docAvis={docAvis}
       onSaveDocAvis={saveDocAvis}
       checklistAnswers={answers}
-      canEditAc={canEdit}
-      onToggleAc={toggleAc}
     />
   );
 }

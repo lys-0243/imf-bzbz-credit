@@ -16,7 +16,7 @@ import {
 import type { AgentActiviteEnrichment, BankingLookupResult } from './index';
 
 /** Version du moteur de faits — à incrémenter si les règles changent. */
-export const PRONOSTIC_MOTEUR_VERSION = '2026-11.1';
+export const PRONOSTIC_MOTEUR_VERSION = '2026-11.2';
 
 export const PRONOSTIC_RECOMMANDATIONS = [
   'ACCORD',
@@ -181,7 +181,7 @@ export function buildDossierFacts(input: {
   banking: BankingLookupResult | null;
   /** Grille des paramètres IMF (sinon grille par défaut). */
   grilleTaux?: ReadonlyArray<{ min: number; max: number; tauxMensuel: number }>;
-  /** Total CF5.1 du demandeur (sinon saisie CF 2.4). */
+  /** Total CF5.1 du demandeur, même nul (non fourni : saisie CF 2.4 en repli). */
   valeurGaranties?: number | null;
   /** Garanties CF 5.1 décomposées, pour la proposition de l'IA. */
   garantiesIa?: GarantiesIa | null;
@@ -231,7 +231,7 @@ export function buildDossierFacts(input: {
     };
     ratios = computeCf24Ratios(
       analyse,
-      input.valeurGaranties ? { valeurGaranties: input.valeurGaranties } : {},
+      input.valeurGaranties != null ? { valeurGaranties: input.valeurGaranties } : {},
     ).map(toRatioFait);
 
     const f25 = analyse.cf25;
@@ -629,7 +629,7 @@ export function buildContexteClient(input: {
       // et les dettes CT + 3 mensualités dépendent de la proposition de l’agent).
       cf24_saisies: {
         capacitePaiement: cf24.capacitePaiement,
-        valeurGaranties: cf24.valeurGaranties,
+        // Σ gages : non transmise ici — la valeur fait foi depuis la CF5.1 (garanties).
         actifCirculant: cf24.actifCirculant,
         cmv: cf24.cmv,
         dettesTotales: cf24.dettesTotales,

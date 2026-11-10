@@ -267,8 +267,9 @@ export class TerrainController {
   @Post('agent/dossiers/:id/rapport/generate')
   @Roles(Role.AGENT)
   @ApiOperation({
-    summary: 'Générer un brouillon de rapport',
-    description: 'Produit un texte de rapport à partir des données déjà collectées.',
+    summary: 'Générer un brouillon de résumé exécutif',
+    description:
+      'Rédige le résumé à partir des données collectées et du dernier avis IA, dont il recopie la recommandation, le montant et les conditions. 400 sans avis IA, 409 si l’avis est obsolète.',
   })
   @ApiParam({ name: 'id', description: 'ID du dossier' })
   generateRapport(

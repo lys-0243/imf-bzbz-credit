@@ -152,6 +152,11 @@ function useFiches(): FichesState {
   return ctx;
 }
 
+/** Fiches du dossier si un FichesProvider englobe le composant (sinon null). */
+export function useFichesOptionnel(): FichesState | null {
+  return useContext(FichesContext);
+}
+
 /**
  * État partagé des onglets de fiches : chargé au premier onglet ouvert et
  * conservé quand on change d’onglet (les saisies non enregistrées restent).

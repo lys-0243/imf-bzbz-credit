@@ -8,6 +8,7 @@ import {
   newCf25Risque,
   resolveMensualite,
   resolveTauxPeriodique,
+  sumStock,
   type Cf25Data,
   type Cf25Risque,
   type Cf2Analyse,
@@ -98,6 +99,42 @@ function formatMoney(n: number, devise: string): string {
   })} ${devise}`;
 }
 
+function montant(raw: string | null | undefined): number {
+  const n = Number(String(raw ?? '').replace(',', '.').trim());
+  return Number.isFinite(n) ? n : 0;
+}
+
+/**
+ * Lien « ↑ Reprendre la valeur CF2.2 » : recopie la valeur relevée en CF2.2 quand elle
+ * n'a pas changé. Masqué si le champ la contient déjà ou s'il n'y a rien à reprendre.
+ */
+function ReprendreCf22({
+  valeur,
+  actuelle,
+  devise,
+  disabled,
+  onReprendre,
+}: {
+  valeur: number;
+  actuelle: string;
+  devise: string;
+  disabled?: boolean;
+  onReprendre: (raw: string) => void;
+}) {
+  const deja = actuelle.trim() !== '' && Math.abs(montant(actuelle) - valeur) < 0.005;
+  if (disabled || !(valeur > 0) || deja) return null;
+  return (
+    <button
+      type="button"
+      className={styles.cf2Reprendre}
+      title="Recopier la valeur de la CF2.2 (inchangée)"
+      onClick={() => onReprendre(String(Math.round(valeur * 100) / 100))}
+    >
+      ↑ Reprendre la valeur CF2.2 : {formatMoney(valeur, devise)}
+    </button>
+  );
+}
+
 function formatPct(ratio: number | null): string {
   if (ratio == null || !Number.isFinite(ratio)) return '—';
   return `${(ratio * 100).toLocaleString('fr-FR', {
@@ -117,6 +154,9 @@ export function Cf25Section({
   const cf25 = analyse.cf25;
   const cr = useMemo(() => computeCompteResultat(analyse), [analyse]);
   const bilan = useMemo(() => computeBilan(analyse), [analyse]);
+  /** Valeurs relevées en CF2.2 (espèces du jour, inventaire du stock). */
+  const caisseCf22 = montant(analyse.cf22.aujourdHui.especes);
+  const stockCf22 = useMemo(() => sumStock(analyse.cf22.stock), [analyse.cf22.stock]);
   const mensualiteCalc = useMemo(() => resolveMensualite(cf25), [cf25]);
   const tauxRatio = useMemo(
     () => resolveTauxPeriodique(cf25.tauxPeriodique),
@@ -223,6 +263,13 @@ export function Cf25Section({
                 ? `Sinon espèces CF2.2 → ${formatMoney(bilan.caisse, devise)}`
                 : `Retenue : ${formatMoney(bilan.caisse, devise)}`}
             </span>
+            <ReprendreCf22
+              valeur={caisseCf22}
+              actuelle={cf25.caisse ?? ''}
+              devise={devise}
+              disabled={disabled}
+              onReprendre={(caisse) => patch({ caisse })}
+            />
           </div>
         </FormRow>
         <FormRow label="Banque (CA, SA, FDA)">
@@ -257,6 +304,13 @@ export function Cf25Section({
                 ? `Sinon stock CF2.2 → ${formatMoney(bilan.stock, devise)}`
                 : `Retenu : ${formatMoney(bilan.stock, devise)}`}
             </span>
+            <ReprendreCf22
+              valeur={stockCf22}
+              actuelle={cf25.stock ?? ''}
+              devise={devise}
+              disabled={disabled}
+              onReprendre={(stock) => patch({ stock })}
+            />
           </div>
         </FormRow>
         <FormRow label="A. Actifs circulants" total>
