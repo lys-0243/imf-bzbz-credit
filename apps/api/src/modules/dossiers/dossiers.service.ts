@@ -232,7 +232,14 @@ export class DossiersService {
     await this.documents.assertCanAccessDossier(user, id);
     const d = await this.prisma.dossier.findUnique({
       where: { id },
-      select: { etat: true, agentId: true, agentValideAt: true, analysteId: true, conformiteId: true },
+      select: {
+        etat: true,
+        agentId: true,
+        agentValideAt: true,
+        analysteId: true,
+        conformiteId: true,
+        agent: { select: { displayName: true } },
+      },
     });
     if (!d) throw new NotFoundException('Dossier introuvable');
     if (!this.editables(user, d).includes(code)) {
@@ -253,6 +260,21 @@ export class DossiersService {
       await this.prisma.dossier.updateMany({ where: { id, conformiteId: null }, data: { conformiteId: user.id } });
     }
     const data = normalizeFormulaire(code, raw);
+    // CF4 / CF5.1 / CF5.2 : la signature de l'agent est toujours celle de l'agent attribué.
+    if (code === 'CF4') {
+      const cf4 = data as { certification: { agent: string } };
+      cf4.certification = { ...cf4.certification, agent: d.agent?.displayName ?? '' };
+    }
+    if (code === 'CF8') {
+      // Agent responsable et signature de l'agent : agent attribué (non modifiables).
+      const cf8 = data as { visites: Array<{ agent: string; signatures: { agent: string } }> };
+      const agent = d.agent?.displayName ?? '';
+      cf8.visites = cf8.visites.map((v) => ({ ...v, agent, signatures: { ...v.signatures, agent } }));
+    }
+    if (code === 'CF5_1_DEMANDEUR' || code === 'CF5_1_GARANT') {
+      const cf5 = data as { signatures: { agent: string } };
+      cf5.signatures = { ...cf5.signatures, agent: d.agent?.displayName ?? '' };
+    }
     if (JSON.stringify(data).length > 200_000) {
       throw new BadRequestException('Formulaire trop volumineux');
     }

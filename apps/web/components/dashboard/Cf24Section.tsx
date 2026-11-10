@@ -1,13 +1,15 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import {
   computeCf24Ratios,
+  computeCf5Totaux,
   type Cf24Data,
   type Cf2Analyse,
   type Cf2RatioRow,
 } from '@imf/shared';
 import { dashStyles as styles } from './DashboardShell';
+import { useFichesOptionnel } from './fiches/FichesPanel';
 
 type Props = {
   analyse: Cf2Analyse;
@@ -112,7 +114,28 @@ export function Cf24Section({
   onSave,
 }: Props) {
   const cf24 = analyse.cf24;
-  const ratios = useMemo(() => computeCf24Ratios(analyse), [analyse]);
+  // Σ des biens mis en gage = total de la CF5.1 du demandeur (Excel I8 = CF5.1!W28),
+  // caution financière calculée sur le montant proposé — comme le scoring et la synthèse.
+  const fiches = useFichesOptionnel();
+  useEffect(() => {
+    fiches?.ensureLoaded();
+  }, [fiches]);
+  const cf5 = fiches?.forms?.CF5_1_DEMANDEUR ?? null;
+  const cautionPct = fiches?.parametres?.conditions.cautionPct;
+  const totalCf5 = useMemo(() => {
+    if (!fiches) return undefined; // hors fiches : saisie manuelle en repli
+    if (fiches.error) return undefined; // fiches indisponibles : saisie manuelle en repli
+    if (!cf5 || cautionPct == null) return null; // chargement
+    return computeCf5Totaux(cf5, {
+      montantPropose: Number(String(analyse.cf25.montantPropose).replace(',', '.')) || 0,
+      cautionPct,
+    }).total;
+  }, [fiches, cf5, cautionPct, analyse.cf25.montantPropose]);
+  const ratios = useMemo(
+    // CF5.1 connue : son total fait foi, même à 0 (pas de repli sur l'ancienne saisie CF 2.4).
+    () => computeCf24Ratios(analyse, totalCf5 != null ? { valeurGaranties: totalCf5 } : {}),
+    [analyse, totalCf5],
+  );
 
   function patch(partial: Partial<Cf24Data>) {
     onChange({ ...cf24, ...partial });
@@ -138,7 +161,7 @@ export function Cf24Section({
         </div>
         <p className={styles.assignHint} style={{ marginTop: 10 }}>
           Valeurs prises automatiquement depuis CF2.5 (mensualité, prêt, CMV,
-          capacité, bilan). Σ gages : saisie manuelle en attendant CF5.1.
+          capacité, bilan) ; Σ gages depuis la CF5.1.
         </p>
         <div className={styles.tableWrap} style={{ marginTop: 8 }}>
           <table className={`${styles.detailDataTable} ${styles.cf1FormTable}`}>
@@ -148,18 +171,34 @@ export function Cf24Section({
                   Σ des valeurs des biens mis en gage
                 </td>
                 <td className={styles.cf1FormValue}>
-                  <div className={styles.cf1AmountField}>
-                    <span className={styles.cf1DeviseBadge}>{devise}</span>
-                    <input
-                      type="number"
-                      className={styles.cf1FormControl}
-                      value={cf24.valeurGaranties}
-                      disabled={disabled}
-                      onChange={(e) =>
-                        patch({ valeurGaranties: e.target.value })
-                      }
-                    />
-                  </div>
+                  {totalCf5 === undefined ? (
+                    <div className={styles.cf1AmountField}>
+                      <span className={styles.cf1DeviseBadge}>{devise}</span>
+                      <input
+                        type="number"
+                        className={styles.cf1FormControl}
+                        value={cf24.valeurGaranties}
+                        disabled={disabled}
+                        onChange={(e) =>
+                          patch({ valeurGaranties: e.target.value })
+                        }
+                      />
+                    </div>
+                  ) : (
+                    <div>
+                      <strong>
+                        {totalCf5 == null ? '…' : `${formatNum(totalCf5)} ${devise}`}
+                      </strong>
+                      <span
+                        className={styles.assignHint}
+                        style={{ display: 'block', margin: '4px 0 0' }}
+                      >
+                        {totalCf5 === 0
+                          ? 'Aucun bien en CF5.1 — renseignez les biens mis en gage du demandeur.'
+                          : 'Total de la CF5.1 — biens mis en gage du demandeur (caution comprise).'}
+                      </span>
+                    </div>
+                  )}
                 </td>
               </tr>
             </tbody>

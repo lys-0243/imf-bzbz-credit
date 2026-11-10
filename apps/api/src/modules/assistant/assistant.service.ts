@@ -136,8 +136,28 @@ export class AssistantService implements OnModuleInit, OnModuleDestroy {
 
   onModuleInit() {
     if (process.env.ASSISTANT_WORKER_DISABLED === '1') return;
+    void this.reprendreInterrompus();
     this.timer = setInterval(() => void this.traiterFile(), INTERVALLE_MS);
     this.timer.unref?.();
+  }
+
+  /**
+   * Avis restés EN_COURS au démarrage : leur appel IA a été coupé par l'arrêt
+   * du processus (redéploiement, rechargement en dev). Remis en file tout de
+   * suite plutôt qu'après DELAI_BLOCAGE_MS. Suppose un seul worker actif
+   * (les autres instances : ASSISTANT_WORKER_DISABLED=1).
+   */
+  private async reprendreInterrompus() {
+    try {
+      const { count } = await this.prisma.avisIa.updateMany({
+        where: { statut: StatutAvisIa.EN_COURS },
+        data: { statut: StatutAvisIa.EN_ATTENTE },
+      });
+      if (count) this.logger.log(`${count} avis IA interrompu(s) remis en file`);
+    } catch (e) {
+      this.logger.error(`Reprise des avis IA interrompus : ${texteErreur(e)}`);
+    }
+    void this.traiterFile();
   }
 
   onModuleDestroy() {

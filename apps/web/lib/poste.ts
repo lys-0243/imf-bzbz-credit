@@ -22,8 +22,14 @@ import type { DossierDetailData } from '../components/dashboard/DossierDetailVie
 
 export const fetcher = <T,>(path: string) => apiFetch<T>(path);
 
+/**
+ * Requête SWR. `keepPreviousData` n'est PAS activé par défaut : quand la clé
+ * change d'objet (autre dossier, autre type d'avis), les données de l'ancienne
+ * clé s'afficheraient sous la nouvelle. À activer seulement pour une même
+ * ressource dont varient les paramètres (recherche, aperçu recalculé).
+ */
 export function useApi<T>(path: string | null, config?: SWRConfiguration<T>) {
-  return useSWR<T>(path, fetcher, { revalidateOnFocus: true, keepPreviousData: true, ...config });
+  return useSWR<T>(path, fetcher, { revalidateOnFocus: true, ...config });
 }
 
 export function rafraichir(prefix: string) {
@@ -173,9 +179,12 @@ export function useAvis<T extends TypeAvisIa>(dossierId: string | null, type: T 
     await apiFetch(`/assistant/dossiers/${dossierId}/avis`, { method: 'POST', body: JSON.stringify({ type }) });
     await res.mutate();
   };
+  // Garde : jamais l'avis d'un autre type ou d'un autre dossier sous cette vue.
+  const data =
+    res.data && (res.data.type !== type || res.data.dossierId !== dossierId) ? undefined : res.data;
   /** Avis exploitable : le courant s'il est prêt, sinon le précédent prêt. */
-  const avis = res.data?.statut === 'PRET' ? res.data : (res.data?.precedent ?? null);
-  return { ...res, avis, demander };
+  const avis = data?.statut === 'PRET' ? data : (data?.precedent ?? null);
+  return { ...res, data, avis, demander };
 }
 
 // ── Score ───────────────────────────────────────────────────

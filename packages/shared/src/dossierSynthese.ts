@@ -195,11 +195,32 @@ export function totauxGaranties(ctx: DossierContexte): {
   };
 }
 
-/** Ratios CF 2.4 avec Σ gages = total CF5.1 du demandeur (Excel I8). */
+/** Ratios CF 2.4 avec Σ gages = total CF5.1 du demandeur (Excel I8), même nul. */
 export function ratiosDossier(ctx: DossierContexte): Cf2RatioRow[] {
   if (!ctx.analyse) return [];
   const total = totauxGaranties(ctx).demandeur.total;
-  return computeCf24Ratios(ctx.analyse, total > 0 ? { valeurGaranties: total } : {});
+  return computeCf24Ratios(ctx.analyse, { valeurGaranties: total });
+}
+
+/**
+ * Signataires proposés pour CF5.1 (demandeur) et CF5.2 (garant), à partir de ce que
+ * le dossier connaît déjà (CF1 / demande, CF4). Le témoin n'a pas de source.
+ */
+export function signaturesCf5Proposees(
+  ctx: Pick<DossierContexte, 'payload' | 'client' | 'agent' | 'formulaires'>,
+  proprietaire: 'demandeur' | 'garant',
+): { proprietaire: string; conjoint: string; agent: string } {
+  const agent = s(ctx.agent?.displayName);
+  if (proprietaire === 'garant') {
+    const g = ctx.formulaires.CF4.identite;
+    return { proprietaire: s(g.nomComplet), conjoint: s(g.conjoint), agent };
+  }
+  const id = identiteDemandeur(ctx.payload);
+  return {
+    proprietaire: id.nomComplet || s(ctx.client.fullName),
+    conjoint: id.conjointNomComplet || s(ctx.payload.conjointNom),
+    agent,
+  };
 }
 
 export function garantResume(ctx: DossierContexte) {

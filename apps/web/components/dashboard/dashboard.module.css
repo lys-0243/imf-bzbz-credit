@@ -264,7 +264,7 @@
 .boardHero {
   margin: 0 0 28px;
   padding: 28px 28px 24px;
-  border-radius: 20px;
+  border-radius: var(--imf-radius);
   color: #fff;
   background:
     radial-gradient(ellipse at 12% 0%, rgba(244, 223, 60, 0.2), transparent 42%),
@@ -464,7 +464,7 @@
   max-width: 520px;
   padding: 4px 6px 4px 14px;
   background: #fff;
-  border-radius: 14px;
+  border-radius: var(--imf-radius);
   border: 1px solid transparent;
   box-shadow: 0 4px 18px rgba(10, 20, 50, 0.08);
 }
@@ -501,7 +501,7 @@
   height: 36px;
   flex-shrink: 0;
   border: 0;
-  border-radius: 10px;
+  border-radius: var(--imf-radius);
   background: var(--imf-blue);
   color: #fff;
   display: grid;
@@ -527,7 +527,7 @@
   height: 48px;
   padding: 0 14px 0 40px;
   border: 1px solid #e8e8e8;
-  border-radius: 16px;
+  border-radius: var(--imf-radius);
   background: #fff;
   font-family: inherit;
   font-size: 0.95rem;
@@ -579,7 +579,7 @@
 .dossierCard {
   text-align: left;
   border: 1px solid #ececec;
-  border-radius: 12px;
+  border-radius: var(--imf-radius);
   background: #fff;
   padding: 18px;
   cursor: pointer;
@@ -612,7 +612,7 @@
   align-items: center;
   gap: 6px;
   padding: 6px 10px;
-  border-radius: 20px;
+  border-radius: var(--imf-radius);
   background: #f0f0f0;
   color: var(--imf-muted);
   font-size: 0.75rem;
@@ -706,7 +706,7 @@
   display: flex;
   flex-direction: column;
   background: #fff;
-  border-radius: 28px;
+  border-radius: var(--imf-radius);
   box-shadow: 0 28px 80px rgba(10, 20, 50, 0.28);
   overflow: hidden;
   animation: sheetRise 0.36s cubic-bezier(0.22, 1, 0.36, 1);
@@ -767,7 +767,7 @@
   width: 40px;
   height: 40px;
   border: 0;
-  border-radius: 20px;
+  border-radius: var(--imf-radius);
   background: #f0f0f0;
   color: #555;
   display: grid;
@@ -819,7 +819,7 @@
 
 .tableWrap {
   border: 1px solid #e8e8e8;
-  border-radius: 16px;
+  border-radius: var(--imf-radius);
   overflow: auto;
   background: #fff;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
@@ -931,7 +931,7 @@
   gap: 14px;
   text-align: center;
   padding: 28px 24px;
-  border-radius: 18px;
+  border-radius: var(--imf-radius);
   border: 1px solid rgba(15, 40, 80, 0.08);
   background: #fff;
   box-shadow: 0 10px 28px rgba(20, 40, 80, 0.05);
@@ -1251,7 +1251,7 @@
 
 .descenteCard {
   border: 1px solid #ececec;
-  border-radius: 16px;
+  border-radius: var(--imf-radius);
   background: #fff;
   padding: 16px 18px;
   display: flex;
@@ -1333,7 +1333,7 @@
   width: 42px;
   height: 42px;
   border: 0;
-  border-radius: 21px;
+  border-radius: var(--imf-radius);
   background: #f0f0f0;
   color: var(--imf-text);
   display: grid;
@@ -1362,7 +1362,7 @@
 }
 
 .detailHero {
-  border-radius: 24px;
+  border-radius: var(--imf-radius);
   padding: 22px 20px;
   margin-bottom: 14px;
   color: #fff;
@@ -1467,7 +1467,7 @@
 
 .detailTabs {
   background: var(--imf-blue);
-  border-radius: 22px;
+  border-radius: var(--imf-radius);
   padding: 8px 6px;
   box-shadow: 0 8px 20px rgba(20, 30, 60, 0.14);
   overflow: hidden;
@@ -1629,7 +1629,7 @@
   width: min(400px, 92vw);
   overflow: auto;
   border-left: 1px solid #ececec;
-  border-radius: 20px 0 0 20px;
+  border-radius: var(--imf-radius) 0 0 var(--imf-radius);
   background: #fafafa;
   padding: 18px 16px 24px;
   box-shadow: -18px 0 48px rgba(10, 20, 50, 0.18);
@@ -1683,7 +1683,7 @@
   width: 100%;
   text-align: left;
   border: 1px solid #e8b8bb;
-  border-radius: 12px;
+  border-radius: var(--imf-radius);
   background: #fff;
   padding: 12px;
   cursor: pointer;
@@ -1867,7 +1867,7 @@
 
 .opsDocPromptPast,
 .opsDocPromptFuture {
-  border-radius: 12px;
+  border-radius: var(--imf-radius);
   padding: 14px 16px;
   display: flex;
   flex-wrap: wrap;
@@ -1929,7 +1929,7 @@
   z-index: 1;
   width: min(480px, 100%);
   background: #fff;
-  border-radius: 18px;
+  border-radius: var(--imf-radius);
   padding: 22px 20px;
   box-shadow: 0 24px 64px rgba(10, 20, 50, 0.28);
   display: flex;
@@ -1979,7 +1979,7 @@
 .infoCard {
   background: #fff;
   border: 1px solid #ececec;
-  border-radius: 18px;
+  border-radius: var(--imf-radius);
   padding: 6px 16px;
 }
 
@@ -2066,7 +2066,7 @@
 .docIcon {
   width: 40px;
   height: 40px;
-  border-radius: 12px;
+  border-radius: var(--imf-radius);
   display: grid;
   place-items: center;
   flex-shrink: 0;
@@ -2154,7 +2154,7 @@
   padding: 0.7rem 0.9rem;
   background: #fff;
   border: 1px solid rgba(15, 40, 80, 0.1);
-  border-radius: 12px;
+  border-radius: var(--imf-radius);
 }
 
 .checklistDocIcon {
@@ -2257,7 +2257,7 @@
   height: 2rem;
   padding: 0;
   border: 1px solid rgba(15, 40, 80, 0.12);
-  border-radius: 8px;
+  border-radius: var(--imf-radius);
   background: #fff;
   color: var(--imf-blue, #1f4b99);
   cursor: pointer;
@@ -2407,7 +2407,7 @@
 
   .boardHero {
     padding: 22px 18px 18px;
-    border-radius: 16px;
+    border-radius: var(--imf-radius);
   }
 
   .detailPage {
@@ -2482,7 +2482,7 @@
   height: 44px;
   padding: 0 22px;
   border: 0;
-  border-radius: 28px;
+  border-radius: var(--imf-radius);
   background: var(--imf-blue);
   color: #fff;
   font-family: inherit;
@@ -2505,7 +2505,7 @@
   height: 48px;
   padding: 0 22px;
   border: 0;
-  border-radius: 28px;
+  border-radius: var(--imf-radius);
   font-family: inherit;
   font-size: 0.95rem;
   font-weight: 700;
@@ -2552,7 +2552,7 @@
 
 .adminForm {
   border: 1px solid #e8e8e8;
-  border-radius: 16px;
+  border-radius: var(--imf-radius);
   background: #fff;
   padding: 20px;
   margin-bottom: 18px;
@@ -2619,7 +2619,7 @@
   width: 100%;
   min-height: 54px;
   border: 1px solid #e8e8e8;
-  border-radius: 16px;
+  border-radius: var(--imf-radius);
   background: #fff;
   padding: 14px 18px;
   font: inherit;
@@ -2655,7 +2655,7 @@
 
 .adminPanel {
   border: 1px solid #e8e8e8;
-  border-radius: 16px;
+  border-radius: var(--imf-radius);
   background: #fff;
   padding: 18px;
   margin-top: 16px;
@@ -2669,7 +2669,7 @@
 
 .adminInlineSelect {
   border: 1px solid #e8e8e8;
-  border-radius: 12px;
+  border-radius: var(--imf-radius);
   padding: 8px 12px;
   font: inherit;
   font-size: 0.85rem;
@@ -2705,7 +2705,7 @@
   flex: 1 1 280px;
   min-height: 40px;
   border: 1px solid #e8e8e8;
-  border-radius: 12px;
+  border-radius: var(--imf-radius);
   padding: 8px 12px;
   font: inherit;
   font-size: 0.9rem;
@@ -2722,7 +2722,7 @@
   width: 100%;
   margin-top: 6px;
   border: 1px solid #e8e8e8;
-  border-radius: 12px;
+  border-radius: var(--imf-radius);
   padding: 10px 12px;
   font: inherit;
   font-size: 0.9rem;
@@ -2753,7 +2753,7 @@
   font-size: 0.85rem;
   background: #fff;
   border: 1px solid #eee;
-  border-radius: 12px;
+  border-radius: var(--imf-radius);
   overflow: hidden;
 }
 
@@ -2790,7 +2790,7 @@
 
 .agentCard {
   border: 1px solid #e8e8e8;
-  border-radius: 16px;
+  border-radius: var(--imf-radius);
   background: #fff;
   overflow: hidden;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
@@ -2878,7 +2878,7 @@
   box-sizing: border-box;
   padding: 8px 10px;
   border: 1px solid #ddd;
-  border-radius: 8px;
+  border-radius: var(--imf-radius);
   background: #fff;
   font: inherit;
   font-size: 0.92rem;
@@ -2908,7 +2908,7 @@
   width: 100%;
   box-sizing: border-box;
   border: 1px solid #ddd;
-  border-radius: 8px;
+  border-radius: var(--imf-radius);
   background: #fff;
   overflow: hidden;
 }
@@ -2998,7 +2998,7 @@
   margin: 0;
   padding: 14px 14px 12px;
   border: 1.5px solid #e5e7eb;
-  border-radius: 12px;
+  border-radius: var(--imf-radius);
   background: #fff;
   color: var(--imf-text);
   font: inherit;
@@ -3162,7 +3162,7 @@
   display: inline-block;
   padding: 4px 10px;
   border: 1px solid #ccc;
-  border-radius: 4px;
+  border-radius: var(--imf-radius);
   font-weight: 700;
   font-style: italic;
   font-size: 0.9rem;
@@ -3243,7 +3243,7 @@
   margin: 0 auto;
   padding: 4px 2px;
   font-size: 0.8rem;
-  border-radius: 6px;
+  border-radius: var(--imf-radius);
   text-align: center;
 }
 
@@ -3262,7 +3262,7 @@
   margin-top: 8px;
   padding: 28px 20px;
   border: 1px dashed #d0d7e4;
-  border-radius: 10px;
+  border-radius: var(--imf-radius);
   background: #fafbfd;
   text-align: center;
 }
@@ -3298,7 +3298,7 @@
 
 .pronosticFigure {
   border: 1px solid #ececec;
-  border-radius: 12px;
+  border-radius: var(--imf-radius);
   padding: 10px 12px;
   background: #fafafa;
 }
@@ -3353,7 +3353,7 @@
   width: 100%;
   min-height: 40px;
   border: 1px solid #e8e8e8;
-  border-radius: 12px;
+  border-radius: var(--imf-radius);
   padding: 8px 12px;
   font: inherit;
   font-size: 0.9rem;
@@ -3375,7 +3375,7 @@
   min-width: 0;
   padding: 16px;
   border: 1px solid #ececec;
-  border-radius: 16px;
+  border-radius: var(--imf-radius);
   background: #fff;
 }
 
@@ -3398,7 +3398,7 @@
   gap: 8px;
   padding: 18px 14px;
   border: 2px dashed #c9d2e6;
-  border-radius: 14px;
+  border-radius: var(--imf-radius);
   background: #f7f9fd;
   text-align: center;
   cursor: pointer;
@@ -3440,7 +3440,7 @@
   display: block;
   max-width: 100%;
   max-height: 360px;
-  border-radius: 12px;
+  border-radius: var(--imf-radius);
   border: 1px solid #e8e8e8;
 }
 
@@ -3449,7 +3449,7 @@
   width: 100%;
   height: 280px;
   border: 0;
-  border-radius: 12px;
+  border-radius: var(--imf-radius);
 }
 
 /* Nom d’une pièce reçue : ouvre l’aperçu. */
@@ -3464,4 +3464,112 @@
 
 .checklistDocNameBtn:hover {
   text-decoration: underline;
+}
+
+/* CF2.5 — lien « Reprendre la valeur CF2.2 » (caisse, stock). */
+.cf2Reprendre {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+  padding: 3px 10px;
+  border: 1px dashed rgba(40, 64, 128, 0.45);
+  border-radius: 999px;
+  background: rgba(40, 64, 128, 0.06);
+  color: var(--imf-blue);
+  font-family: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.cf2Reprendre:hover {
+  background: rgba(40, 64, 128, 0.12);
+  border-style: solid;
+}
+
+.cf2Reprendre:focus-visible {
+  outline: 2px solid rgba(40, 64, 128, 0.4);
+  outline-offset: 2px;
+}
+
+/* Bouton flottant unique du dossier + menu déplié (Historique, Actions à faire, volets). */
+.fabMain {
+  position: relative;
+  width: 58px;
+  height: 58px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--imf-blue);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  box-shadow: 0 12px 30px rgba(20, 30, 60, 0.32);
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.fabMain svg {
+  transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.fabMain:hover {
+  background: var(--imf-blue-deep);
+}
+
+.fabMain:focus-visible {
+  outline: 3px solid rgba(40, 64, 128, 0.4);
+  outline-offset: 3px;
+}
+
+.fabMainOuvert svg {
+  transform: rotate(45deg);
+}
+
+.fabMainBadge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  box-shadow: 0 0 0 2px #fff;
+}
+
+.fabMenu {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.fabMenuItem {
+  animation: fabMenuIn 0.22s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.fabBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 69;
+  border: 0;
+  padding: 0;
+  background: rgba(10, 20, 50, 0.12);
+  cursor: default;
+}
+
+@keyframes fabMenuIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fabMenuItem,
+  .fabMain svg {
+    animation: none;
+    transition: none;
+  }
 }

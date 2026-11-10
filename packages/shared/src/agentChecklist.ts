@@ -657,18 +657,10 @@ export function validateAgentChecklist(
     if (!item.required) continue;
     const val = answers.values?.[item.id];
 
-    if (item.input === 'upload') {
-      const kind = item.kind ?? item.id;
-      if (!uploadedKinds.has(kind)) {
-        const avis = (val?.note ?? '').trim();
-        if (avis) continue;
-        issues.push({
-          itemId: item.id,
-          label: item.label,
-          reason: 'Pièce manquante',
-        });
-      }
-    } else if (item.input === 'boolean') {
+    // Les pièces ne sont pas obligatoires : leur état (reçue / dispensée / non fournie)
+    // est informatif (`etatPieceChecklist`) et ne bloque ni la soumission ni le score.
+    if (item.input === 'upload') continue;
+    if (item.input === 'boolean') {
       if (val?.booleanValue === undefined || val?.booleanValue === null) {
         issues.push({
           itemId: item.id,
@@ -700,6 +692,20 @@ export function validateAgentChecklist(
   }
 
   return issues;
+}
+
+export type EtatPieceChecklist = 'RECUE' | 'DISPENSEE' | 'NON_FOURNIE';
+
+/**
+ * État d'une pièce de la checklist, déduit uniquement du fichier téléversé et de
+ * l'avis de dispense — c'est aussi la validation AC (agent de crédit), automatique.
+ */
+export function etatPieceChecklist(
+  recue: boolean,
+  value?: ChecklistItemValue | null,
+): EtatPieceChecklist {
+  if (recue) return 'RECUE';
+  return (value?.note ?? '').trim() ? 'DISPENSEE' : 'NON_FOURNIE';
 }
 
 export const CHECKLIST_CATEGORY_LABELS: Record<ChecklistCategory, string> = {
