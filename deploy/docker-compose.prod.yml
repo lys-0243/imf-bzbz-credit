@@ -1,0 +1,111 @@
+name: imf
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+x-build: &build
+  context: ..
+  dockerfile: deploy/Dockerfile
+
+x-database-url: &database_url postgresql://imf:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD manquant}@postgres:5432/imf_credit?schema=public
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: imf
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: imf_credit
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    # Pas de "ports:" : Postgres n'est joignable que depuis le réseau Docker.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U imf -d imf_credit"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    logging: *logging
+
+  migrate:
+    build:
+      <<: *build
+      target: tools
+    image: imf-tools
+    command: ["npx", "prisma", "migrate", "deploy"]
+    env_file: .env
+    environment:
+      DATABASE_URL: *database_url
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+    logging: *logging
+
+  api:
+    build:
+      <<: *build
+      target: api
+    image: imf-api
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      PORT: "3001"
+      DATABASE_URL: *database_url
+      WEB_ORIGIN: https://${APP_HOST},https://${RECEPTION_HOST}
+      STORAGE_DRIVER: local
+      STORAGE_LOCAL_DIR: /var/lib/imf/uploads
+    volumes:
+      - /var/lib/imf/uploads:/var/lib/imf/uploads
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    logging: *logging
+
+  web:
+    build:
+      <<: *build
+      target: web
+      args:
+        NEXT_PUBLIC_API_URL: https://${API_HOST}
+        NEXT_PUBLIC_APP_URL: https://${APP_HOST}
+    image: imf-web
+    restart: unless-stopped
+    depends_on:
+      - api
+    logging: *logging
+
+  caddy:
+    build:
+      <<: *build
+      target: caddy
+      args:
+        EXPO_PUBLIC_WEB_API_URL: https://${API_HOST}
+    image: imf-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      APP_HOST: ${APP_HOST:?APP_HOST manquant}
+      API_HOST: ${API_HOST:?API_HOST manquant}
+      RECEPTION_HOST: ${RECEPTION_HOST:?RECEPTION_HOST manquant}
+      ACME_EMAIL: ${ACME_EMAIL:?ACME_EMAIL manquant}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+      - web
+    logging: *logging
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:
