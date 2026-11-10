@@ -9,7 +9,7 @@ import {
   formatDureeLabel,
   formatMontantSouhaite,
   getApplicableChecklistItems,
-  getChecklistAc,
+  etatPieceChecklist,
   montantSouhaiteFromPayload,
   TYPE_PIECE_LABELS,
   usesAnalyseAgrPack,
@@ -688,8 +688,6 @@ export function DossierDetailView({
   docAvis = {},
   onSaveDocAvis,
   checklistAnswers,
-  canEditAc = false,
-  onToggleAc,
   tabRequest = null,
   onTabRequestHandled,
   drawers = [],
@@ -722,8 +720,6 @@ export function DossierDetailView({
   docAvis?: Record<string, string>;
   onSaveDocAvis?: (itemId: string, avis: string) => void | Promise<void>;
   checklistAnswers?: ChecklistAnswers | null;
-  canEditAc?: boolean;
-  onToggleAc?: (itemId: string, checked: boolean) => void | Promise<void>;
   tabRequest?: string | null;
   onTabRequestHandled?: () => void;
   drawers?: DetailDrawer[];
@@ -1013,21 +1009,15 @@ export function DossierDetailView({
               {docRows.map((row) => {
                 const avis = (docAvis[row.id] || '').trim();
                 const itemVal = answers?.values?.[row.id];
-                const acChecked = getChecklistAc(itemVal);
+                // AC automatique : pièce reçue ou dispensée (les pièces ne sont pas obligatoires).
+                const etat = etatPieceChecklist(row.received, { note: avis });
+                const acChecked = etat !== 'NON_FOURNIE';
+                const acDisabled = true;
                 const scChecked = Boolean(itemVal?.sc);
                 const boChecked = Boolean(itemVal?.bo);
                 const ext = inferDocExt(row.piece?.blobPath);
-                const canTurnOnAc = row.received || Boolean(avis);
-                const acDisabled =
-                  !canEditAc ||
-                  docBusy ||
-                  !onToggleAc ||
-                  (!canTurnOnAc && !acChecked);
-                const statusLabel = row.received
-                  ? 'Reçu'
-                  : avis
-                    ? 'Dispensé'
-                    : 'Manquant';
+                const statusLabel =
+                  etat === 'RECUE' ? 'Reçu' : etat === 'DISPENSEE' ? 'Dispensé' : 'Non fourni';
                 const statusClass = row.received
                   ? styles.checklistStatusOk
                   : avis
@@ -1139,22 +1129,14 @@ export function DossierDetailView({
                         className={`${styles.checklistRole} ${
                           acChecked ? styles.checklistRoleOn : ''
                         } ${acDisabled ? styles.checklistRoleDisabled : ''}`}
-                        title={
-                          acDisabled && !acChecked && canEditAc
-                            ? 'Uploadez le document ou saisissez un avis avant de valider AC'
-                            : 'Agent Crédit'
-                        }
+                        title="Agent Crédit — automatique : pièce reçue ou dispensée"
                       >
                         <input
                           type="checkbox"
                           checked={acChecked}
                           disabled={acDisabled}
-                          aria-label={`AC — ${row.label}`}
-                          onChange={(e) => {
-                            if (!onToggleAc) return;
-                            if (e.target.checked && !canTurnOnAc) return;
-                            void onToggleAc(row.id, e.target.checked);
-                          }}
+                          readOnly
+                          aria-label={`AC — ${row.label} (automatique)`}
                         />
                         <span>AC</span>
                       </label>

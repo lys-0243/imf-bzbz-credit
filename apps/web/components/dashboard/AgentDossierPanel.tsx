@@ -416,40 +416,6 @@ export default function AgentDossierPanel({
     }
   }
 
-  async function toggleAc(itemId: string, checked: boolean) {
-    const next: ChecklistAnswers = {
-      ...answers,
-      values: {
-        ...answers.values,
-        [itemId]: {
-          ...answers.values?.[itemId],
-          ac: checked,
-          checked,
-        },
-      },
-    };
-    setAnswers(next);
-    setBusy(true);
-    setError(null);
-    try {
-      await apiFetch(`/agent/dossiers/${id}/checklist`, {
-        method: 'PUT',
-        body: JSON.stringify({ answers: next }),
-      });
-      toast.success(checked ? 'AC validé.' : 'AC retiré.');
-    } catch (e) {
-      const message =
-        e instanceof ApiError
-          ? e.message
-          : 'Échec enregistrement validation AC';
-      setError(message);
-      toast.error(message);
-      await load();
-    } finally {
-      setBusy(false);
-    }
-  }
-
   if (error && !data) {
     return (
       <PageStateBlock>
@@ -677,8 +643,6 @@ export default function AgentDossierPanel({
       docAvis={docAvis}
       onSaveDocAvis={saveDocAvis}
       checklistAnswers={answers}
-      canEditAc={canEdit}
-      onToggleAc={toggleAc}
     />
   );
 }
