@@ -48,6 +48,10 @@ Comptes seed :
 - Mobile : Expo (émulateur Android → API `http://10.0.2.2:3001` ; appareil → IP LAN via `EXPO_PUBLIC_API_URL`)
 - Réception web : http://localhost:8081 (app mobile compilée pour le navigateur ; API sur le même hôte que la page, port 3001, ou `EXPO_PUBLIC_WEB_API_URL`). L'origine doit figurer dans `WEB_ORIGIN`.
 
+## Déploiement
+
+Mise en production sur un Droplet DigitalOcean (Docker Compose, HTTPS, sous-domaines `app.` / `api.` / `reception.`) : voir [documentation/DEPLOIEMENT.md](documentation/DEPLOIEMENT.md).
+
 ## Réception web (production)
 
 ```bash
