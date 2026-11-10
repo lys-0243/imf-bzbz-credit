@@ -2,6 +2,33 @@ import { PrismaClient, Role } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import { KINSHASA_COMMUNES, KINSHASA_ZONES } from '@imf/shared';
 
+const isProduction = process.env.NODE_ENV === 'production';
+
+/** Production : un seul ADMIN, créé s'il n'existe pas, jamais réécrit. */
+async function seedAdminProduction() {
+  const email = process.env.SEED_ADMIN_EMAIL?.trim().toLowerCase();
+  const password = process.env.SEED_ADMIN_PASSWORD ?? '';
+  if (!email || password.length < 12) {
+    throw new Error(
+      'SEED_ADMIN_EMAIL et SEED_ADMIN_PASSWORD (12 caractères min.) requis en production',
+    );
+  }
+  const existing = await prisma.user.findUnique({ where: { email } });
+  if (existing) {
+    console.log(`Admin ${email} déjà présent : inchangé`);
+    return;
+  }
+  await prisma.user.create({
+    data: {
+      email,
+      passwordHash: await bcrypt.hash(password, 10),
+      displayName: 'Administrateur',
+      role: Role.ADMIN,
+    },
+  });
+  console.log(`Admin ${email} créé`);
+}
+
 const prisma = new PrismaClient();
 
 type SeedProduit = {
@@ -297,34 +324,39 @@ async function main() {
     });
   }
 
-  for (const u of SEED_USERS) {
-    const email = u.email.trim().toLowerCase();
-    const passwordHash = await bcrypt.hash(u.password, 10);
-    const zoneId = u.zoneCode ? zoneByCode[u.zoneCode]?.id ?? null : null;
-    if (u.zoneCode && !zoneId) {
-      throw new Error(`Zone introuvable pour ${u.email}: ${u.zoneCode}`);
+  if (isProduction) {
+    await seedAdminProduction();
+  } else {
+    for (const u of SEED_USERS) {
+      const email = u.email.trim().toLowerCase();
+      const passwordHash = await bcrypt.hash(u.password, 10);
+      const zoneId = u.zoneCode ? zoneByCode[u.zoneCode]?.id ?? null : null;
+      if (u.zoneCode && !zoneId) {
+        throw new Error(`Zone introuvable pour ${u.email}: ${u.zoneCode}`);
+      }
+      await prisma.user.upsert({
+        where: { email },
+        update: {
+          passwordHash,
+          displayName: u.displayName,
+          role: u.role,
+          zoneId,
+          disabledAt: null,
+        },
+        create: {
+          email,
+          passwordHash,
+          displayName: u.displayName,
+          role: u.role,
+          zoneId,
+        },
+      });
     }
-    await prisma.user.upsert({
-      where: { email },
-      update: {
-        passwordHash,
-        displayName: u.displayName,
-        role: u.role,
-        zoneId,
-        disabledAt: null,
-      },
-      create: {
-        email,
-        passwordHash,
-        displayName: u.displayName,
-        role: u.role,
-        zoneId,
-      },
-    });
   }
 
   console.log(
-    `Seed OK — ${SEED_PRODUITS.length} produits, ${SEED_USERS.length} utilisateurs`,
+    `Seed OK — ${SEED_PRODUITS.length} produits, ` +
+      (isProduction ? 'admin de production' : `${SEED_USERS.length} utilisateurs`),
   );
 }
 

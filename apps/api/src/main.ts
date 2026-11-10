@@ -60,15 +60,18 @@ async function bootstrap() {
     .addTag('Clients', 'Module clients (stub)')
     .build();
 
-  const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api', app, document, {
-    swaggerOptions: {
-      persistAuthorization: true,
-      docExpansion: 'list',
-      tagsSorter: 'alpha',
-      operationsSorter: 'alpha',
-    },
-  });
+  // Swagger : jamais exposé en production, sauf ouverture ponctuelle (SWAGGER_ENABLED=1).
+  if (!isProduction || process.env.SWAGGER_ENABLED === '1') {
+    const document = SwaggerModule.createDocument(app, config);
+    SwaggerModule.setup('api', app, document, {
+      swaggerOptions: {
+        persistAuthorization: true,
+        docExpansion: 'list',
+        tagsSorter: 'alpha',
+        operationsSorter: 'alpha',
+      },
+    });
+  }
 
   const port = Number(process.env.PORT ?? 3001);
   await app.listen(port);
