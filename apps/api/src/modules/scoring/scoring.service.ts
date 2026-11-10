@@ -211,7 +211,8 @@ export class ScoringService {
       checklistIssues,
       banking: await this.lookupBanking(payload, d.produit.code),
       grilleTaux: parametres.grilleTaux,
-      valeurGaranties: garanties > 0 ? garanties : null,
+      // Total CF5.1 du demandeur : fait foi même à 0 (Σ gages CF 2.4).
+      valeurGaranties: garanties,
       garantiesIa:
         garantiesHorsCaution > 0 || avecCaution
           ? {

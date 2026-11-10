@@ -7,6 +7,7 @@ import {
 import { DossierEtat, Prisma, Role } from '@prisma/client';
 import {
   clientFieldsFromPayload,
+  dernierPretDuHistorique,
   parseReceptionPayloadAgainstProduit,
 } from '@imf/shared';
 import { ZodError } from 'zod';
@@ -49,9 +50,9 @@ export class DemandesService {
    * Le contrôle est refait côté serveur (le lookup envoyé par le client n’est pas fiable)
    * et l’instantané stocké dans le payload est celui du serveur.
    */
-  private async verifierCompteCbs(numeroCompte: string, produitCode: string) {
+  private async verifierCompteCbs(numeroCompte: string, produitCode: string, exiger = true) {
     const res = await this.banking.lookup(numeroCompte, produitCode);
-    if (!res.found) {
+    if (!res.found && exiger) {
       throw new BadRequestException(
         'Compte introuvable dans le core banking : la demande ne peut pas être enregistrée.',
       );
@@ -61,8 +62,24 @@ export class DemandesService {
       creditEnCours: res.creditEnCours,
       score: res.score,
       historiqueCount: res.historique.length,
+      // Dernier crédit connu : prérempli (non modifiable) dans la CF1 de l'agent.
+      dernierPret: dernierPretDuHistorique(res.historique),
       checkedAt: new Date().toISOString(),
     };
+  }
+
+  /**
+   * Instantané core banking figé dans le dossier. Réception : compte obligatoire.
+   * Autres rôles : facultatif (indisponibilité du CBS → pas d'instantané, saisie libre en CF1).
+   */
+  private async instantaneCbs(user: AuthUser, payload: Record<string, any>, produitCode: string) {
+    if (user.role === Role.RECEPTION) return this.verifierCompteCbs(payload.numeroCompte, produitCode);
+    if (!String(payload.numeroCompte ?? '').trim()) return undefined;
+    try {
+      return await this.verifierCompteCbs(payload.numeroCompte, produitCode, false);
+    } catch {
+      return undefined;
+    }
   }
 
   async listZones() {
@@ -152,9 +169,7 @@ export class DemandesService {
 
     const produit = await this.resolveProduitActif(produitId);
     const payload = this.validatePayload(payloadRaw, produit);
-    if (user.role === Role.RECEPTION) {
-      payload.bankingLookup = await this.verifierCompteCbs(payload.numeroCompte, produit.code);
-    }
+    payload.bankingLookup = await this.instantaneCbs(user, payload, produit.code);
     const fields = clientFieldsFromPayload(payload);
     const commune = await this.resolveCommune(fields.communeId);
     const zoneId = commune.zoneId;
@@ -306,9 +321,7 @@ export class DemandesService {
       );
     }
     const payload = this.validatePayload(payloadRaw, existing.produit);
-    if (user.role === Role.RECEPTION) {
-      payload.bankingLookup = await this.verifierCompteCbs(payload.numeroCompte, existing.produit.code);
-    }
+    payload.bankingLookup = await this.instantaneCbs(user, payload, existing.produit.code);
     const fields = clientFieldsFromPayload(payload);
     const commune = await this.resolveCommune(fields.communeId);
 

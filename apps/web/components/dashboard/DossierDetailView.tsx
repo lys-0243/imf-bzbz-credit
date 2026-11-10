@@ -18,6 +18,8 @@ import {
   type DossierEtat,
   type FamilleProduit,
   type ProduitCreditDto,
+  dureePretPrecedentLabel,
+  pretPrecedentDuPayload,
 } from '@imf/shared';
 import { getApiUrl, getToken } from '../../lib/api';
 import { PiecePreview, type PreviewPiece } from '../documents/PiecePreview';
@@ -444,24 +446,39 @@ function buildCf1Sections(
       value: displayVal(autreInstNom),
     });
   }
-  pretRows.push(
-    {
-      label: 'Montant du prêt précédent',
-      value:
-        pret.montantPretPrecedent == null || pret.montantPretPrecedent === ''
-          ? '—'
-          : formatMontantSouhaite(
-              typeof pret.montantPretPrecedent === 'number'
-                ? pret.montantPretPrecedent
-                : Number(pret.montantPretPrecedent) || null,
-              devise,
-            ),
-    },
-    {
-      label: 'Durée prêt précédent',
-      value: displayVal(pret.dureePretPrecedent),
-    },
-  );
+  // Prêt précédent : core banking s'il connaît le client ; masqué s'il n'a jamais emprunté.
+  const pretPrecedent = pretPrecedentDuPayload(p);
+  if (pretPrecedent.source === 'CBS') {
+    pretRows.push(
+      {
+        label: 'Montant du prêt précédent',
+        value: formatMontantSouhaite(pretPrecedent.pret.montant, pretPrecedent.pret.devise),
+      },
+      {
+        label: 'Durée prêt précédent',
+        value: `${dureePretPrecedentLabel(pretPrecedent.pret) || '—'} (core banking, ${pretPrecedent.pret.reference})`,
+      },
+    );
+  } else if (pretPrecedent.source === 'INCONNU') {
+    pretRows.push(
+      {
+        label: 'Montant du prêt précédent',
+        value:
+          pret.montantPretPrecedent == null || pret.montantPretPrecedent === ''
+            ? '—'
+            : formatMontantSouhaite(
+                typeof pret.montantPretPrecedent === 'number'
+                  ? pret.montantPretPrecedent
+                  : Number(pret.montantPretPrecedent) || null,
+                devise,
+              ),
+      },
+      {
+        label: 'Durée prêt précédent',
+        value: displayVal(pret.dureePretPrecedent),
+      },
+    );
+  }
 
   return {
     eligibilite: [
@@ -719,15 +736,19 @@ export function DossierDetailView({
   const [tab, setTab] = useState('historique');
   /** Volet flottant ouvert : 'actions', 'historique' ou la clé d’un `drawers`. */
   const [openDrawer, setOpenDrawer] = useState<string | null>(null);
+  /** Menu du bouton flottant unique (Historique, Actions à faire, volets du dossier). */
+  const [fabOuvert, setFabOuvert] = useState(false);
 
   useEffect(() => {
-    if (!openDrawer) return;
+    if (!openDrawer && !fabOuvert) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpenDrawer(null);
+      if (e.key !== 'Escape') return;
+      setOpenDrawer(null);
+      setFabOuvert(false);
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [openDrawer]);
+  }, [openDrawer, fabOuvert]);
   const [docError, setDocError] = useState<string | null>(null);
   const [downloadBusy, setDownloadBusy] = useState(false);
   const [apercu, setApercu] = useState<PreviewPiece | null>(null);
@@ -1470,45 +1491,75 @@ export function DossierDetailView({
         <div className={styles.detailScroll}>{tabContent}</div>
       </div>
 
+      {fabOuvert ? (
+        <button
+          type="button"
+          className={styles.fabBackdrop}
+          aria-label="Fermer le menu"
+          tabIndex={-1}
+          onClick={() => setFabOuvert(false)}
+        />
+      ) : null}
       <div className={styles.fabStack} style={sansBoutonsFlottants ? { display: 'none' } : undefined}>
+        {fabOuvert ? (
+          <div className={styles.fabMenu} role="menu" aria-label="Actions du dossier">
+            {[
+              { key: 'historique', label: 'Historique', badge: null as number | null, warn: false, primary: false },
+              {
+                key: 'actions',
+                label: 'Actions à faire',
+                badge: pendingActions.length,
+                warn: pendingActions.length > 0,
+                primary: false,
+              },
+              ...drawers.map((d) => ({
+                key: d.key,
+                label: d.label,
+                badge: d.badge ?? null,
+                warn: false,
+                primary: Boolean(d.primary),
+              })),
+            ].map((item, i, all) => (
+              <button
+                key={item.key}
+                type="button"
+                role="menuitem"
+                className={`${styles.actionsFab} ${styles.fabMenuItem} ${item.primary ? styles.actionsFabPrimary : ''}`}
+                // Apparition en cascade depuis le bouton (le plus proche d’abord).
+                style={{ animationDelay: `${(all.length - 1 - i) * 35}ms` }}
+                onClick={() => {
+                  setFabOuvert(false);
+                  setOpenDrawer(item.key);
+                }}
+              >
+                {item.label}
+                {item.badge != null ? (
+                  <span className={`${styles.actionsFabBadge} ${item.warn ? styles.actionsFabBadgeWarn : ''}`}>
+                    {item.badge}
+                  </span>
+                ) : null}
+              </button>
+            ))}
+          </div>
+        ) : null}
         <button
           type="button"
-          className={styles.actionsFab}
-          aria-haspopup="dialog"
-          aria-expanded={openDrawer === 'historique'}
-          onClick={() => setOpenDrawer('historique')}
+          className={`${styles.fabMain} ${fabOuvert ? styles.fabMainOuvert : ''}`}
+          aria-haspopup="menu"
+          aria-expanded={fabOuvert}
+          aria-label={fabOuvert ? 'Fermer le menu du dossier' : 'Ouvrir le menu du dossier'}
+          title="Historique, actions à faire, pré-contrôle, soumission"
+          onClick={() => setFabOuvert((o) => !o)}
         >
-          Historique
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
+            <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />
+          </svg>
+          {!fabOuvert && pendingActions.length ? (
+            <span className={`${styles.actionsFabBadge} ${styles.actionsFabBadgeWarn} ${styles.fabMainBadge}`}>
+              {pendingActions.length}
+            </span>
+          ) : null}
         </button>
-        <button
-          type="button"
-          className={styles.actionsFab}
-          aria-haspopup="dialog"
-          aria-expanded={openDrawer === 'actions'}
-          onClick={() => setOpenDrawer('actions')}
-        >
-          Actions à faire
-          <span
-            className={`${styles.actionsFabBadge} ${
-              pendingActions.length ? styles.actionsFabBadgeWarn : ''
-            }`}
-          >
-            {pendingActions.length}
-          </span>
-        </button>
-        {drawers.map((d) => (
-          <button
-            key={d.key}
-            type="button"
-            className={`${styles.actionsFab} ${d.primary ? styles.actionsFabPrimary : ''}`}
-            aria-haspopup="dialog"
-            aria-expanded={openDrawer === d.key}
-            onClick={() => setOpenDrawer(d.key)}
-          >
-            {d.label}
-            {d.badge != null ? <span className={styles.actionsFabBadge}>{d.badge}</span> : null}
-          </button>
-        ))}
       </div>
 
       {openDrawer === 'actions' ? (

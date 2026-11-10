@@ -1,6 +1,6 @@
 import { PrismaClient, Role } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
-import { decouperManuel, KINSHASA_COMMUNES, KINSHASA_ZONES, sansAccents } from '@imf/shared';
+import { KINSHASA_COMMUNES, KINSHASA_ZONES } from '@imf/shared';
 
 const prisma = new PrismaClient();
 
@@ -323,76 +323,9 @@ async function main() {
     });
   }
 
-  await seedManuelTest();
-
   console.log(
     `Seed OK — ${SEED_PRODUITS.length} produits, ${SEED_USERS.length} utilisateurs`,
   );
-}
-
-/**
- * Manuel FICTIF pour le développement du RAG de conformité. Il ne reflète ni
- * les procédures réelles de l'IMF ni la réglementation BCC : à remplacer par
- * les manuels officiels (Admin › Manuels).
- */
-const MANUEL_TEST = `MANUEL DE PROCÉDURES DE CRÉDIT — VERSION DE TEST (NON OFFICIEL)
-Ce document fictif sert uniquement aux essais de la plateforme.
-
-CHAPITRE 1 - Dispositions générales
-Article 1 : Champ d'application
-Le présent manuel s'applique à toute demande de crédit instruite par l'institution, quel que soit le produit.
-
-Article 2 : Identification du client
-Toute demande doit comporter une pièce d'identité en cours de validité, une preuve d'adresse et une photo récente du demandeur. Le client ne doit pas figurer sur une liste noire.
-
-CHAPITRE 2 - Instruction
-Article 3 : Visite terrain
-L'agent de crédit effectue une visite de l'activité et du domicile avant toute analyse. Le plan de route est joint au dossier.
-
-Article 4 : Capacité de remboursement
-La mensualité ne doit pas dépasser 40 % de la capacité de paiement mensuelle (DSR). Une capacité de paiement nulle ou négative entraîne le refus.
-
-Article 5 : Garanties
-Tout crédit doit être couvert par des garanties d'une valeur d'au moins 120 % du principal augmenté des intérêts. Une caution financière de 30 % du montant est exigée à l'octroi.
-
-Article 6 : Taux et frais
-Le taux applicable est celui de la grille en vigueur pour la tranche de montant. Les frais de dossier et de décaissement sont prélevés à l'octroi.
-
-CHAPITRE 3 - Décision
-Article 7 : Circuit d'approbation
-Le dossier est contre-vérifié par l'analyste, contrôlé par la conformité, validé par le responsable crédit puis approuvé par la Direction générale. Les crédits supérieurs à 500 USD sont soumis à l'approbation du Conseil d'administration.
-
-Article 8 : Parties liées
-Les crédits accordés aux dirigeants, administrateurs et employés sont soumis à l'approbation du Conseil d'administration quel que soit le montant.
-`;
-
-async function seedManuelTest() {
-  const titre = 'Manuel de crédit — TEST (non officiel)';
-  const existe = await prisma.manuel.findFirst({ where: { titre } });
-  if (existe) return;
-  const sections = decouperManuel(MANUEL_TEST);
-  await prisma.manuel.create({
-    data: {
-      titre,
-      source: 'IMF',
-      reference: 'TEST',
-      version: '0.1-test',
-      actif: true,
-      nomFichier: 'manuel-test.txt',
-      mimeType: 'text/plain',
-      nbMots: MANUEL_TEST.split(/\s+/).filter(Boolean).length,
-      sections: {
-        create: sections.map((s) => ({
-          ordre: s.ordre,
-          numero: s.numero,
-          titre: s.titre,
-          contenu: s.contenu,
-          titreRecherche: sansAccents(`${s.numero} ${s.titre}`),
-          contenuRecherche: sansAccents(s.contenu),
-        })),
-      },
-    },
-  });
 }
 
 main()

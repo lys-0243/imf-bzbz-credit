@@ -104,7 +104,8 @@ export const FORMULAIRES: {
     label: 'Historique',
     feuille: 'Histotique',
     normalize: normalizeHistorique,
-    edition: [AGENT_TERRAIN, { roles: ['RESPONSABLE_CREDIT'], etats: ['EN_ATTENTE_VALIDATION_RC'] }],
+    // L'agent s'arrête à CF6.1 et au plan de route : l'historique lui est en lecture seule.
+    edition: [{ roles: ['RESPONSABLE_CREDIT'], etats: ['EN_ATTENTE_VALIDATION_RC'] }],
   },
   PRE_COMITE: {
     label: 'Fiche de visite pré-comité',
@@ -128,10 +129,8 @@ export const FORMULAIRES: {
     label: 'CF8 — Suivi et supervision',
     feuille: 'CF8',
     normalize: normalizeCf8,
-    edition: [
-      { roles: ['AGENT'], etats: ETATS_APRES_AGENT, agentAssigne: true },
-      { roles: ['RESPONSABLE_CREDIT'], etats: ETATS_APRES_AGENT },
-    ],
+    // Suivi tenu par le RC ; l'agent le consulte sans le modifier.
+    edition: [{ roles: ['RESPONSABLE_CREDIT'], etats: ETATS_APRES_AGENT }],
   },
   RAPPORT_ANALYSE: {
     label: 'Rapport d’analyse',

@@ -185,6 +185,11 @@ describe('Droits d’édition des formulaires', () => {
     assert.equal(peutEditerFormulaire('DECISION_COMITE', { role: 'DG', etat: 'DIRECTION', agentAssigne: false, agentAValide: true }), true);
     assert.equal(peutEditerFormulaire('DECISION_COMITE', { role: 'AGENT', etat: 'DIRECTION', agentAssigne: true, agentAValide: true }), false);
     assert.equal(peutEditerFormulaire('APPRO_PCA', { role: 'CA', etat: 'CONSEIL', agentAssigne: false, agentAValide: true }), true);
-    assert.equal(peutEditerFormulaire('CF8', { ...agent, etat: 'A_DECAISSER', agentAValide: true }), true);
+    // L'agent s'arrête à CF6.1 et au plan de route ; le reste lui est en lecture seule.
+    assert.equal(peutEditerFormulaire('CF6_1', { ...agent, etat: 'DESCENTE' }), true);
+    assert.equal(peutEditerFormulaire('PLAN_ROUTE', { ...agent, etat: 'DESCENTE' }), true);
+    assert.equal(peutEditerFormulaire('HISTORIQUE', { ...agent, etat: 'DESCENTE' }), false);
+    assert.equal(peutEditerFormulaire('CF8', { ...agent, etat: 'A_DECAISSER', agentAValide: true }), false);
+    assert.equal(peutEditerFormulaire('CF8', { role: 'RESPONSABLE_CREDIT', etat: 'A_DECAISSER', agentAssigne: false, agentAValide: true }), true);
   });
 });

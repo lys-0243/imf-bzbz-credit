@@ -3465,3 +3465,111 @@
 .checklistDocNameBtn:hover {
   text-decoration: underline;
 }
+
+/* CF2.5 — lien « Reprendre la valeur CF2.2 » (caisse, stock). */
+.cf2Reprendre {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+  padding: 3px 10px;
+  border: 1px dashed rgba(40, 64, 128, 0.45);
+  border-radius: 999px;
+  background: rgba(40, 64, 128, 0.06);
+  color: var(--imf-blue);
+  font-family: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.cf2Reprendre:hover {
+  background: rgba(40, 64, 128, 0.12);
+  border-style: solid;
+}
+
+.cf2Reprendre:focus-visible {
+  outline: 2px solid rgba(40, 64, 128, 0.4);
+  outline-offset: 2px;
+}
+
+/* Bouton flottant unique du dossier + menu déplié (Historique, Actions à faire, volets). */
+.fabMain {
+  position: relative;
+  width: 58px;
+  height: 58px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--imf-blue);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  box-shadow: 0 12px 30px rgba(20, 30, 60, 0.32);
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.fabMain svg {
+  transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.fabMain:hover {
+  background: var(--imf-blue-deep);
+}
+
+.fabMain:focus-visible {
+  outline: 3px solid rgba(40, 64, 128, 0.4);
+  outline-offset: 3px;
+}
+
+.fabMainOuvert svg {
+  transform: rotate(45deg);
+}
+
+.fabMainBadge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  box-shadow: 0 0 0 2px #fff;
+}
+
+.fabMenu {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.fabMenuItem {
+  animation: fabMenuIn 0.22s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.fabBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 69;
+  border: 0;
+  padding: 0;
+  background: rgba(10, 20, 50, 0.12);
+  cursor: default;
+}
+
+@keyframes fabMenuIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fabMenuItem,
+  .fabMain svg {
+    animation: none;
+    transition: none;
+  }
+}

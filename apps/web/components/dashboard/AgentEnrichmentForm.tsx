@@ -9,6 +9,8 @@ import {
   TYPE_PIECE_LABELS,
   TYPES_PIECE,
   enrichmentFromPayload,
+  formatMontantSouhaite,
+  pretPrecedentDuPayload,
   type AgentActiviteEnrichment,
   type AgentSalaireEnrichment,
   type FamilleProduit,
@@ -227,6 +229,8 @@ export function AgentEnrichmentForm({
     etatCivil ||
     '';
   const marie = etatCivilCourant === 'Marie';
+  /** Prêt précédent : rempli par le core banking, masqué si le client n'a jamais emprunté. */
+  const pretPrecedent = pretPrecedentDuPayload(payload);
 
   return (
     <div className={styles.assignPanel}>
@@ -776,36 +780,67 @@ export function AgentEnrichmentForm({
                 />
               </FormRow>
             ) : null}
-            <FormRow label="Montant du prêt précédent">
-              <AmountField
-                value={numInputValue(activite.pret.montantPretPrecedent)}
-                devise={devise}
-                disabled={disabled}
-                onChange={(raw) =>
-                  patchActivite({
-                    pret: {
-                      ...activite.pret,
-                      montantPretPrecedent: raw === '' ? '' : Number(raw),
-                    },
-                  })
-                }
-              />
-            </FormRow>
-            <FormRow label="Durée prêt précédent">
-              <input
-                className={styles.cf1FormControl}
-                value={activite.pret.dureePretPrecedent || ''}
-                disabled={disabled}
-                onChange={(e) =>
-                  patchActivite({
-                    pret: {
-                      ...activite.pret,
-                      dureePretPrecedent: e.target.value,
-                    },
-                  })
-                }
-              />
-            </FormRow>
+            {pretPrecedent.source === 'CBS' ? (
+              <>
+                <FormRow label="Montant du prêt précédent">
+                  <input
+                    className={styles.cf1FormControl}
+                    value={formatMontantSouhaite(pretPrecedent.pret.montant, pretPrecedent.pret.devise)}
+                    disabled
+                    readOnly
+                  />
+                </FormRow>
+                <FormRow label="Durée prêt précédent">
+                  <input
+                    className={styles.cf1FormControl}
+                    value={activite.pret.dureePretPrecedent || '—'}
+                    disabled
+                    readOnly
+                  />
+                  <p className={styles.assignMeta} style={{ margin: '6px 0 0' }}>
+                    Repris du core banking — crédit {pretPrecedent.pret.reference} ({pretPrecedent.pret.produitCode}),
+                    du {new Date(pretPrecedent.pret.dateDebut).toLocaleDateString('fr-FR')}
+                    {pretPrecedent.pret.dateFin
+                      ? ` au ${new Date(pretPrecedent.pret.dateFin).toLocaleDateString('fr-FR')}`
+                      : ''}
+                    .
+                  </p>
+                </FormRow>
+              </>
+            ) : pretPrecedent.source === 'INCONNU' ? (
+              <>
+                <FormRow label="Montant du prêt précédent">
+                  <AmountField
+                    value={numInputValue(activite.pret.montantPretPrecedent)}
+                    devise={devise}
+                    disabled={disabled}
+                    onChange={(raw) =>
+                      patchActivite({
+                        pret: {
+                          ...activite.pret,
+                          montantPretPrecedent: raw === '' ? '' : Number(raw),
+                        },
+                      })
+                    }
+                  />
+                </FormRow>
+                <FormRow label="Durée prêt précédent">
+                  <input
+                    className={styles.cf1FormControl}
+                    value={activite.pret.dureePretPrecedent || ''}
+                    disabled={disabled}
+                    onChange={(e) =>
+                      patchActivite({
+                        pret: {
+                          ...activite.pret,
+                          dureePretPrecedent: e.target.value,
+                        },
+                      })
+                    }
+                  />
+                </FormRow>
+              </>
+            ) : null}
           </FormSection>
         </>
       )}

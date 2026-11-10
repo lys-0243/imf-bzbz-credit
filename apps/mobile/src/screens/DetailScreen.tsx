@@ -13,6 +13,8 @@ import { colors, fonts } from '@imf/assets';
 import {
   DOSSIER_ETAT_LABELS,
   dureeFromPayload,
+  dureePretPrecedentLabel,
+  pretPrecedentDuPayload,
   dureeUniteFromPayload,
   ETAT_CIVIL_LABELS,
   formatDureeLabel,
@@ -570,14 +572,37 @@ export function DetailScreen({ id, onBack, bottomInset = 24 }: Props) {
             value={displayVal(pret.autreInstitutionNom)}
           />
         ) : null}
-        <InfoRow
-          label="Montant prêt précédent"
-          value={displayVal(pret.montantPretPrecedent)}
-        />
-        <InfoRow
-          label="Durée prêt précédent"
-          value={displayVal(pret.dureePretPrecedent)}
-        />
+        {(() => {
+          // Core banking s'il connaît le client ; rien s'il n'a jamais emprunté.
+          const pp = pretPrecedentDuPayload(p);
+          if (pp.source === 'AUCUN') return null;
+          if (pp.source === 'CBS') {
+            return (
+              <>
+                <InfoRow
+                  label="Montant prêt précédent"
+                  value={formatMontantSouhaite(pp.pret.montant, pp.pret.devise)}
+                />
+                <InfoRow
+                  label="Durée prêt précédent"
+                  value={dureePretPrecedentLabel(pp.pret) || '—'}
+                />
+              </>
+            );
+          }
+          return (
+            <>
+              <InfoRow
+                label="Montant prêt précédent"
+                value={displayVal(pret.montantPretPrecedent)}
+              />
+              <InfoRow
+                label="Durée prêt précédent"
+                value={displayVal(pret.dureePretPrecedent)}
+              />
+            </>
+          );
+        })()}
       </InfoCard>
     );
   };
