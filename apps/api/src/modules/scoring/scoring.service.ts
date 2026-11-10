@@ -166,13 +166,15 @@ export class ScoringService {
       flags: {},
       values: {},
     };
+    // Le résumé exécutif est rédigé à partir du pronostic : il n'en fait pas
+    // partie (sinon l'enregistrer rendrait le pronostic obsolète).
     const checklistIssues = validateAgentChecklist(
       d.produit.famille,
       payload,
       answers,
       new Set(d.pieces.map((p) => p.kind)),
       d.visite?.rapportTexte,
-    );
+    ).filter((i) => i.itemId !== 'resume_executif');
     const { montantSouhaite, devise } = montantSouhaiteFromPayload(payload);
     const cf5 = normalizeFormulaire('CF5_1_DEMANDEUR', d.formulaires[0]?.data);
     const cautionPct = parametres.conditions.cautionPct;

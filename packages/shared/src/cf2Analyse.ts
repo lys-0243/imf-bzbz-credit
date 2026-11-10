@@ -1419,11 +1419,12 @@ function ratioVal(nume: number, deno: number): number | null {
 
 /**
  * Ratios CF2.4 — définitions des libellés CF 2.4 / feuille « Histotique » :
- * DSR = mensualité / capacité ; garantie = gages / (mensualité × échéance) ;
+ * DSR = mensualité / capacité ; garantie = gages / montant du prêt proposé ;
  * liquidité = actif / (dettes CT + 3 × mensualité) ; levier = prêt / actif ;
  * rotation = CMV / actif ; endettement = (dettes + prêt) / capitaux propres.
- * L’Excel calcule garantie, liquidité et endettement sans intérêts ni dettes
- * existantes : corrigé ici. Σ gages : total CF5.1 du demandeur si fourni.
+ * L’Excel calcule liquidité et endettement sans dettes existantes : corrigé
+ * ici. Garantie : principal seul pour l’instant (intérêts exclus, décision
+ * 2026-11-10, susceptible d’évoluer). Σ gages : total CF5.1 du demandeur si fourni.
  */
 export function computeCf24Ratios(
   analyse: Cf2Analyse,
@@ -1444,8 +1445,6 @@ export function computeCf24Ratios(
   const garanties = opts.valeurGaranties ?? num(f24.valeurGaranties);
   // Excel I14 = CF2.5!D38
   const pret = num(f25.montantPropose);
-  // Excel CF2.5!P39 = L38*H38 (principal + intérêts)
-  const pretAvecInterets = acompte * num(f25.echeanceMois);
   // Excel I11 / I15 / I18 = CF2.5!E16
   const actif = bilan.actifsCirculants;
   // Excel I12 = CF2.5!L38*3, + dettes CT (CF2.5!D29) selon le libellé
@@ -1460,7 +1459,7 @@ export function computeCf24Ratios(
   // Sans mensualité ni prêt proposés, ces ratios ne sont pas calculables
   // (et non « conformes » à 0).
   const dsr = acompte > 0 ? ratioVal(acompte, capacite) : null;
-  const garantie = ratioVal(garanties, pretAvecInterets);
+  const garantie = pret > 0 ? ratioVal(garanties, pret) : null;
   const liquidite = ratioVal(actif, dettesCtEtTroisMensualites);
   const levier = pret > 0 ? ratioVal(pret, actif) : null;
   const rotation = ratioVal(cmv, actif);
@@ -1485,9 +1484,9 @@ export function computeCf24Ratios(
       index: 2,
       label: 'Ratio de Garantie',
       numerateurLabel: 'Σ des valeurs des biens mis en gage',
-      denominateurLabel: 'Prêt IMF Bisou Bisou (Principal + intérêt)',
+      denominateurLabel: 'Prêt IMF Bisou Bisou (montant proposé)',
       numerateur: garanties,
-      denominateur: pretAvecInterets,
+      denominateur: pret,
       value: garantie,
       asPercent: true,
       norme: '≥ 120%',

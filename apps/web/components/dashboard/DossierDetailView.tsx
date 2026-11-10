@@ -583,8 +583,9 @@ function FieldsTable({
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => (
-              <tr key={r.label}>
+            {/* Libellés non uniques (ex. historique : un état repassé après un retour). */}
+            {rows.map((r, i) => (
+              <tr key={`${i}-${r.label}`}>
                 <td>{r.label}</td>
                 <td>
                   <strong>{r.value}</strong>

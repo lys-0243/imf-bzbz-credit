@@ -16,7 +16,7 @@ import {
 import type { AgentActiviteEnrichment, BankingLookupResult } from './index';
 
 /** Version du moteur de faits — à incrémenter si les règles changent. */
-export const PRONOSTIC_MOTEUR_VERSION = '2026-11.1';
+export const PRONOSTIC_MOTEUR_VERSION = '2026-11.2';
 
 export const PRONOSTIC_RECOMMANDATIONS = [
   'ACCORD',

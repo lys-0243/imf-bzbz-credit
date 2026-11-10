@@ -106,7 +106,8 @@ describe('CF3 et CF5.1', () => {
   test('ratio de garantie CF 2.4 alimenté par CF5.1', () => {
     const r = ratiosDossier(contexte()).find((x) => x.key === 'garantie')!;
     close(r.numerateur, 750);
-    close(r.value, 750 / 3237.6143741364172);
+    close(r.denominateur, 2500);
+    close(r.value, 750 / 2500);
   });
 });
 

@@ -57,10 +57,10 @@ describe('CF2 — parité avec Analyse_AGR.xlsx', () => {
 });
 
 describe('CF 2.4 — ratios corrigés selon leurs libellés', () => {
-  test('garantie = gages / (principal + intérêts)', () => {
+  test('garantie = gages / montant proposé (principal seul)', () => {
     const r = ratio(excelExemple(), 'garantie');
-    close(r.denominateur, 3237.6143741364172); // CF 2.5 P39
-    close(r.value, 750 / 3237.6143741364172);
+    close(r.denominateur, 2500); // CF 2.5 D38
+    close(r.value, 750 / 2500);
     assert.equal(r.ok, false);
   });
 

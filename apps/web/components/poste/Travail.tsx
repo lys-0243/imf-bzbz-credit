@@ -295,6 +295,8 @@ export function ScorePanel({ d, actif }: { d: DossierPoste; actif: boolean }) {
       ...(Number(q.montant) > 0 ? { montant: q.montant } : {}),
       ...(Number(q.duree) > 0 ? { dureeMois: q.duree } : {}),
     })}`,
+    // Même dossier (sous-arbre remonté par dossier) : garder l'aperçu pendant le recalcul.
+    { keepPreviousData: true },
   );
   const a = apercu.data;
   const [notes, setNotes] = useState<Partial<Record<PilierScore, number>>>({});
