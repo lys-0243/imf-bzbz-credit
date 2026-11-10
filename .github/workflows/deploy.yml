@@ -1,0 +1,39 @@
+name: Déploiement production
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  verifier:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm install -g npm@11.19.0
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npm test
+      - run: npm run build -w @imf/api
+      - run: npm run build -w @imf/web
+
+  deployer:
+    needs: verifier
+    runs-on: ubuntu-24.04
+    environment: production
+    steps:
+      - uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DROPLET_HOST }}
+          username: deploy
+          key: ${{ secrets.DROPLET_SSH_KEY }}
+          command_timeout: 40m
+          script: bash /opt/imf/deploy/deploy.sh ${{ github.sha }}

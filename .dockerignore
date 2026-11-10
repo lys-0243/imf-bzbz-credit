@@ -1,0 +1,12 @@
+.git
+**/node_modules
+**/dist
+**/.next
+**/.expo
+**/*.tsbuildinfo
+.env
+.env.*
+deploy/.env
+uploads
+apps/api/uploads
+coverage
