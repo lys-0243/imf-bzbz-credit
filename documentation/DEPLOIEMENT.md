@@ -699,7 +699,25 @@ usermod -aG docker deploy
 docker --version && docker compose version
 ```
 
-Déconnectez-vous et reconnectez-vous en `deploy` pour que le groupe `docker` soit pris en compte.
+Déconnectez-vous et reconnectez-vous en `deploy` pour que le groupe `docker` soit pris en compte :
+
+```bash
+exit                              # ferme la session root, retour sur votre PC
+```
+
+```powershell
+ssh deploy@203.0.113.10           # depuis votre PC
+```
+
+Vérifier, une fois connecté en `deploy` :
+
+```bash
+whoami        # deploy
+groups        # doit contenir "sudo" et "docker"
+docker ps     # tableau vide, sans "permission denied" ni sudo
+```
+
+Toutes les étapes suivantes se font en `deploy` (avec `sudo` quand c'est indiqué). Si la connexion root est déjà désactivée (§5.4), c'est désormais le seul accès SSH.
 
 ### 5.7 Dossiers de l'application
 
